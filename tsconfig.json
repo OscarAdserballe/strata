@@ -1,0 +1,38 @@
+{
+  // The type gate: `npm run check` (tsc --noEmit). Nothing here emits — the server runs
+  // .ts directly under Node's native type stripping, and the frontend is bundled by
+  // build.mjs (esbuild). Files join the include list as they are converted; the goal is
+  // the whole tree, strict.
+  "compilerOptions": {
+    "target": "es2023",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "lib": ["es2023", "dom", "dom.iterable"],
+    "jsx": "react-jsx",
+    "types": ["node"],
+    "strict": true,
+    "noUncheckedIndexedAccess": false,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitOverride": true,
+    "forceConsistentCasingInFileNames": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    // Node's type stripping wants real .ts specifiers in imports; tsc must accept them
+    "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": false,
+    // erasableSyntaxOnly matches what Node can strip: no enums, no namespaces, no
+    // parameter properties — a file that violates it would typecheck and then not run
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true
+  },
+  "include": [
+    "server/**/*.ts",
+    "web/**/*.ts",
+    "web/**/*.tsx",
+    "shared/**/*.ts",
+    "tools/*.test.ts",
+    "test/**/*.ts"
+  ],
+  "exclude": ["node_modules", "dist"]
+}

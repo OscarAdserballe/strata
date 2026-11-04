@@ -1,0 +1,38 @@
+.cram-choose { max-width: 640px; width: 100%; margin: 4vh auto 0; padding: 0 28px; box-sizing: border-box; }
+.cram-modes { display: flex; align-items: center; gap: 6px; margin-bottom: 14px; }
+.cram-modes button { border: 1px solid var(--line); border-radius: 8px; padding: 6px 11px; background: var(--card-bg); cursor: pointer;
+  font: 500 12px/1 var(--sans); color: var(--ink-soft); }
+.cram-modes button.on { background: var(--accent-soft); border-color: var(--accent-line); color: var(--accent-deep); }
+.cram-modes .grow, .cram-foot .grow { flex: 1; }
+.cram-modes .cram-all { border-color: transparent; background: none; }
+.cram-modes .cram-all:hover { color: var(--accent-deep); }
+
+.cram-group { border-top: 1px solid var(--line); padding: 6px 0; }
+.cram-gh { padding: 8px 0 4px; font: 500 9.5px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-faint); }
+.cram-gh .cram-name { font: inherit; color: inherit; }
+.cram-row { display: flex; align-items: center; gap: 10px; min-height: 36px; }
+.cram-ch { padding-left: 26px; min-height: 32px; }
+.cram-tick { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+.cram-tick input { flex: 0 0 auto; width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.cram-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 400 15px/1.4 var(--serif); color: var(--ink); }
+.cram-ch .cram-name { font-size: 14px; color: var(--ink-soft); }
+.cram-n { flex: 0 0 auto; min-width: 32px; text-align: right; font: 500 11px/1 var(--mono); font-variant-numeric: tabular-nums; color: var(--ink-faint); }
+.cram-open { flex: 0 0 auto; border: 0; background: none; padding: 4px 0; cursor: pointer; font: 400 12px/1 var(--sans); color: var(--ink-soft); }
+.cram-open:hover { color: var(--accent-deep); }
+
+.cram-foot { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--line); padding-top: 16px; margin-top: 4px; }
+.cram-total { font: 400 13px/1.5 var(--sans); color: var(--ink-soft); }
+.cram-link { border: 0; background: none; padding: 0; cursor: pointer; font: inherit; color: var(--accent-deep); border-bottom: 1px solid var(--accent-line); }
+.cram-foot .lask-go, .cram-again .lask-go { display: inline-flex; align-items: center; gap: 8px; }
+.cram-foot .lask-go:disabled { cursor: default; color: var(--ink-faint); background: var(--line-soft); }
+.cram-quiet { margin: 14px 0 0; font: 400 12px/1.5 var(--sans); color: var(--ink-faint); }
+
+.cram-bar { height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; margin-bottom: 22px; }
+.cram-bar i { display: block; height: 100%; background: var(--accent); transition: width .2s; }
+.cram-again { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 14px; }
+
+@media (max-width: 640px) {
+  .cram-choose { padding: 0 20px; margin-top: 2vh; }
+}
+.cram-again .lask-go { margin-top: 0; }
+.cram-off { margin: 6px 0 0; font: 400 12px/1.5 var(--sans); color: var(--ink-faint); }

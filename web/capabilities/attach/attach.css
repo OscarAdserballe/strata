@@ -1,0 +1,22 @@
+.strata-img{display:block;max-width:100%;max-height:50vh;height:auto;margin:8px 0;border-radius:6px;border:1px solid var(--line-soft);background:var(--paper);cursor:zoom-in;object-fit:contain;}
+.q .strata-img{margin:10px auto;}
+.turn.me .said-me .strata-img{max-height:160px;max-width:min(100%,280px);margin:2px 0 6px;}
+
+.att-tray{display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:6px 8px 0;}
+.att-tray.face{padding:4px 0 2px;}
+.att-thumb{position:relative;width:72px;height:52px;border-radius:6px;border:1px solid var(--line);background:var(--paper);overflow:hidden;flex:none;}
+.att-thumb img{width:100%;height:100%;object-fit:cover;display:block;}
+.att-thumb.failed{border-color:var(--warn);}
+/* the × keeps its look inside a dialog or form that styles every button it holds */
+.att-thumb button.att-x{position:absolute;top:2px;right:2px;width:18px;height:18px;line-height:16px;margin:0;padding:0;border:none;border-radius:9px;background:rgba(0,0,0,.55);color:#fff;font:13px/16px var(--sans);cursor:pointer;}
+.att-thumb button.att-x:focus-visible{outline:2px solid var(--accent);}
+.att-ring{position:absolute;bottom:4px;right:4px;width:12px;height:12px;border-radius:50%;border:2px solid rgba(255,255,255,.7);border-top-color:var(--accent);animation:att-spin .8s linear infinite;}
+.att-err{position:absolute;bottom:3px;left:5px;color:var(--warn);font:700 13px var(--sans);}
+.att-note{font:12px var(--sans);color:var(--ink-soft);}
+.att-status{font:12px var(--sans);color:var(--ink-soft);}
+@keyframes att-spin{to{transform:rotate(360deg);}}
+@media (prefers-reduced-motion:reduce){.att-ring{animation:none;}}
+
+dialog.att-box{border:none;padding:0;background:transparent;max-width:96vw;max-height:94vh;outline:none;}
+dialog.att-box::backdrop{background:rgba(10,12,16,.82);}
+dialog.att-box img{display:block;max-width:96vw;max-height:94vh;object-fit:contain;cursor:zoom-out;border-radius:4px;background:#fff;}

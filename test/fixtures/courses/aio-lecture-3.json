@@ -1,0 +1,1 @@
+{"course":{"slug":"aio-lecture-3","title":"Fixture Three"},"decks":[{"type":"flashcard","title":"Fixture","cards":[{"id":"one","front":"What is fixture three?","back":"A synthetic test card.","source":"Fixture, page 1"},{"id":"two","front":"Can this card be dropped?","back":"Yes, while its tombstone remains.","source":"Fixture, page 2"}]}]}

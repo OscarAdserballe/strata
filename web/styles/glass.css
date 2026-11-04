@@ -1,0 +1,21 @@
+/* Remove the double-tap delay and keep pane gestures away from Safari's. */
+button,.opt,.go-row,.tclaim,.q.openq,.note-read,.tile{touch-action:manipulation;}
+.deck{touch-action:pan-y;}
+.page{touch-action:pan-x pan-y;}
+.keys button.tk{display:inline-flex;align-items:center;gap:7px;font:500 10.5px/1 var(--mono);letter-spacing:.05em;color:var(--ink-soft);background:var(--paper);border:1px solid var(--line);border-radius:99px;padding:9px 15px;cursor:pointer;transition:border-color .12s,color .12s;}
+.keys button.tk:hover{border-color:var(--accent-line);color:var(--accent-deep);}
+.keys button.tk kbd{margin:-2px 0;}
+.keys button.tk.live{color:var(--accent-deep);border-color:var(--accent-line);background:var(--accent-soft);}
+.keys button.tk.live kbd{border-color:var(--accent-line);background:var(--card-bg);}
+.keys button.tk.arm{color:var(--warn);border-color:var(--warn);background:var(--warn-soft);}
+@media (hover:none){
+  .bp-acts{opacity:1;}
+  .mint-c{opacity:1;}
+  .fb-b{opacity:1;}
+  .ced-b{opacity:1;}
+  .askwrap{padding-bottom:calc(14px + env(safe-area-inset-bottom));}
+  .sh-foot{padding-bottom:calc(11px + env(safe-area-inset-bottom));}
+  .status{padding-left:max(15px, env(safe-area-inset-left));padding-right:max(15px, env(safe-area-inset-right));}
+}
+
+@media(max-width:600px){.lhead{flex-wrap:wrap;}.status{flex-wrap:wrap;height:auto;min-height:30px;row-gap:4px;padding-top:4px;padding-bottom:4px;}.status .seg{height:26px;}}

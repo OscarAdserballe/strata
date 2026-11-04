@@ -1,0 +1,176 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  # Every trigger runs the tests; stages run as parallel jobs and `test` is green only when all of them are.
+  check:
+    name: types · lint · unit · integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.19.0
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: shellcheck ops/*.sh
+      - name: The Playwright image matches the locked package
+        run: |
+          locked="$(node -p 'require("./package-lock.json").packages["node_modules/playwright"].version')"
+          images="$(grep -hoP 'mcr\.microsoft\.com/playwright:v\K[0-9.]+' .github/workflows/*.yml | sort -u)"
+          [ "$images" = "$locked" ] || { echo "playwright $locked is locked but the workflows run image(s): $images"; exit 1; }
+      - name: Validate compose.yaml
+        run: GEMINI_API_KEY=ci docker compose config --quiet
+
+  smoke:
+    name: browser smokes (${{ matrix.shard }}/2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # browsers and their system libraries come baked in: no apt on the runner, whose mirrors stall
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --ipc=host
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.19.0
+          cache: npm
+      - run: npm ci
+      - run: node tools/build.mjs
+      - name: Smoke test the major browser workflows
+        run: |
+          tools/preview.sh > /tmp/strata-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill "$preview_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 100); do
+            curl -fsS http://127.0.0.1:8804/api/boards | grep -q 'The Discipline of Repetition' && break
+            sleep 0.2
+          done
+          node tools/smoke-all.mjs http://127.0.0.1:8804 --shard ${{ matrix.shard }}/2 || { sed -n '1,240p' /tmp/strata-preview.log; exit 1; }
+          if [ "${{ matrix.shard }}" = 2 ]; then
+            node tools/pdf-scroll-check.mjs http://127.0.0.1:8804 chromium
+            node tools/pdf-scroll-check.mjs http://127.0.0.1:8804 webkit
+          fi
+
+  race:
+    name: race gate (${{ matrix.shard }}/2)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --ipc=host
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.19.0
+          cache: npm
+      - run: npm ci
+      - run: node tools/build.mjs
+      - name: Race gate
+        run: node tools/race/run.mjs --shard ${{ matrix.shard }}/2
+
+  # On the perf fixture: the failure only shows on a book long enough to have pages at the draw window's edge.
+  selmenu:
+    name: selection menu
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: mcr.microsoft.com/playwright:v1.62.1-noble
+      options: --ipc=host
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.19.0
+          cache: npm
+      - run: npm ci
+      - run: node tools/build.mjs
+      - name: The selection menu holds on a production-shaped PDF
+        run: |
+          node tools/perf-fixture.mjs /tmp/selmenu.db
+          STRATA_DB=/tmp/selmenu.db STRATA_PORT=8808 STRATA_OPEN=1 STRATA_FAKE_MODEL=1 GEMINI_API_KEY= \
+            STRATA_COURSES="$PWD/test/fixtures/courses" node server/main.ts > /tmp/selmenu.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          for _ in $(seq 1 150); do curl -fsS http://127.0.0.1:8808/api/health >/dev/null 2>&1 && break; sleep 0.2; done
+          node tools/selmenu-check.mjs http://127.0.0.1:8808 || { tail -n 80 /tmp/selmenu.log; exit 1; }
+
+  # One runner, not shards: the timing budgets want the machine to themselves.
+  perf:
+    name: perf budgets
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.19.0
+          cache: npm
+      - run: npm ci
+      - run: node tools/build.mjs
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+      - run: npx playwright install --with-deps chromium
+      - name: Performance budgets on a production-shaped room
+        run: node tools/perf/budgets.mjs --serve --fresh
+
+  # The one check branch protection names: green only when every stage above is.
+  # Perf budgets report but never block: the same revision passes one day and fails the next on a shared runner.
+  test:
+    name: test
+    if: always()
+    needs: [check, smoke, race, selmenu, perf]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every stage passed
+        env:
+          RESULTS: ${{ toJSON(needs) }}
+        run: |
+          echo "$RESULTS" | jq -r 'to_entries[] | "\(.key): \(.value.result)"'
+          echo "$RESULTS" | jq -e 'to_entries | all(.[]; .value.result == "success" or .key == "perf")' > /dev/null
+
+  # The image the production box pulls: named after the repository, so a fork publishes its own.
+  publish:
+    name: publish image
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build and push the image, tagged with this revision and latest
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          repo="ghcr.io/${GITHUB_REPOSITORY,,}"
+          echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          docker build --build-arg STRATA_COMMIT="$GITHUB_SHA" -t "$repo:$GITHUB_SHA" -t "$repo:latest" .
+          docker push "$repo:$GITHUB_SHA"
+          docker push "$repo:latest"

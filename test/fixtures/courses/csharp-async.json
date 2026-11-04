@@ -1,0 +1,1 @@
+{"course":{"slug":"csharp-async","title":"Fixture Async"},"decks":[{"type":"flashcard","title":"Fixture","cards":[{"id":"one","front":"What is the first async fixture?","back":"A synthetic lifecycle card.","source":"Fixture, page 1"},{"id":"two","front":"What is the second async fixture?","back":"Another synthetic lifecycle card.","source":"Fixture, page 2"}]}]}

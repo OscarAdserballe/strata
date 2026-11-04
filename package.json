@@ -1,0 +1,45 @@
+{
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.8",
+    "@types/node": "^26.2.0",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "esbuild": "^0.28.2",
+    "playwright": "1.62.1",
+    "typescript": "^7.0.2"
+  },
+  "dependencies": {
+    "katex": "^0.18.4",
+    "markdown-to-jsx": "^9.10.2",
+    "pdfjs-dist": "^6.2.108",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "name": "strata",
+  "private": true,
+  "version": "1.0.0",
+  "description": "The reading room \u2014 course decks beside the source you are reading",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/OscarAdserballe/strata.git"
+  },
+  "scripts": {
+    "build": "node tools/build.mjs",
+    "watch": "node tools/build.mjs --watch",
+    "check": "tsc --noEmit && npm run lint && npm test",
+    "pretest": "npm run build",
+    "test": "node --test \"test/**/*.test.{ts,mjs}\" \"tools/**/*.test.{ts,mjs}\" \"{web,server,shared}/**/*.test.{ts,mjs}\"",
+    "lint": "biome lint web server shared test tools/*.mjs tools/*.test.ts tools/perf tools/race tools/figma ops/*.mjs",
+    "smoke": "node tools/smoke.mjs",
+    "smoke:all": "node tools/smoke-all.mjs",
+    "backup": "node tools/backup.mjs",
+    "perf": "npm run build && node tools/perf/budgets.mjs --serve",
+    "perf:fixture": "node tools/perf-fixture.mjs data/perf/fixture.db",
+    "verify": "node tools/verify.mjs",
+    "verify:quick": "node tools/verify.mjs --quick",
+    "race": "npm run build && node tools/race/run.mjs",
+    "figma:capture": "npm run build && node tools/figma/capture.mjs"
+  },
+  "type": "module"
+}

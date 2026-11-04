@@ -1,0 +1,4 @@
+.card-deleted { display: flex; align-items: center; gap: 12px; margin: 14px 0 0; padding: 9px 12px; border: 1px solid var(--line, #d8d3c9); border-radius: 9px; font-size: 13px; color: var(--ink-soft, #5c574f); }
+.card-deleted > span { flex: 1; min-width: 0; }
+.card-deleted button { font: 500 9.5px/1 var(--mono); letter-spacing: .06em; border-radius: 99px; padding: 7px 12px; cursor: pointer; background: none; color: var(--accent-deep, inherit); border: 1px solid var(--accent-line, currentColor); }
+.bench .card-deleted { margin: 4px 0 0; padding: 3px 8px; font-size: 12px; }

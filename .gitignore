@@ -1,0 +1,14 @@
+/node_modules/
+/dist/
+/data/
+/backups/
+/courses/
+/.env
+/secrets/*
+!/secrets/.gitkeep
+!/secrets/*.example.json
+
+# the performance harness: fixtures, runs and profiles are generated, never committed
+tools/perf/out/
+tools/perf/dist-prof/
+tools/perf/targets.json

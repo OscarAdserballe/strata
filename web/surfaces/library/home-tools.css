@@ -1,0 +1,31 @@
+.home-tools { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0; }
+.import-receipt { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); z-index: var(--layer-receipt); display: flex; align-items: center; gap: 12px; max-width: calc(100vw - 32px); padding: 10px 16px; background: #faf8f3; color: #292720; border: 1px solid #d6d0c5; border-radius: 8px; box-shadow: 0 3px 18px #0002; }
+.import-receipt span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.import-receipt button { color: inherit; cursor: pointer; background: transparent; border: 0; padding: 4px; }
+.home-tools > button { padding: 7px 12px; color: #514d43; background: transparent; border: 1px solid #d6d0c5; border-radius: 6px; cursor: pointer; font: 13px/1.4 system-ui, sans-serif; }
+.home-tool-dialog { width: min(680px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); box-sizing: border-box; padding: 24px; border: 1px solid #d6d0c5; border-radius: 12px; background: #faf8f3; color: #292720; overflow: auto; font: 15px/1.6 system-ui, sans-serif; }
+.home-tool-dialog::backdrop { background: #24231d66; }
+.home-tool-dialog header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.home-tool-dialog h2 { font: 500 26px/1.3 Georgia, serif; margin: 0; }
+.home-tool-dialog nav { display: flex; flex-wrap: wrap; gap: 8px; margin: 18px 0; }
+.home-tool-dialog button { border: 1px solid #d6d0c5; border-radius: 6px; background: transparent; color: inherit; padding: 7px 12px; cursor: pointer; font: inherit; }
+.home-tool-dialog button[aria-pressed="true"], .home-tool-form button[type="submit"] { background: #394537; color: #fff; border-color: #394537; }
+.home-tool-dialog button:disabled { opacity: .5; cursor: default; }
+.home-tool-dialog :focus-visible { outline: 2px solid #566e49; outline-offset: 3px; }
+.home-tool-note { color: #716d63; font-size: 13px; }
+.home-tool-form { display: grid; gap: 8px; }
+.home-tool-form textarea, .home-tool-form input { box-sizing: border-box; width: 100%; border: 1px solid #cfc8bd; border-radius: 6px; padding: 10px; background: #fffefa; color: inherit; font: inherit; }
+.home-tool-form textarea { min-height: 90px; resize: vertical; }
+.home-tool-form button { justify-self: start; margin-top: 8px; }
+.home-card-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.home-personal-cards details { border-top: 1px solid #d6d0c5; padding: 14px 0; overflow-wrap: anywhere; }
+.home-personal-cards summary { cursor: pointer; font-weight: 500; }
+@media (max-width: 480px) { .home-tool-dialog { padding: 18px; } .home-tool-dialog nav button { padding: 6px 8px; font-size: 13px; } }
+.agent-snippet { display: grid; gap: 4px; }
+.agent-snippet > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: #716d63; font-size: 13px; }
+.agent-snippet pre { margin: 0; padding: 10px; background: #fffefa; border: 1px solid #cfc8bd; border-radius: 6px; font: 12px/1.5 ui-monospace, monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent-check { display: flex; gap: 8px; align-items: center; }
+.agent-check input { width: auto; }
+.agent-heading { font: 500 17px/1.3 Georgia, serif; margin: 18px 0 4px; }
+.agent-tokens { list-style: none; margin: 0; padding: 0; }
+.agent-tokens li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid #d6d0c5; font-size: 14px; }

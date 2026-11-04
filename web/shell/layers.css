@@ -1,0 +1,22 @@
+/* Values mirror web/shell/layers.ts; stack with z-index: var(--layer-<name>), never a number. */
+:root{
+  --layer-page-layers:15;
+  --layer-desk:20;
+  --layer-bench:30;
+  --layer-room-ask:40;
+  --layer-selmenu:60;
+  --layer-menu:70;
+  --layer-veil:80;
+  --layer-bench-lib:85;
+  --layer-saving:88;
+  --layer-toast:90;
+  --layer-ask-dock:95;
+  --layer-capture:100;
+  --layer-sheet:110;
+  --layer-imports:120;
+  --layer-imports-pop:130;
+  --layer-banner:500;
+  --layer-receipt:12000;
+}
+/* Names both classes so it outranks .veil regardless of stylesheet order. */
+.veil.keys-veil{z-index:var(--layer-sheet);}

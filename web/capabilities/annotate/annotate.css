@@ -1,0 +1,18 @@
+.page-col.marked{position:relative;}
+/* no radius: a mark split across spans would show gaps where rounded corners meet */
+.mk{background:oklch(0.94 0.075 92);box-decoration-break:clone;-webkit-box-decoration-break:clone;padding:1px 0;cursor:pointer;transition:background .12s;}
+.mk:hover{background:oklch(0.90 0.11 92);}
+.mk.said{background:oklch(0.95 0.07 92);box-shadow:inset 0 -2px 0 oklch(0.80 0.13 88);}
+.mk.on{background:oklch(0.88 0.13 92);box-shadow:inset 0 -2px 0 oklch(0.62 0.16 60);}
+/* under the text layer with no pointer events, so a new drag can start on a marked passage */
+.mkbox{position:absolute;background:oklch(0.80 0.13 92 / 0.34);border-radius:2px;transition:background .12s;pointer-events:none;z-index:2;}
+.mkbox.said{box-shadow:inset 0 -2px 0 oklch(0.78 0.14 88 / 0.85);}
+.mkbox.on{background:oklch(0.76 0.17 92 / 0.55);box-shadow:inset 0 -2px 0 oklch(0.58 0.17 60);}
+
+
+/* divided by the room's scale: a fixed child of a zoomed subtree is placed in unzoomed coordinates */
+.selmenu{position:fixed;z-index:var(--layer-selmenu);transform:translate(-50%,calc(-100% - 9px));display:flex;background:var(--ink);border-radius:8px;box-shadow:0 4px 16px oklch(0.2 0.02 60 / 0.28);overflow:hidden;}
+.selmenu button{font:500 11.5px/1 var(--sans);letter-spacing:.02em;color:var(--paper);background:transparent;border:none;padding:9px 13px;cursor:pointer;white-space:nowrap;}
+.selmenu button + button{border-left:1px solid oklch(1 0 0 / 0.14);}
+.selmenu button:hover{background:oklch(1 0 0 / 0.13);}
+.selmenu:after{content:"";position:absolute;left:50%;bottom:-5px;width:10px;height:10px;background:var(--ink);transform:translateX(-50%) rotate(45deg);border-radius:1px;z-index:-1;}

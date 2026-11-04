@@ -1,0 +1,12 @@
+:root{
+  /* light-only: a live page's iframe inherits this, and its prefers-color-scheme follows it rather than the OS */
+  color-scheme:light;
+  --paper:oklch(0.987 0.006 85); --paper-2:oklch(0.967 0.008 83); --paper-3:oklch(0.945 0.010 82);
+  --card-bg:oklch(0.995 0.004 85); --ink:oklch(0.265 0.012 60); --ink-soft:oklch(0.44 0.012 60);
+  --ink-faint:oklch(0.60 0.010 65); --line:oklch(0.905 0.008 78); --line-soft:oklch(0.935 0.007 80);
+  --accent:oklch(0.50 0.072 248); --accent-deep:oklch(0.42 0.072 248); --accent-soft:oklch(0.945 0.022 248); --accent-line:oklch(0.86 0.04 248);
+  --good:oklch(0.55 0.06 150); --good-soft:oklch(0.95 0.03 150); --warn:oklch(0.62 0.12 55); --warn-soft:oklch(0.96 0.04 55);
+  --serif:"Spectral",Georgia,serif; --sans:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",monospace;
+  --shadow:0 1px 2px oklch(0.4 0.02 70 / 0.05), 0 8px 26px oklch(0.4 0.02 70 / 0.07);
+  --shadow-soft:0 1px 2px oklch(0.4 0.02 70 / 0.04), 0 2px 8px oklch(0.4 0.02 70 / 0.05);
+}

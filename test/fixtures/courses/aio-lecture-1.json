@@ -1,0 +1,1 @@
+{"course":{"slug":"aio-lecture-1","title":"Fixture One"},"decks":[{"type":"flashcard","title":"Fixture","cards":[{"id":"one","front":"What is fixture one?","back":"A synthetic test card.","source":"Fixture, page 1"},{"id":"two","front":"Why is fixture one small?","back":"It only tests the data boundary.","source":"Fixture, page 2"}]}]}

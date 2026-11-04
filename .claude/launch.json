@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "strata-preview",
+      "runtimeExecutable": "./tools/preview.sh",
+      "runtimeArgs": ["--keep"],
+      "port": 8804
+    },
+    {
+      "name": "strata-preview-bash",
+      "runtimeExecutable": "C:/Program Files/Git/bin/bash.exe",
+      "runtimeArgs": ["tools/preview.sh", "--keep"],
+      "port": 8804
+    }
+  ]
+}

@@ -1,0 +1,1289 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dashboard</title>
+<!-- The dashboard: a separate app Strata hosts at <room>/dashboard. Agents feed its inbox through the
+     dashboard_add_items MCP tool and read it with dashboard_read; this page is where you triage and move tasks. -->
+<script>window.STRATA_BASE = "__STRATA_BASE__";</script>
+<style>
+:root{
+  --bg:#fafaf8; --surface:#ffffff; --sunk:#efeeea; --line:#e6e5e1; --line-strong:#d9d8d3;
+  --text:#1a1a1a; --text-2:#3d3d3a; --text-3:#55554f; --muted:#6b6b66; --faint:#9a9a94;
+  --accent:#1f55c0; --accent-ink:#ffffff; --accent-deep:#163f91; --accent-wash:#eef3fc;
+  --pad:#fffdf6; --pad-line:#e8e2cf;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+button,textarea,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:var(--accent);text-decoration:none} a:hover{color:var(--accent-deep)}
+:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+.muted{color:var(--muted)} .small{font-size:13px} .xs{font-size:12px}
+.spacer{flex:1}
+.label{font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3)}
+
+header.top{border-bottom:1px solid var(--line);background:var(--surface)}
+.topin{max-width:1200px;margin:0 auto;padding:12px 24px;display:flex;flex-wrap:wrap;align-items:center;gap:8px 24px}
+.brand{font-weight:700;font-size:18px;letter-spacing:-.01em}
+.tabs{display:flex;gap:4px;flex-wrap:wrap}
+.tab{min-height:36px;padding:0 14px;border-radius:8px;border:0;background:transparent;color:var(--text-2);font-size:14px;font-weight:500}
+.tab[aria-selected="true"]{background:var(--text);color:#fff}
+.tab .n{color:var(--accent);font-weight:700;margin-left:4px}
+.tab[aria-selected="true"] .n{color:inherit}
+.out{display:flex;gap:4px 14px;flex-wrap:wrap;font-size:13px}
+.out a{color:var(--muted)} .out a:hover{color:var(--text)}
+
+main{max-width:1200px;margin:0 auto;padding:28px 24px 120px}
+.btn{min-height:36px;padding:0 12px;border-radius:8px;border:1px solid var(--line-strong);background:var(--surface);font-size:13.5px}
+.btn.primary{min-height:44px;padding:0 20px;background:var(--accent);color:var(--accent-ink);border-color:var(--accent);font-weight:600;font-size:14.5px}
+.btn.primary[disabled],.btn[disabled]{background:var(--sunk);border-color:var(--sunk);color:var(--muted);cursor:default}
+.btn.big{min-height:44px;padding:0 16px;font-size:14.5px}
+.btn.link{border:0;background:transparent;color:var(--accent);padding:0 6px;font-weight:500}
+
+/* board */
+.board{display:flex;flex-wrap:wrap;gap:40px;align-items:flex-start}
+.lane{flex:999 1 600px;min-width:0;display:flex;flex-direction:column;gap:36px}
+.rail{flex:1 1 300px;min-width:0;display:flex;flex-direction:column;gap:28px}
+.zone{border-radius:10px;outline:2px dashed transparent;outline-offset:6px}
+.zone.over{outline-color:var(--accent)}
+.zhead{display:flex;align-items:baseline;gap:10px;margin-bottom:8px}
+.zhead h2{margin:0;font-size:20px;font-weight:700;letter-spacing:-.01em}
+.zone.today .zhead h2{font-size:26px;color:var(--accent);letter-spacing:-.02em}
+.rail .zhead{margin-bottom:4px} .rail .zhead h2{font-size:13px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3)}
+.zhead .n{font-size:14px;color:var(--muted)} .rail .zhead .n{font-size:13px}
+.empty{margin:0;padding:14px 0;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
+.trow{display:flex;align-items:flex-start;gap:10px;padding:12px 0;border-top:1px solid var(--line);cursor:pointer}
+.trow.over{box-shadow:inset 0 0 0 2px var(--accent);border-radius:6px}
+.trow.dragging{opacity:.4}
+.today .trow{padding:14px 0}
+.rail .trow{padding:8px 0;align-items:center}
+.pin{flex:none;width:44px;height:44px;margin:-10px 0 -10px -12px;border:0;background:transparent;border-radius:8px;display:flex;align-items:center;justify-content:center;color:var(--faint)}
+.pin:hover{background:var(--sunk);color:var(--accent)}
+.pin[aria-pressed="true"]{color:var(--accent)}
+.tmain{flex:1;min-width:0}
+.tt{font-weight:500;font-size:15px}
+.today .tt{font-weight:600;font-size:16px}
+.rail .tt{font-size:14px;font-weight:400}
+.tc{font-size:13.5px;color:var(--muted);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.today .tc{white-space:normal;color:var(--text-3);font-size:14px}
+.meta{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:12.5px;color:var(--muted);margin-top:3px}
+.meta .fresh,.meta .stale{color:var(--accent);font-weight:500}
+.done-t{color:var(--muted);text-decoration:line-through;text-decoration-color:#c9c8c2}
+.drop-t{color:var(--muted)}
+.status{position:relative;flex:none}
+.chip{min-height:32px;padding:0 12px;border:1px solid var(--line-strong);border-radius:16px;background:var(--surface);font-size:13px;display:flex;align-items:center;gap:8px}
+.chip.dotonly{width:32px;padding:0;justify-content:center}
+.dot{display:inline-block;flex:none;width:8px;height:8px;border-radius:4px;background:var(--faint)}
+.dot.you{background:var(--accent)} .dot.claude,.dot.waiting{background:transparent;border:2px solid #6e6e68;width:9px;height:9px}
+.dot.later{background:#b5b5af} .dot.done{background:var(--text)} .dot.dropped{background:#b5b5af}
+.menu{position:absolute;z-index:30;right:0;top:38px;width:220px;background:var(--surface);border:1px solid var(--line-strong);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.1);padding:4px}
+.menu button{display:flex;align-items:center;gap:10px;width:100%;min-height:36px;padding:0 10px;border:0;border-radius:6px;background:transparent;font-size:14px;text-align:left}
+.menu button:hover,.menu button[aria-checked="true"]{background:var(--sunk)}
+.menu kbd{margin-left:auto;font:11px ui-monospace,monospace;color:var(--muted);border:1px solid var(--line);border-radius:3px;padding:0 4px}
+.menu hr{border:0;border-top:1px solid var(--line);margin:4px 0}
+.hint{font-size:12.5px;color:var(--muted);margin:0}
+
+/* inbox */
+.inbox{display:flex;flex-wrap:wrap;gap:32px;align-items:flex-start}
+.ilist{flex:1 1 280px;min-width:0;display:flex;flex-direction:column;gap:22px}
+.ilist h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em}
+.addform{display:flex;gap:8px}
+.routine{display:flex;flex-direction:column;gap:8px;font-size:12.5px;color:var(--muted)}
+.routine .rrow{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.routine input{min-height:34px;padding:0 10px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface);font:12.5px ui-monospace,Consolas,monospace}
+.routine .err{color:var(--accent-deep);font-weight:500}
+.addform input{flex:1;min-width:0;min-height:40px;padding:0 12px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);font-size:14px}
+.ghead{display:flex;align-items:baseline;gap:8px}
+.ghint{margin:0 0 6px;font-size:12.5px;color:var(--muted)}
+.irow{display:flex;flex-direction:column;gap:2px;width:100%;text-align:left;padding:9px 12px;border:0;border-top:1px solid var(--line);background:transparent}
+.irow[aria-current="true"]{background:var(--surface);box-shadow:inset 3px 0 0 var(--accent)}
+.irow .it{font-weight:600;font-size:14px;line-height:1.35;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.irow .ik{display:flex;gap:6px;font-size:12.5px;color:var(--muted)}
+.irow .thin{color:var(--accent);font-weight:600}
+.editor{flex:999 1 480px;min-width:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:24px 28px;display:flex;flex-direction:column;gap:18px}
+.editor .top{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;color:var(--muted)}
+.field{display:flex;flex-direction:column;gap:4px}
+.editor textarea.titlein{min-height:0;field-sizing:content;resize:none;background:var(--surface);line-height:1.3;font-size:21px;color:var(--text);padding:8px 10px}
+.titlein{font-size:21px;font-weight:600;letter-spacing:-.01em;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:var(--surface)}
+.editor textarea{width:100%;min-height:76px;max-height:60vh;field-sizing:content;resize:vertical;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fcfcfb;font-size:14px;line-height:1.55;color:#2b2b28}
+.editor textarea.tall{min-height:110px}
+.quote{margin:0;padding:2px 0 2px 14px;border-left:2px solid var(--line-strong);color:var(--text-3);font-size:14px}
+.note{margin:0;padding:10px 12px;background:var(--accent-wash);border-radius:8px;font-size:13.5px;color:var(--accent-deep)}
+.links{display:flex;flex-wrap:wrap;gap:8px}
+.links a{display:inline-flex;gap:6px;align-items:center;padding:6px 10px;border:1px solid var(--line);border-radius:6px;font-size:13px;color:var(--text-2)}
+.links a .k{color:var(--muted);text-transform:capitalize}
+.actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding-top:8px;border-top:1px solid #ecebe7}
+.target{display:flex;gap:10px;align-items:center}
+.target select{flex:1;min-width:0;min-height:40px;padding:0 10px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface)}
+.dir{display:flex;gap:12px;align-items:flex-start;padding:12px;margin:0 -12px;border-top:1px solid var(--line);border-radius:8px;cursor:pointer}
+.dir.on{background:var(--accent-wash)}
+.dir input{width:18px;height:18px;margin:3px 0 0;accent-color:var(--accent);flex:none}
+.dir .dt{font-weight:600;font-size:14.5px} .dir .db{font-size:13.5px;color:var(--text-3)}
+.ownform{display:flex;gap:8px;padding-top:12px;border-top:1px solid var(--line)}
+.ownform input{flex:1;min-width:0;min-height:40px;padding:0 12px;border:1px solid var(--line-strong);border-radius:8px}
+.isedit{align-self:flex-start;font-size:13px}
+.ifold{border-top:1px solid var(--line);padding-top:8px}
+.ifold summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:baseline;min-width:0}
+.ifold summary::-webkit-details-marker{display:none}
+.ifold summary .peek{flex:1;min-width:0;font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ifold[open] summary .peek{visibility:hidden}
+.ifold .quote{margin:8px 0}
+.editor .decide{margin-left:auto;display:flex;gap:8px} .editor .decide .btn.big{color:var(--text)}
+.editor .top:has(.decide),.editor .pickarea{flex-wrap:wrap;align-items:center}
+
+/* archive */
+.archive{max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.ahead{display:flex;flex-wrap:wrap;gap:12px 20px;align-items:center}
+.ahead h1{margin:0;font-size:22px;font-weight:700;letter-spacing:-.01em}
+.seg{display:flex;gap:2px;padding:3px;background:var(--sunk);border-radius:10px}
+.seg.area{padding:3px}
+.seg.area button{min-height:32px;padding:0 12px;border:0;border-radius:8px;font-size:13.5px;font-weight:500;background:transparent;color:var(--text-3)}
+.seg.area button[aria-selected="true"]{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.seg.area .n{color:var(--muted);font-weight:400;margin-left:2px}
+.small-seg{display:inline-flex;gap:2px;padding:2px;background:var(--sunk);border-radius:8px}
+.small-seg button{min-height:28px;padding:0 10px;border:0;border-radius:6px;font-size:12.5px;font-weight:500;background:transparent;color:var(--text-3)}
+.small-seg button[aria-pressed="true"]{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.pickarea{display:flex;align-items:center;gap:10px}
+.atag{font-weight:500;color:var(--text-3)}
+.atag::after{content:"·";margin:0 6px;color:var(--muted)}
+.seg button{min-height:34px;padding:0 14px;border:0;border-radius:8px;font-size:13.5px;font-weight:500;background:transparent;color:var(--text-3)}
+.seg button[aria-selected="true"]{background:var(--surface);color:var(--text);box-shadow:0 1px 2px rgba(0,0,0,.08)}
+.search{flex:0 1 320px;min-width:0;min-height:40px;padding:0 12px;border:1px solid var(--line-strong);border-radius:8px;background:var(--surface);font-size:14px}
+.arow{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.arow .at{flex:1 1 320px;min-width:0;font-size:14.5px}
+.srow{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:baseline;padding:12px 0;border-top:1px solid var(--line)}
+.srow .sm{flex:1 1 360px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.srow .sn{font-weight:600;font-size:14.5px;color:var(--text)}
+a.sn:hover{color:var(--accent)}
+.cov{flex:none;padding:3px 10px;border-radius:12px;font-size:12.5px;font-weight:500;background:var(--sunk);color:var(--text-2)}
+.cov.partial{background:var(--accent-wash);color:var(--accent-deep)}
+.cov.unknown{background:transparent;color:var(--muted);border:1px solid var(--line)}
+
+/* drawer */
+.drawer-bg{position:fixed;inset:0;background:rgba(0,0,0,.25);display:none;z-index:40}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(760px,100%);background:var(--surface);box-shadow:-4px 0 20px rgba(0,0,0,.15);padding:24px;overflow:auto;display:none;flex-direction:column;gap:18px;z-index:41}
+.open .drawer-bg{display:block} .open .drawer{display:flex}
+.drawer > *{flex-shrink:0}
+.drawer h2{margin:0;font-size:20px}
+.dhead{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.dtitle{width:100%;font-size:21px;font-weight:600;line-height:1.3;letter-spacing:-.01em;border:1px solid transparent;border-radius:6px;padding:4px 6px;margin:-8px 0 0 -7px;background:transparent;resize:none;overflow:hidden}
+.dtitle:hover{border-color:var(--line)} .dtitle:focus{border-color:var(--accent);outline:none;background:var(--surface)}
+.dwait{display:flex;align-items:center;gap:10px} .dwait input{flex:1;min-height:36px;padding:0 10px;border:1px solid var(--line-strong);border-radius:8px}
+.md.editable{cursor:text;border-radius:8px;margin-left:-8px;padding:6px 8px} .md.editable:hover{background:var(--sunk)}
+.desced{display:flex;flex-direction:column;gap:12px}
+.desced textarea{width:100%;min-height:76px;resize:vertical;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fcfcfb;font-size:14px;line-height:1.55;color:#2b2b28}
+.desced textarea.tall{min-height:120px}
+.body{font-size:14.5px;line-height:1.6;white-space:pre-wrap;color:var(--text-2)}
+.md{font-size:14.5px;line-height:1.6;color:var(--text-2);max-width:68ch}
+.md h4{margin:18px 0 4px;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-3)}
+.md h4:first-child{margin-top:4px}
+.md p{margin:0 0 8px} .md ul,.md ol{margin:0 0 8px;padding-left:20px} .md li{margin:2px 0}
+.md blockquote{margin:6px 0 10px;padding:2px 0 2px 12px;border-left:2px solid var(--line-strong);color:var(--text-3)}
+.md a{word-break:break-all} .md code{font:13px ui-monospace,monospace;background:var(--sunk);padding:1px 4px;border-radius:4px}
+.trow.sub{margin-left:34px;padding-left:14px;border-top:0;border-left:2px solid var(--line)}
+.rail .trow.sub{margin-left:8px;padding-left:12px}
+.trow.sub .tt{font-size:14.5px}
+.unnest{border:0;background:transparent;color:var(--accent);font-size:12.5px;padding:0 2px;cursor:pointer}
+.unnest:hover{text-decoration:underline}
+.kid{display:flex;align-items:center;gap:8px;padding:4px 0}
+.think{border:1px solid var(--line);border-radius:10px;padding:10px 14px 12px;background:var(--surface);margin-top:6px}
+.thead{display:flex;align-items:center;margin-bottom:8px}
+.tldr{padding:8px 12px;border-left:3px solid var(--accent);background:var(--accent-wash);border-radius:0 8px 8px 0;font-size:14px;line-height:1.55;margin-bottom:8px}
+.tldr .k{display:block;font-size:11px;font-weight:700;letter-spacing:.07em;color:var(--accent)}
+.tq{border-top:1px solid var(--line);padding:7px 0}
+.tq summary,.cut summary{list-style:none;cursor:pointer;display:flex;gap:10px;align-items:flex-start;font-size:14px;line-height:1.45}
+.tq summary::-webkit-details-marker,.cut summary::-webkit-details-marker{display:none}
+.tq .n{flex:none;width:20px;height:20px;border-radius:10px;background:var(--sunk);color:var(--text-3);font-size:11.5px;font-weight:600;display:flex;align-items:center;justify-content:center;margin-top:1px}
+.tq.blocks .n{background:var(--accent);color:var(--accent-ink)}
+.tq .bl{display:inline-block;font-size:12px;padding:0 8px;border-radius:99px;background:#fdf1d6;color:#8a5a00;margin-right:6px}
+.tq .qw{margin:4px 0 0 30px;font-size:13.5px;color:var(--text-3)}
+.tq .gen{margin:6px 0 0 30px;font-size:13px;font-style:italic;color:var(--muted);background:#f7f6f3;border-radius:6px;padding:4px 8px}
+.tq .gen span{font-style:normal;font-weight:600;font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--faint);margin-right:6px}
+.cuts{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;align-items:start}
+.cut{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.cut[open]{border-color:var(--accent);background:var(--accent-wash)}
+.cut summary{flex-direction:column;gap:2px;font-size:13.5px} .cut .cn{font-size:13px;color:var(--muted)}
+pre.tree{margin:8px 0 0;font:12px/1.5 ui-monospace,Consolas,monospace;color:var(--text-2);white-space:pre;overflow-x:auto}
+.meta .thinkb{color:var(--accent)}
+.updsep{display:flex;gap:10px;align-items:center;font-size:12px;color:var(--muted);margin:12px 0 4px}
+.updsep::before,.updsep::after{content:"";flex:1;border-top:1px solid var(--line)}
+.prompt{width:100%;min-height:300px;padding:12px;border:1px solid var(--line-strong);border-radius:6px;background:var(--surface);font:13px/1.55 ui-monospace,Consolas,monospace;resize:vertical}
+
+/* scratch pad */
+.padbtn{position:fixed;right:24px;bottom:24px;z-index:44;min-height:44px;padding:0 16px;border-radius:22px;border:1px solid var(--line-strong);background:var(--surface);box-shadow:0 4px 14px rgba(0,0,0,.08);display:flex;gap:8px;align-items:center;font-size:14px;font-weight:500}
+.pad{position:fixed;left:auto;top:auto;right:24px;bottom:24px;z-index:45;width:400px;height:460px;background:var(--pad);border:1px solid var(--pad-line);border-radius:12px;box-shadow:0 16px 40px rgba(0,0,0,.16),0 2px 6px rgba(0,0,0,.06);display:none;flex-direction:column;overflow:hidden}
+.padopen .pad{display:flex} .padopen .padbtn{display:none}
+.pad.moving{user-select:none;box-shadow:0 22px 50px rgba(0,0,0,.2)}
+.padbar{display:flex;align-items:center;gap:2px;padding:4px 4px 4px 8px;border-bottom:1px solid var(--pad-line);cursor:grab;touch-action:none}
+.pad.moving .padbar{cursor:grabbing}
+.padtools{display:flex;gap:2px}
+.padbar button{width:34px;height:34px;border:0;background:transparent;border-radius:6px;color:var(--text-3);display:flex;align-items:center;justify-content:center;font-size:15px;cursor:pointer}
+.padbar button:hover{background:rgba(0,0,0,.05)}
+.padbar button[aria-pressed="true"]{background:rgba(31,85,192,.1);color:var(--accent)}
+.padstate{font-size:12px;color:var(--muted);white-space:nowrap;padding:0 6px}
+.paded{flex:1;overflow:auto;padding:14px 20px 28px;font-size:15px;line-height:1.6;color:#2b2b28;outline:none;cursor:text;word-wrap:break-word}
+.paded.blank::before{content:attr(data-placeholder);color:var(--faint);position:absolute;pointer-events:none}
+.paded ul,.paded ol{margin:2px 0;padding-left:22px} .paded li{margin:1px 0}
+.paded blockquote{margin:4px 0;padding-left:12px;border-left:2px solid var(--pad-line);color:var(--text-3)}
+.paded a{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+.paded h1,.paded h2,.paded h3{font-size:16px;margin:8px 0 2px}
+.paded p{margin:0}
+.padgrip{position:absolute;right:0;bottom:0;width:18px;height:18px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 50%,var(--pad-line) 50%,var(--pad-line) 58%,transparent 58%,transparent 70%,var(--pad-line) 70%,var(--pad-line) 78%,transparent 78%)}
+@media (max-width:640px){.pad{left:0!important;right:0;top:auto!important;bottom:0;width:100%!important;height:62vh!important;border-radius:14px 14px 0 0}.padbar{cursor:default}.padgrip{display:none}}
+
+.toast{position:fixed;left:50%;bottom:20px;transform:translateX(-50%);background:var(--text);color:#fff;padding:10px 16px;border-radius:8px;font-size:14px;display:none;max-width:90%;z-index:50}
+.toast.show{display:block}
+@media (max-width:640px){main{padding:20px 16px 120px}.editor{padding:18px}.topin{padding:10px 16px}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="topin">
+    <span class="brand">Dashboard</span>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button class="tab" role="tab" data-view="board">Board</button>
+      <button class="tab" role="tab" data-view="inbox">Inbox<span class="n" id="inboxN"></span></button>
+      <button class="tab" role="tab" data-view="archive">Archive</button>
+    </nav>
+    <span class="spacer"></span>
+    <span class="seg area" role="tablist" aria-label="Work or personal"><button role="tab" data-area="work">Work <span class="n" id="workN"></span></button><button role="tab" data-area="personal">Personal <span class="n" id="personalN"></span></button></span>
+    <span class="out">
+      <span id="outLinks" style="display:contents"></span>
+      <a id="strataLink" href="./">Strata</a>
+      <a href="https://claude.ai/code" target="_blank" rel="noopener">Claude</a>
+    </span>
+  </div>
+</header>
+<main id="view"><p class="muted">Loading…</p></main>
+<div id="drawerRoot"><div class="drawer-bg" id="drawerBg"></div><aside class="drawer" id="drawer" aria-label="Task"></aside></div>
+<button class="padbtn" id="padBtn" aria-label="Open the scratch pad"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M14 6l4 4"/></svg>Scratch pad</button>
+<aside class="pad" id="pad" aria-label="Scratch pad">
+  <div class="padbar" id="padBar" title="Drag to move">
+    <span class="padtools" role="toolbar" aria-label="Formatting">
+      <button data-cmd="bold" aria-label="Bold" title="Bold (Ctrl+B)"><b>B</b></button>
+      <button data-cmd="italic" aria-label="Italic" title="Italic (Ctrl+I)"><i>I</i></button>
+      <button data-cmd="underline" aria-label="Underline" title="Underline (Ctrl+U)"><u>U</u></button>
+      <button data-cmd="strike" aria-label="Strikethrough" title="Strikethrough (Ctrl+Shift+X)"><s>S</s></button>
+      <button data-cmd="ul" aria-label="Bulleted list" title="Bulleted list (type - and a space)"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1" fill="currentColor"/><circle cx="4.5" cy="12" r="1" fill="currentColor"/><circle cx="4.5" cy="18" r="1" fill="currentColor"/></svg></button>
+      <button data-cmd="ol" aria-label="Numbered list" title="Numbered list (type 1. and a space)"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M10 6h10M10 12h10M10 18h10"/><path d="M4 5h1.5v4M4 9h3M4 14.5c0-1 2.8-1 2.8.3 0 1-2.8 2-2.8 3.2h3" stroke-width="1.5"/></svg></button>
+    </span>
+    <span class="spacer"></span><span class="padstate" id="padState" role="status"></span>
+    <button id="padClose" aria-label="Close the scratch pad" title="Close (Esc)"><svg aria-hidden="true" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+  </div>
+  <div id="padEd" class="paded blank" role="textbox" aria-multiline="true" aria-label="Scratch pad" spellcheck="true" data-placeholder="Anything. Ctrl+B, Ctrl+I, “- ” for a list."></div>
+  <div class="padgrip" id="padGrip" aria-hidden="true"></div>
+</aside>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+const BASE = window.STRATA_BASE && window.STRATA_BASE !== "__STRATA_BASE__" ? window.STRATA_BASE : "/";
+const STATES = [['you','Your move','1'],['claude','Claude is on it','2'],['waiting','Waiting on others','3'],['later','Later','4']];
+const ENDS = [['done','Done','D'],['dropped','Dropped','X']];
+const NAME = Object.fromEntries([...STATES, ...ENDS].map(([k, l]) => [k, l]));
+const KEYS = {'1':'you','2':'claude','3':'waiting','4':'later','d':'done','x':'dropped'};
+const SECTIONS = [['context','Context','What happened, who said it, why it came up'],['done','Done when','One to three outcomes you can check'],['think','Think first','TL;DR, the questions to decide, three ways to cut it'],['research','Research','What Claude looked up, with sources; then what is left for you'],['sources','Sources','Each link, with a line on what is in it']];
+const THIN = 200;
+const STAR = (filled) => `<svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="${filled ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"><path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1L3.2 9.5l6.1-.9z"/></svg>`;
+
+// Server data, plus what only this tab knows: the view, open panels, inbox edits not yet saved.
+const S = {tasks:[], inbox:[], pad:{text:'', rev:0}, archived:0, view:'board', area:'work', sel:null, open:null, menu:null,
+  edits:{}, secs:{}, tedits:{}, tsecs:{}, editDesc:null, picked:{}, own:{}, iopen:new Set(), isec:null, archive:null, archiveView:'tasks', q:'', loadedAt:null, sig:'', routine:null, routineForm:false, running:false};
+let dragId = null, hoverId = null, inflight = 0;
+
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const stamp = (t) => { const d = new Date(t); return d.toLocaleDateString([], {day:'numeric', month:'short'}) + ' ' + d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}); };
+const day = (t) => new Date(t).toLocaleDateString([], {weekday:'short', day:'numeric', month:'short'});
+const key = () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now()).replace(/[^A-Za-z0-9-]/g, '').slice(0, 40);
+const task = (id) => S.tasks.find((t) => t.id === id);
+const ended = (t) => t.state === 'done' || t.state === 'dropped';
+const linkText = (l) => [l.ref, l.title].filter(Boolean).join(' · ');
+const item = (id) => { const p = S.inbox.find((x) => x.id === id); return p ? {...p, ...(S.edits[id] || {})} : null; };
+const storage = { get(k, fb){ try { return JSON.parse(localStorage.getItem(k) || 'null') ?? fb; } catch { return fb; } }, set(k, v){ try { localStorage.setItem(k, JSON.stringify(v)); } catch {} } };
+function toast(m){ const t = document.getElementById('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 3500); }
+
+// "Updated" marks: the newest update you have seen per task, kept in this browser only.
+const seen = storage.get('dashboard-seen', {});
+const lastUpdate = (t) => t.updates?.length ? t.updates[t.updates.length - 1].at : 0;
+const isFresh = (t) => lastUpdate(t) > (seen[t.id] || t.createdAt);
+function markSeen(t){ seen[t.id] = lastUpdate(t) || Date.now(); storage.set('dashboard-seen', seen); }
+
+// A task body in five parts; text before the first known heading, and unknown headings, stay in Context.
+function parseBody(md){
+  const out = {context:'', done:'', think:'', research:'', sources:''};
+  const names = {'context':'context','done when':'done','think first':'think','research':'research','sources':'sources'};
+  let cur = 'context';
+  for (const line of String(md || '').split('\n')) {
+    const h = line.match(/^##\s+(.+?)\s*$/);
+    if (h && names[h[1].toLowerCase()]) { cur = names[h[1].toLowerCase()]; continue; }
+    out[cur] += (out[cur] ? '\n' : '') + line;
+  }
+  for (const k of Object.keys(out)) out[k] = out[k].trim();
+  return out;
+}
+// Task text as Markdown: headings, lists, quotes, bold, code and links; everything is escaped first.
+function md(text){
+  const inline = (l) => esc(l)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')
+    .replace(/(^|[\s(])[*_]([^*_\s][^*_]*)[*_](?=[\s.,;:)]|$)/g, '$1<i>$2</i>')
+    .replace(/&lt;(https?:\/\/[^\s&]+)&gt;|(https?:\/\/[^\s<]+[^\s<.,;:!?)'"])/g, (_, a, b) => { const u = a || b; return `<a href="${u}" target="_blank" rel="noopener">${u.replace(/^https?:\/\//, '').slice(0, 60)}${u.length > 68 ? '…' : ''}</a>`; });
+  const out = []; let list = null, para = [], code = null;
+  const flush = () => { if (para.length) out.push(`<p>${para.join('<br>')}</p>`); para = []; if (list) { out.push(`</${list}>`); list = null; } };
+  for (const raw of String(text || '').split('\n')) {
+    const l = raw.trimEnd();
+    let m;
+    if (/^\s*```/.test(l)) { if (code) { out.push(`<pre class="tree">${esc(code.join('\n'))}</pre>`); code = null; } else { flush(); code = []; } continue; }
+    if (code) { code.push(l); continue; }
+    if (!l.trim()) { flush(); continue; }
+    if ((m = l.match(/^#{1,4}\s+(.*)/))) { flush(); out.push(`<h4>${inline(m[1])}</h4>`); continue; }
+    if ((m = l.match(/^>\s?(.*)/))) { flush(); out.push(`<blockquote>${inline(m[1])}</blockquote>`); continue; }
+    const ul = l.match(/^\s*[-*•]\s+(.*)/), ol = l.match(/^\s*\d+[.)]\s+(.*)/);
+    if (ul || ol) {
+      const kind = ul ? 'ul' : 'ol';
+      if (para.length) { out.push(`<p>${para.join('<br>')}</p>`); para = []; }
+      if (list !== kind) { if (list) out.push(`</${list}>`); out.push(`<${kind}>`); list = kind; }
+      out.push(`<li>${inline((ul || ol)[1])}</li>`);
+      continue;
+    }
+    if (list) { out.push(`</${list}>`); list = null; }
+    para.push(inline(l));
+  }
+  if (code) out.push(`<pre class="tree">${esc(code.join('\n'))}</pre>`);
+  flush();
+  return out.join('');
+}
+// Think first: a TL;DR line, numbered questions (bold first sentence, why, an italic General line), then cuts with ASCII trees.
+function parseThink(text){
+  const out = {tldr:'', qs:[], cuts:[], rest:[]};
+  let cur = null, code = null;
+  for (const raw of String(text || '').split('\n')) {
+    const l = raw.trim();
+    let m;
+    if (/^```/.test(l)) { if (code) { cur.tree = code.join('\n'); code = null; } else if (cur && 'tree' in cur) code = []; else out.rest.push(raw); continue; }
+    if (code) { code.push(raw.trimEnd()); continue; }
+    if ((m = l.match(/^\*\*TL;DR:?\*\*:?\s*(.*)/i))) { out.tldr = m[1]; cur = null; continue; }
+    if ((m = l.match(/^(?:#{2,4}\s+|\*\*)Cut\s+([A-Z])\s*[:·.—-]\s*(.+?)(?:\*\*)?$/))) { cur = {id: m[1], name: m[2].replace(/\*\*/g, ''), note: '', tree: ''}; out.cuts.push(cur); continue; }
+    if ((m = l.match(/^\d+[.)]\s+(.*)/))) {
+      const b = m[1].match(/^\*\*(.+?)\*\*\s*(.*)/);
+      const head = b ? b[1] : m[1];
+      cur = {q: head.replace(/\s*\(blocks the rest\)\s*/i, ' ').trim(), why: (b ? b[2] : '').replace(/^\(blocks the rest\)\s*/i, ''), general: '', blocks: /\(blocks the rest\)/i.test(m[1])};
+      out.qs.push(cur);
+      continue;
+    }
+    if (!l) continue;
+    if (cur && 'q' in cur && (m = l.match(/^[*_]\s*General:\s*(.*?)[*_]?$/i))) { cur.general = m[1].replace(/^["“]|["”]$/g, ''); continue; }
+    if (cur && 'q' in cur) { cur.why += (cur.why ? ' ' : '') + l; continue; }
+    if (cur && 'tree' in cur) { cur.note += (cur.note ? ' ' : '') + l; continue; }
+    out.rest.push(raw);
+  }
+  return out;
+}
+const thinkCache = new Map();
+const thinkOf = (t) => { const k = t.id + ':' + t.updatedAt; if (!thinkCache.has(k)) thinkCache.set(k, parseThink(parseBody(t.body).think)); return thinkCache.get(k); };
+function thinkHtml(text){
+  const th = parseThink(text);
+  if (!th.qs.length && !th.cuts.length) return `<div class="md">${md(text)}</div>`;
+  const inl = (s) => md(s).replace(/^<p>|<\/p>$/g, '');
+  const first = th.qs.some((q) => q.blocks) ? th.qs.findIndex((q) => q.blocks) : 0;
+  return `<div class="think">
+    <div class="thead"><span class="label">Think first</span><span class="spacer"></span><button class="btn link" data-thinkall>Open all</button></div>
+    ${th.tldr ? `<div class="tldr"><span class="k">TL;DR</span>${inl(th.tldr)}</div>` : ''}
+    ${th.qs.map((q, i) => `<details class="tq${q.blocks ? ' blocks' : ''}"${i === first ? ' open' : ''}><summary><span class="n">${i + 1}</span><span class="qh">${q.blocks ? '<span class="bl">blocks the rest</span>' : ''}<b>${inl(q.q)}</b></span></summary>${q.why ? `<div class="qw">${inl(q.why)}</div>` : ''}${q.general ? `<div class="gen"><span>General</span>${inl(q.general)}</div>` : ''}</details>`).join('')}
+    ${th.cuts.length ? `<div class="label" style="margin:14px 0 6px">Ways to cut it</div><div class="cuts">${th.cuts.map((c) => `<details class="cut"><summary><b>${esc(c.id)} · ${inl(c.name)}</b>${c.note ? `<span class="cn">${inl(c.note)}</span>` : ''}</summary>${c.tree ? `<pre class="tree">${esc(c.tree)}</pre>` : ''}</details>`).join('')}</div>` : ''}
+    ${th.rest.some((l) => l.trim()) ? `<div class="md">${md(th.rest.join('\n'))}</div>` : ''}
+  </div>`;
+}
+const serialize = (sec) => SECTIONS.filter(([k]) => sec[k].trim()).map(([k, name]) => `## ${name}\n${sec[k].trim()}`).join('\n\n');
+const contextLine = (t) => { const s = parseBody(t.body); return ([s.context, s.done].join('\n').split('\n').find((l) => l.trim() && !/^#/.test(l.trim())) || '').replace(/^\s*(>|[-*•])\s+/, '').replace(/\*\*|`/g, ''); };
+
+// ---------- network: one key per write, reused on every retry, so a lost answer never writes twice ----------
+async function api(path, method = 'GET', body, headers = {}){
+  const k = method === 'GET' ? null : key();
+  for (let attempt = 0; ; attempt++) {
+    try {
+      const r = await fetch(BASE + path, {method, headers: {'Content-Type':'application/json', ...(k ? {'Idempotency-Key': k} : {}), ...headers}, body: body === undefined ? undefined : JSON.stringify(body)});
+      if (r.status < 500 && ![408, 425, 429].includes(r.status)) {
+        const data = await r.json().catch(() => ({}));
+        if (!r.ok) throw Object.assign(new Error(data.error || `HTTP ${r.status}`), {final: true, status: r.status, data});
+        return data;
+      }
+    } catch (e) { if (e.final || attempt >= 4) throw e; }
+    if (attempt >= 4) throw new Error('The server didn’t answer');
+    await new Promise((r) => setTimeout(r, 400 * 2 ** attempt));
+  }
+}
+// The header's outside links come from the server's STRATA_DASHBOARD_LINKS, so the page itself names no tool.
+function showLinks(links){
+  const sig = JSON.stringify(links || []);
+  if (sig === S.linksSig) return;
+  S.linksSig = sig;
+  const host = document.getElementById('outLinks');
+  host.replaceChildren(...(links || []).map((l) => Object.assign(document.createElement('a'), {href: l.url, textContent: l.label, target: '_blank', rel: 'noopener'})));
+}
+async function load(){
+  const d = await api('api/dashboard');
+  showLinks(d.links);
+  const sig = JSON.stringify([d.tasks, d.inbox, d.archived]);
+  S.loadedAt = Date.now();
+  takePad(d.pad);
+  if (sig === S.sig) return false;
+  S.sig = sig; S.tasks = d.tasks; S.inbox = d.inbox; S.archived = d.archived;
+  // Fields typed in the task panel stay as typed until the server holds them.
+  for (const [id, f] of Object.entries(S.tedits)) {
+    const t = task(id);
+    if (!t) { delete S.tedits[id]; continue; }
+    for (const [k, v] of Object.entries(f)) { if (!tsaving[id] && (t[k] ?? '') === v) delete f[k]; else t[k] = v; }
+    if (!Object.keys(f).length) delete S.tedits[id];
+  }
+  for (const id of Object.keys(S.edits)) {
+    const p = S.inbox.find((x) => x.id === id);
+    if (!p) { delete S.edits[id]; continue; }
+    if (!saving[id]) for (const [f, v] of Object.entries(S.edits[id])) if (JSON.stringify(p[f]) === JSON.stringify(v)) delete S.edits[id][f];
+  }
+  if (S.view === 'archive') loadArchive();
+  render();
+  return true;
+}
+async function saveRoutine(body){
+  try { S.routine = await api('api/dashboard/routine', 'PUT', body); S.routineForm = false; toast(S.routine.connected ? 'Routine connected.' : 'Routine disconnected.'); }
+  catch (e) { toast(`Not saved: ${e.message}`); }
+  render();
+}
+async function runNow(){
+  S.running = true; render();
+  try {
+    S.routine = await api('api/dashboard/routine/run', 'POST', {});
+    toast(S.routine.error ? 'The routine didn’t start.' : 'Claude is going through the board.');
+    // The button comes back once the minute between runs has passed.
+    setTimeout(render, 61000);
+  } catch (e) { toast(`Didn’t run: ${e.message}`); }
+  S.running = false; render();
+}
+async function loadArchive(){
+  try { S.archive = await api('api/dashboard/archive'); render(); } catch (e) { toast(`Couldn’t load the archive: ${e.message}`); }
+}
+// Applies a change here first, then sends it; on failure says why and reloads what the server holds.
+async function write(local, path, method, body, done){
+  inflight++;
+  if (local) local();
+  render();
+  try { const r = await api(path, method, body); if (done) done(r); }
+  catch (e) { toast(`Not saved: ${e.message}`); }
+  finally { inflight--; if (!inflight) load().catch(() => {}); }
+}
+let idle = 0;
+async function poll(){
+  if (document.hidden || inflight || Object.keys(saving).length || Object.keys(tsaving).length) return;
+  const before = S.inbox.length;
+  let changed = false;
+  try { changed = await load(); } catch { return; }
+  idle = changed ? 0 : idle + 1;
+  const n = S.inbox.length - before;
+  if (n > 0) toast(`${n} new in the inbox`);
+}
+// Every 20 s while something changes; backs off to 2 min when nothing has for a while.
+(function tick(){ setTimeout(() => { poll().finally(tick); }, idle > 6 ? 120000 : 20000); })();
+
+// ---------- the scratch pad: one rich-text document, saved whole with If-Match ----------
+// Local first: every keystroke is kept in this browser until the server has it, so a reload,
+// a dead wire or a closed tab loses nothing; another tab's save is merged, not overwritten.
+const padEd = document.getElementById('padEd'), padEl = document.getElementById('pad');
+const PAD_DRAFT = 'dashboard-pad-draft', PAD_GEOM = 'dashboard-pad-geom';
+const P = {server: null, dirty: false, saving: false, timer: null, retry: 0, remote: null, sent: null};
+
+const KEEP = new Set(['B','STRONG','I','EM','U','S','STRIKE','DEL','UL','OL','LI','BR','DIV','P','A','BLOCKQUOTE','H1','H2','H3','CODE']);
+const DROP = new Set(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','TEMPLATE','SVG','MATH','NOSCRIPT','IMG','VIDEO','AUDIO','CANVAS','FORM','INPUT','BUTTON','SELECT','TEXTAREA','LINK','META','TITLE','HEAD']);
+// Only formatting survives a save or a paste: no attributes but a link's http(s) href.
+function cleanPad(html){
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, 'text/html');
+  const out = document.createElement('div');
+  const walk = (from, to) => {
+    for (const n of [...from.childNodes]) {
+      if (n.nodeType === 3) { to.append(n.textContent); continue; }
+      if (n.nodeType !== 1 || DROP.has(n.tagName)) continue;
+      if (!KEEP.has(n.tagName)) { walk(n, to); continue; }
+      const el = document.createElement(n.tagName);
+      if (n.tagName === 'A') {
+        const href = n.getAttribute('href') || '';
+        if (!/^(https?:|mailto:)/i.test(href)) { walk(n, to); continue; }
+        el.setAttribute('href', href);
+      }
+      walk(n, el);
+      to.append(el);
+    }
+  };
+  walk(doc.body, out);
+  return out.innerHTML;
+}
+const isHtml = (t) => /<\/?(div|p|br|b|i|u|s|ul|ol|li|a|strong|em|strike|h[1-3]|blockquote)\b/i.test(t);
+const fromText = (t) => t ? t.split('\n').map((l) => `<div>${esc(l) || '<br>'}</div>`).join('') : '';
+const padHtml = () => (padEd.textContent.trim() || padEd.querySelector('li,br+br,img') ? cleanPad(padEd.innerHTML) : '');
+const showEmpty = () => padEd.classList.toggle('blank', !padEd.textContent.trim() && !padEd.querySelector('li'));
+
+// The caret as a count of characters, so text rebuilt under it puts it back where it was.
+function caretAt(){
+  const s = getSelection();
+  if (!s.rangeCount || !padEd.contains(s.anchorNode)) return null;
+  const r = document.createRange(); r.selectNodeContents(padEd); r.setEnd(s.anchorNode, s.anchorOffset);
+  return r.toString().length;
+}
+function caretTo(n){
+  if (n === null) return;
+  const w = document.createTreeWalker(padEd, NodeFilter.SHOW_TEXT);
+  let left = n, node;
+  while ((node = w.nextNode())) {
+    if (left <= node.length) { const r = document.createRange(); r.setStart(node, left); r.collapse(true); const s = getSelection(); s.removeAllRanges(); s.addRange(r); return; }
+    left -= node.length;
+  }
+}
+function setPadHtml(html){
+  const at = document.activeElement === padEd ? caretAt() : null;
+  padEd.innerHTML = html;
+  caretTo(at);
+  showEmpty();
+}
+// Three-way merge: each side's edit is one span of the base; apart, both apply; on top of each other, theirs stays and yours follows it.
+function mergePad(base, ours, theirs){
+  if (ours === base || ours === theirs) return theirs;
+  if (theirs === base) return ours;
+  const span = (a, b) => {
+    let p = 0; while (p < a.length && p < b.length && a[p] === b[p]) p++;
+    let s = 0; while (s < a.length - p && s < b.length - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+    return {from: p, to: a.length - s, text: b.slice(p, b.length - s)};
+  };
+  const o = span(base, ours), t = span(base, theirs);
+  if (o.to <= t.from || t.to <= o.from) {
+    const [first, second] = o.from <= t.from ? [o, t] : [t, o];
+    return cleanPad(base.slice(0, first.from) + first.text + base.slice(first.to, second.from) + second.text + base.slice(second.to));
+  }
+  return cleanPad(theirs + (o.text ? `<div>${o.text}</div>` : ''));
+}
+
+function setPadState(t){ document.getElementById('padState').textContent = t; }
+function keepDraft(){ storage.set(PAD_DRAFT, P.dirty ? {html: padHtml(), base: P.server.text, rev: P.server.rev} : null); }
+function edited(){
+  if (!P.server) return;
+  P.dirty = true; showEmpty(); keepDraft(); setPadState('Editing');
+  clearTimeout(P.timer); P.timer = setTimeout(savePad, 500);
+}
+// One try per save: a dead wire shows at once, and the retry below reuses the key, so a lost answer replays.
+async function padPut(html){
+  if (P.sent?.html !== html || P.sent?.rev !== P.server.rev) P.sent = {html, rev: P.server.rev, key: key()};
+  const r = await fetch(BASE + 'api/dashboard/pad', {method: 'PUT', body: JSON.stringify({text: html}),
+    headers: {'Content-Type': 'application/json', 'Idempotency-Key': P.sent.key, 'If-Match': `"${P.server.rev}"`}});
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(data.error || `HTTP ${r.status}`), {status: r.status, data});
+  return data;
+}
+async function savePad(){
+  clearTimeout(P.timer);
+  if (P.saving || !P.dirty || !P.server) return;
+  const html = padHtml();
+  if (html === P.server.text) { P.dirty = false; keepDraft(); setPadState('Saved'); return; }
+  P.saving = true; setPadState('Saving…');
+  try {
+    P.server = await padPut(html);
+    P.retry = 0;
+    P.dirty = padHtml() !== P.server.text;
+    setPadState(P.dirty ? 'Editing' : 'Saved');
+  } catch (e) {
+    if (e.status === 409) {
+      const theirs = e.data.conflict.value;
+      const merged = mergePad(P.server.text, padHtml(), theirs.text);
+      P.server = theirs;
+      if (merged !== padHtml()) setPadHtml(merged);
+      P.dirty = merged !== theirs.text;
+      setPadState('Merged with another tab');
+    } else {
+      P.retry = Math.min(P.retry + 1, 5);
+      setPadState(navigator.onLine === false ? 'Offline · kept on this device' : 'Not saved yet · kept on this device');
+    }
+  } finally {
+    P.saving = false;
+    keepDraft();
+    if (P.dirty) P.timer = setTimeout(savePad, P.retry ? 2000 * 2 ** P.retry : 400);
+  }
+}
+// What the server holds; while you type, someone else's change waits until you pause or leave the pad.
+function takePad(p){
+  if (!p) return;
+  const text = isHtml(p.text) ? p.text : fromText(p.text);
+  const server = {text, rev: p.rev};
+  if (!P.server) return firstPad(server);
+  if (p.rev === P.server.rev || P.saving || P.dirty) return;
+  P.server = server;
+  if (document.activeElement === padEd) { P.remote = text; return; }
+  if (text !== padHtml()) setPadHtml(text);
+}
+function firstPad(server){
+  P.server = server;
+  const draft = storage.get(PAD_DRAFT, null);
+  let html = server.text;
+  if (draft && typeof draft.html === 'string' && draft.html !== server.text) {
+    html = mergePad(cleanPad(draft.base || ''), cleanPad(draft.html), server.text);
+    P.dirty = html !== server.text;
+  }
+  padEd.setAttribute('contenteditable', 'true');
+  setPadHtml(html);
+  setPadState(P.dirty ? 'Restored from this device' : '');
+  if (P.dirty) savePad();
+}
+padEd.addEventListener('blur', () => { if (P.remote !== null && !P.dirty) setPadHtml(P.remote); P.remote = null; savePad(); });
+// A tab being closed or hidden sends what it has; the copy kept on this device covers a send that fails.
+const flushPad = () => {
+  if (!P.dirty || !P.server || P.saving) return;
+  try { fetch(BASE + 'api/dashboard/pad', {method: 'PUT', keepalive: true, headers: {'Content-Type': 'application/json', 'Idempotency-Key': key(), 'If-Match': `"${P.server.rev}"`}, body: JSON.stringify({text: padHtml()})}); } catch {}
+};
+addEventListener('pagehide', flushPad);
+document.addEventListener('visibilitychange', () => { if (document.hidden) flushPad(); });
+addEventListener('online', () => { P.retry = 0; savePad(); });
+
+// Typing: the marks Sticky Notes has, plus "- ", "1. " and "> " at the start of a line.
+const CMDS = {bold: 'bold', italic: 'italic', underline: 'underline', strike: 'strikeThrough', ul: 'insertUnorderedList', ol: 'insertOrderedList'};
+function padCmd(name){
+  padEd.focus();
+  document.execCommand(CMDS[name], false, null);
+  edited(); padMarks();
+}
+function padMarks(){
+  for (const b of padEl.querySelectorAll('[data-cmd]')) {
+    let on = false;
+    try { on = document.queryCommandState(CMDS[b.dataset.cmd]); } catch {}
+    b.setAttribute('aria-pressed', String(on));
+  }
+}
+document.addEventListener('selectionchange', () => { if (document.activeElement === padEd) padMarks(); });
+padEl.addEventListener('mousedown', (e) => { if (e.target.closest('[data-cmd]')) e.preventDefault(); });
+padEl.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const b = e.target.closest('[data-cmd]');
+  if (b) return padCmd(b.dataset.cmd);
+  const a = e.target.closest('a[href]');
+  if (a && (e.metaKey || e.ctrlKey)) { e.preventDefault(); window.open(a.href, '_blank', 'noopener'); }
+});
+padEd.addEventListener('keydown', (e) => {
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && e.shiftKey && (e.key === 'x' || e.key === 'X')) { e.preventDefault(); return padCmd('strike'); }
+  if (mod && e.shiftKey && e.key === '8') { e.preventDefault(); return padCmd('ul'); }
+  if (mod && e.shiftKey && e.key === '7') { e.preventDefault(); return padCmd('ol'); }
+  if (e.key === 'Tab' && getSelection().anchorNode?.parentElement?.closest('li')) { e.preventDefault(); document.execCommand(e.shiftKey ? 'outdent' : 'indent'); return edited(); }
+  if (e.key === 'Escape') { e.preventDefault(); setPadOpen(false); }
+});
+padEd.addEventListener('input', (e) => {
+  if (e.inputType === 'insertText' && e.data === ' ') {
+    const s = getSelection(), node = s.anchorNode;
+    if (node && node.nodeType === 3 && !node.parentElement.closest('li')) {
+      const before = node.textContent.slice(0, s.anchorOffset).replace(/ /g, ' ');
+      const block = node.parentElement.closest('div,p') || padEd;
+      const r = document.createRange(); r.selectNodeContents(block); r.setEnd(node, s.anchorOffset);
+      const lead = r.toString().replace(/ /g, ' ');
+      const cmd = lead === '- ' || lead === '* ' ? 'insertUnorderedList' : lead === '1. ' ? 'insertOrderedList' : lead === '> ' ? 'quote' : null;
+      if (cmd && before === lead) {
+        const del = document.createRange(); del.setStart(node, 0); del.setEnd(node, s.anchorOffset);
+        s.removeAllRanges(); s.addRange(del); document.execCommand('delete');
+        if (cmd === 'quote') document.execCommand('formatBlock', false, 'blockquote'); else document.execCommand(cmd);
+      }
+    }
+  }
+  edited();
+});
+padEd.addEventListener('paste', (e) => {
+  const html = e.clipboardData?.getData('text/html'), text = e.clipboardData?.getData('text/plain') || '';
+  e.preventDefault();
+  if (/^https?:\/\/\S+$/.test(text.trim())) { const u = text.trim(); document.execCommand('insertHTML', false, `<a href="${esc(u)}">${esc(u)}</a>`); }
+  else if (html) document.execCommand('insertHTML', false, cleanPad(html));
+  else document.execCommand('insertText', false, text);
+  edited();
+});
+padEd.addEventListener('drop', (e) => e.preventDefault());
+
+// A window you move by its bar and size by its corner; it floats over the page, nothing under it moves.
+function padGeom(){
+  const g = storage.get(PAD_GEOM, null) || {};
+  const vw = innerWidth, vh = innerHeight;
+  const w = Math.min(Math.max(g.w || 400, 280), vw - 16), h = Math.min(Math.max(g.h || 460, 200), vh - 16);
+  const x = Math.min(Math.max(g.x ?? vw - w - 24, 8), vw - w - 8), y = Math.min(Math.max(g.y ?? vh - h - 24, 8), vh - h - 8);
+  return {x, y, w, h};
+}
+function placePad(){
+  if (innerWidth <= 640) { padEl.style.cssText = ''; return; }
+  const g = padGeom();
+  Object.assign(padEl.style, {left: g.x + 'px', top: g.y + 'px', width: g.w + 'px', height: g.h + 'px'});
+}
+const saveGeom = (patch) => storage.set(PAD_GEOM, {...(storage.get(PAD_GEOM, null) || {}), ...patch});
+document.getElementById('padBar').addEventListener('pointerdown', (e) => {
+  if (e.target.closest('button') || innerWidth <= 640) return;
+  e.preventDefault();
+  const r = padEl.getBoundingClientRect(), dx = e.clientX - r.left, dy = e.clientY - r.top;
+  const bar = e.currentTarget; bar.setPointerCapture(e.pointerId); padEl.classList.add('moving');
+  const move = (ev) => { padEl.style.left = Math.min(Math.max(ev.clientX - dx, 8), innerWidth - r.width - 8) + 'px'; padEl.style.top = Math.min(Math.max(ev.clientY - dy, 8), innerHeight - r.height - 8) + 'px'; };
+  const up = () => { bar.removeEventListener('pointermove', move); bar.removeEventListener('pointerup', up); padEl.classList.remove('moving'); saveGeom({x: parseFloat(padEl.style.left), y: parseFloat(padEl.style.top)}); };
+  bar.addEventListener('pointermove', move); bar.addEventListener('pointerup', up);
+});
+document.getElementById('padGrip').addEventListener('pointerdown', (e) => {
+  e.preventDefault();
+  const r = padEl.getBoundingClientRect(), grip = e.currentTarget; grip.setPointerCapture(e.pointerId); padEl.classList.add('moving');
+  const move = (ev) => { padEl.style.width = Math.min(Math.max(ev.clientX - r.left, 280), innerWidth - r.left - 8) + 'px'; padEl.style.height = Math.min(Math.max(ev.clientY - r.top, 200), innerHeight - r.top - 8) + 'px'; };
+  const up = () => { grip.removeEventListener('pointermove', move); grip.removeEventListener('pointerup', up); padEl.classList.remove('moving'); saveGeom({w: parseFloat(padEl.style.width), h: parseFloat(padEl.style.height)}); };
+  grip.addEventListener('pointermove', move); grip.addEventListener('pointerup', up);
+});
+addEventListener('resize', () => { if (document.body.classList.contains('padopen')) placePad(); });
+function setPadOpen(open, focus = true){
+  document.body.classList.toggle('padopen', open);
+  storage.set('dashboard-pad-open', open);
+  if (open) { placePad(); if (focus && P.server) { padEd.focus(); caretTo(padEd.textContent.length); } }
+  else savePad();
+}
+document.getElementById('padBtn').addEventListener('click', () => setPadOpen(true));
+document.getElementById('padClose').addEventListener('click', () => setPadOpen(false));
+window.addEventListener('beforeunload', (e) => { if (Object.keys(saving).length) e.preventDefault(); });
+
+// ---------- task fields edited in the panel: saved as you type, one PATCH per pause ----------
+const tsaving = {}, tTimers = {};
+function editTask(id, fields){
+  const t = task(id);
+  if (!t) return;
+  Object.assign(S.tedits[id] ||= {}, fields);
+  Object.assign(t, fields);
+  clearTimeout(tTimers[id]);
+  tTimers[id] = setTimeout(() => sendTask(id), 700);
+}
+async function sendTask(id){
+  clearTimeout(tTimers[id]);
+  // One PATCH per task at a time, so an older body can never land after a newer one.
+  if (tsaving[id]) { tTimers[id] = setTimeout(() => sendTask(id), 300); return; }
+  const body = {...(S.tedits[id] || {})};
+  if (!Object.keys(body).length) return;
+  tsaving[id] = (tsaving[id] || 0) + 1;
+  try { await api(`api/dashboard/tasks/${id}`, 'PATCH', body); }
+  catch (e) { toast(`Not saved: ${e.message}`); }
+  finally {
+    if (!--tsaving[id]) delete tsaving[id];
+    const f = S.tedits[id];
+    if (f) for (const [k, v] of Object.entries(body)) if (f[k] === v) delete f[k];
+    if (f && !Object.keys(f).length) delete S.tedits[id];
+    if (!Object.keys(tsaving).length) load().catch(() => {});
+  }
+}
+const flushTask = (id) => { if (id && S.tedits[id]) sendTask(id); };
+function closeDrawer(){ flushTask(S.open); S.open = null; S.editDesc = null; render(); }
+
+// ---------- task actions ----------
+function patchTask(id, body, local, label){
+  const t = task(id);
+  if (!t) return;
+  if (label) toast(label);
+  write(() => { local(t); S.menu = null; }, `api/dashboard/tasks/${id}`, 'PATCH', body);
+}
+function setState(id, state){
+  const t = task(id);
+  if (!t || t.state === state) { S.menu = null; return render(); }
+  patchTask(id, {state}, (x) => { x.state = state; if (ended(x)) x.pinnedAt = null; x.updatedAt = Date.now(); }, `→ ${NAME[state]}`);
+}
+function togglePin(id){
+  const t = task(id);
+  const pinned = !t.pinnedAt;
+  patchTask(id, {pinned}, (x) => { x.pinnedAt = pinned ? Date.now() : null; }, pinned ? 'Pinned to Today' : 'Unpinned');
+}
+function clearTask(id){
+  patchTask(id, {cleared: true}, () => { S.tasks = S.tasks.filter((x) => x.id !== id); S.archived++; S.archive = null; });
+}
+function nestTask(id, parentId){
+  const t = task(id), p = task(parentId);
+  if (!t || !p || t === p) return;
+  if (p.parent) return toast('Subtasks go one level deep');
+  if (S.tasks.some((x) => x.parent === t.id)) return toast(`"${t.title}" has subtasks of its own`);
+  patchTask(id, {parent: p.id}, (x) => { x.parent = p.id; }, `"${t.title}" is now under "${p.title}"`);
+}
+function dropOnZone(id, zone){
+  const t = task(id);
+  if (!t) return;
+  if (zone === 'today') return patchTask(id, {pinned: true, ...(ended(t) ? {state: 'you'} : {})}, (x) => { x.pinnedAt = Date.now(); if (ended(x)) x.state = 'you'; }, 'Pinned to Today');
+  const state = zone === 'ended' ? (ended(t) ? t.state : 'done') : zone;
+  if (t.state === state && !t.pinnedAt) return;
+  patchTask(id, {state, pinned: false}, (x) => { x.state = state; x.pinnedAt = null; x.updatedAt = Date.now(); }, `→ ${NAME[state]}`);
+}
+
+// ---------- inbox actions ----------
+const saving = {};
+const saveTimers = {};
+function editItem(id, fields, now){
+  Object.assign(S.edits[id] ||= {}, fields);
+  clearTimeout(saveTimers[id]);
+  const send = async () => {
+    const body = {...S.edits[id]};
+    if (!Object.keys(body).length) return;
+    saving[id] = (saving[id] || 0) + 1;
+    try { await api(`api/dashboard/inbox/${id}`, 'PATCH', body); }
+    catch (e) { if (e.status === 400 && /already triaged/.test(e.message)) delete S.edits[id]; else toast(`Edit not saved: ${e.message}`); }
+    finally { if (!--saving[id]) delete saving[id]; }
+  };
+  if (now) { send().then(() => load().catch(() => {})); render(); }
+  else saveTimers[id] = setTimeout(send, 700);
+}
+function nextAfter(id){
+  const order = inboxOrder().map((p) => p.id);
+  const i = order.indexOf(id);
+  return order[i + 1] || order[i - 1] || null;
+}
+function removeItem(id, line){
+  toast(line.length > 90 ? line.slice(0, 89) + '…' : line);
+  const next = nextAfter(id);
+  clearTimeout(saveTimers[id]);
+  delete S.secs[id];
+  S.inbox = S.inbox.filter((x) => x.id !== id);
+  S.sel = next;
+}
+function keepItem(id){
+  const p = item(id);
+  if (!p) return;
+  if (p.kind === 'update' && !p.task) return toast('Pick the task this updates');
+  let body = {...(S.edits[id] || {})};
+  let line;
+  if (p.kind === 'fragment') {
+    const picked = [...(S.picked[id] || [])];
+    const own = S.own[id] || [];
+    if (!picked.length && !own.length) return toast('Pick a direction or write your own');
+    body = {...body, picked, own};
+    const n = picked.length + own.length;
+    line = `${n} ${n === 1 ? 'task' : 'tasks'} from “${p.title}” → Your move`;
+  } else line = p.kind === 'update' ? `Update → ${(task(p.task) || {}).title || p.task}` : `“${p.title}” → Your move`;
+  write(() => removeItem(id, line), `api/dashboard/inbox/${id}/keep`, 'POST', body);
+}
+function dropItem(id){
+  const p = item(id);
+  write(() => removeItem(id, `Dropped: ${p.title || p.text}`), `api/dashboard/inbox/${id}/drop`, 'POST', {});
+}
+
+function promptFor(t){
+  if (t.prompt != null) return t.prompt;
+  const parent = t.parent && task(t.parent);
+  const ups = (t.updates || []).map((u) => `- ${stamp(u.at)} (${u.from?.source || 'you'}): ${u.text}`);
+  const links = (t.links || []).map((l) => `- ${l.kind}: ${linkText(l)}${l.url ? ' ' + l.url : ''}`);
+  return `${t.title}${parent ? `\n(part of: ${parent.title})` : ''}\n\n${t.body || ''}${ups.length ? `\n\nUpdates:\n${ups.join('\n')}` : ''}\n\nStart from what already exists. Read these before asking me anything:\n${links.length ? links.join('\n') : '- the linked issue and any PR for this'}\n- dashboard_read({ task: "${t.id}" }) for everything on this task\n\nThen: tell me the smallest next step, and take it if it is small.\n\nKeep the linked issue up to date as you go.`;
+}
+
+// ---------- rendering: board ----------
+function statusChip(t, compact, where = ''){
+  const open = S.menu === where + t.id;
+  const opt = ([k, l, kb]) => `<button role="menuitemradio" aria-checked="${k === t.state}" data-set="${t.id}|${k}"><span class="dot ${k}"></span>${l}<kbd>${kb}</kbd></button>`;
+  return `<span class="status"><button class="chip${compact ? ' dotonly' : ''}" data-menu="${where}${t.id}" aria-haspopup="menu" aria-expanded="${open}" ${compact ? `aria-label="Status: ${NAME[t.state]}"` : ''}><span class="dot ${t.state}"></span>${compact ? '' : NAME[t.state]}</button>${open ? `<div class="menu" role="menu">${STATES.map(opt).join('')}<hr>${ENDS.map(opt).join('')}</div>` : ''}</span>`;
+}
+function metaLine(t, nested){
+  const bits = [];
+  const p = t.parent && task(t.parent);
+  const out = p ? `<button class="unnest" data-unnest="${t.id}" title="Make it a task of its own">Move out</button>` : '';
+  if (p) bits.push(nested ? `subtask ${out}` : `↳ under ${esc(p.title)} ${out}`);
+  const kids = S.tasks.filter((x) => x.parent === t.id && x.state !== 'dropped');
+  if (kids.length) bits.push(`${kids.filter((x) => x.state === 'done').length} of ${kids.length} subtasks done`);
+  if (t.state === 'waiting' && t.waitingOn) bits.push(`on ${esc(t.waitingOn)}`);
+  const th = t.state === 'you' && t.body?.includes('## Think first') ? thinkOf(t) : null;
+  if (th?.qs.length) bits.push(`<span class="thinkb">think first · ${th.qs.length} questions</span>`);
+  if (isFresh(t)) bits.push(`<span class="fresh">updated ${esc(stamp(lastUpdate(t)))}</span>`);
+  if (t.pinnedAt && Date.now() - t.pinnedAt > 20 * 3600e3) bits.push(`<span class="stale">pinned ${esc(day(t.pinnedAt))}. Still today?</span>`);
+  if (t.pinnedAt && t.state !== 'you') bits.push(NAME[t.state]);
+  return bits.length ? `<div class="meta">${bits.join('<span aria-hidden="true">·</span>')}</div>` : '';
+}
+function row(t, kind, nested = false){
+  const pin = kind === 'rail' || kind === 'ended' ? '' : `<button class="pin" data-pin="${t.id}" aria-pressed="${!!t.pinnedAt}" aria-label="${t.pinnedAt ? 'Unpin from Today' : 'Pin to Today'}">${STAR(!!t.pinnedAt)}</button>`;
+  const ctx = kind === 'rail' || kind === 'ended' ? '' : contextLine(t);
+  const cls = kind === 'ended' ? (t.state === 'done' ? 'done-t' : 'drop-t') : '';
+  const tail = kind === 'ended' ? `<button class="btn" data-clear="${t.id}">Clear</button>` : '';
+  return `<div class="trow${nested ? ' sub' : ''}" draggable="true" data-id="${t.id}" data-open="${t.id}"${(kind === 'you' || kind === 'today') && !t.parent ? ` data-task="${t.id}"` : ''}>${pin}${kind === 'ended' ? statusChip(t, true) : ''}<div class="tmain"><div class="tt ${cls}">${esc(t.title)}</div>${ctx ? `<div class="tc">${esc(ctx)}</div>` : ''}${kind === 'ended' ? (t.parent && !nested ? `<div class="meta">↳ under ${esc(task(t.parent)?.title || '')}</div>` : '') : metaLine(t, nested)}</div>${kind === 'ended' ? tail : statusChip(t, kind === 'rail')}</div>`;
+}
+// A subtask sits under its parent when both are in the same list; elsewhere it stands alone and names its parent.
+function zone(name, title, list, kind, empty, extra = ''){
+  const here = new Set(list.map((t) => t.id));
+  const rows = list.filter((t) => !t.parent || !here.has(t.parent)).map((t) =>
+    row(t, kind) + list.filter((c) => c.parent === t.id).map((c) => row(c, kind, true)).join('')).join('');
+  return `<section class="zone ${name}" data-zone="${name}" aria-label="${esc(title)}"><div class="zhead"><h2>${title}</h2><span class="n">${list.length}</span><span class="spacer"></span>${extra}</div>${rows || `<p class="empty">${empty}</p>`}</section>`;
+}
+function boardView(){
+  const mine = S.tasks.filter((t) => t.area === S.area);
+  const open = mine.filter((t) => !ended(t));
+  const today = open.filter((t) => t.pinnedAt).sort((a, b) => a.pinnedAt - b.pinnedAt);
+  const of = (s) => open.filter((t) => t.state === s && !t.pinnedAt);
+  const en = mine.filter(ended).sort((a, b) => b.updatedAt - a.updatedAt);
+  return `<div class="board">
+    <div class="lane">
+      <form class="addform" id="addForm" autocomplete="off"><label class="sr" for="addIn">Add a task</label><input id="addIn" data-keep-focus="addIn" placeholder="Add a task to Your move…"><button class="btn" type="submit">Add</button></form>
+      ${zone('today', 'Today', today, 'today', 'Pin a task with the star to plan the day.')}
+      ${zone('you', 'Your move', of('you'), 'you', 'Nothing waits on you. The inbox may have more.')}
+    </div>
+    <aside class="rail" aria-label="Everything else">
+      ${zone('claude', 'Claude is on it', of('claude'), 'rail', 'Nothing with Claude.')}
+      ${zone('waiting', 'Waiting on others', of('waiting'), 'rail', 'Nobody else has the ball.')}
+      ${zone('later', 'Later', of('later'), 'rail', 'Nothing parked.')}
+      ${zone('ended', 'Ended', en, 'ended', S.archived ? `All cleared. <button class="btn link" data-view="archive">${S.archived} in the Archive</button>` : 'Nothing ended yet.', en.length ? '<button class="btn link" data-clearall>Clear all</button>' : '')}
+      <p class="hint">Hover a task and press 1–4, D or X to move it. Drag still works: onto a section, or onto a task in Your move to make it a subtask.</p>
+      ${routinePanel()}
+    </aside>
+  </div>`;
+}
+// Run now wakes the research routine; it reads the board itself, so the button sends nothing about tasks.
+function routinePanel(){
+  const r = S.routine;
+  if (!r) return '';
+  const cooling = r.ranAt && Date.now() - r.ranAt < 60000;
+  const last = r.ranAt ? `Last run ${esc(stamp(r.ranAt))}${r.sessionUrl ? ` · <a href="${esc(r.sessionUrl)}" target="_blank" rel="noopener">watch</a>` : ''}` : 'Not run from here yet';
+  const head = r.connected
+    ? `<span class="rrow"><button class="btn" data-runnow ${S.running || cooling ? 'disabled' : ''}>${S.running ? 'Starting…' : 'Run now'}</button><span>${last}</span><button class="btn link" data-routineform>Change</button></span>${r.error ? `<span class="err">${esc(r.error)}</span>` : ''}`
+    : `<span class="rrow"><span>Connect your research routine to run it from here.</span><button class="btn link" data-routineform>Connect</button></span>`;
+  const form = S.routineForm ? `<form id="routineForm" class="routine" autocomplete="off">
+      <label class="routine">Fire URL<input id="routineUrl" placeholder="https://api.anthropic.com/v1/claude_code/routines/trig_…/fire" value="${esc(r.url || '')}"></label>
+      <label class="routine">API token<input id="routineToken" type="password" placeholder="Shown once when you generate it"></label>
+      <span class="rrow"><button class="btn" type="submit">Save</button>${r.connected ? '<button class="btn link" type="button" data-routineoff>Disconnect</button>' : ''}<button class="btn link" type="button" data-routineform>Cancel</button></span>
+    </form>` : '';
+  return `<div class="routine"><span class="label">Research routine</span>${head}${form}</div>`;
+}
+
+// ---------- rendering: inbox ----------
+function inboxOrder(){
+  const ps = S.inbox.map((p) => item(p.id));
+  return [...ps.filter((p) => p.kind !== 'fragment'), ...ps.filter((p) => p.kind === 'fragment')];
+}
+function kindLabel(p){
+  if (p.kind === 'fragment') { const n = (p.directions || []).length; return n ? `${n} direction${n === 1 ? '' : 's'} proposed` : 'Waiting for directions'; }
+  if (p.kind === 'update') return p.body !== undefined && p.body !== null ? 'New description for a task' : 'Update to a task';
+  if (p.kind === 'subtask') { const t = task(p.parent); return t ? `Subtask of “${t.title}”` : 'Subtask'; }
+  return 'New task';
+}
+const isThin = (p) => (p.kind === 'task' || p.kind === 'subtask') && String(p.body || '').length < THIN;
+function inboxView(){
+  const order = inboxOrder();
+  if (!order.some((p) => p.id === S.sel)) S.sel = order[0]?.id || null;
+  const irow = (p) => `<button class="irow" data-sel="${p.id}" aria-current="${p.id === S.sel}" title="${esc(p.from?.source || '')}"><span class="it">${esc(p.kind === 'update' ? `→ ${task(p.task)?.title || 'Pick a task'}` : p.title)}</span><span class="ik">${p.kind === 'update' ? '' : `<span class="atag">${p.area === 'work' ? 'Work' : 'Personal'}</span>`}${esc(p.kind === 'update' ? (p.body != null ? 'New description' : 'Update') : kindLabel(p))}${isThin(p) ? '<span class="thin">· needs context</span>' : ''}${S.edits[p.id] && Object.keys(S.edits[p.id]).length ? '<span>· edited</span>' : ''}${p.wantsMore ? '<span>· asked for more</span>' : ''}</span></button>`;
+  const tasks = order.filter((p) => p.kind !== 'fragment'), frags = order.filter((p) => p.kind === 'fragment');
+  const rewrites = tasks.filter((p) => p.kind === 'update' && p.body != null && !p.text);
+  const group = (name, hint, list, empty) => `<section><div class="ghead"><h2 class="label" style="margin:0">${name}</h2><span class="small muted">${list.length}</span>${name === 'Tasks' && rewrites.length > 1 ? `<span class="spacer"></span><button class="btn link" data-rewrites>Replace all ${rewrites.length} descriptions</button>` : ''}</div><p class="ghint">${hint}</p>${list.map(irow).join('') || `<p class="empty">${empty}</p>`}</section>`;
+  const cur = S.sel && item(S.sel);
+  return `<div class="inbox">
+    <nav class="ilist" aria-label="Inbox items">
+      <h1>Inbox</h1>
+      ${group('Tasks', 'Clear enough to do. Keep sends them to Your move.', tasks, 'No tasks waiting.')}
+      ${group('Fragments', 'Ideas that aren’t tasks yet. Pick a direction, or leave them to grow.', frags, 'No fragments.')}
+    </nav>
+    ${cur ? (cur.kind === 'fragment' ? fragmentEditor(cur) : draftEditor(cur)) : `<section class="editor" aria-label="Inbox zero"><p class="muted" style="margin:0">Inbox zero. Agents add here through dashboard_add_items; anything you jot in the scratch pad can come here too.</p></section>`}
+  </div>`;
+}
+const linksHtml = (ls) => ls?.length ? `<div class="links">${ls.map((l) => `<a href="${esc(l.url || '#')}" target="_blank" rel="noopener"><span class="k">${esc(l.kind)}</span>${esc(linkText(l))}</a>`).join('')}</div>` : '';
+function draftEditor(p){
+  const isUpd = p.kind === 'update';
+  const sec = S.secs[p.id] || parseBody(p.body);
+  const open = S.tasks.filter((t) => !ended(t));
+  const rewrite = isUpd && p.body !== undefined && p.body !== null;
+  const current = rewrite && task(p.task)?.body;
+  const form = isThin(p);
+  const area = (k, hint) => `<textarea class="tall" data-sec="${k}" data-keep-focus="s-${k}" placeholder="${hint}">${esc(sec[k])}</textarea>`;
+  // Triage reads the plan first; the background folds away and each part turns into a box when clicked.
+  const block = ([k, name, hint]) => {
+    const key = `${p.id}|${k}`, text = sec[k].trim();
+    if (form || S.isec === key) return `<label class="field"><span class="label">${name}</span>${area(k, hint)}</label>`;
+    if (!text) return k === 'sources' ? '' : `<button class="btn link isedit" data-isec="${key}">Add ${name.toLowerCase()}</button>`;
+    if (k === 'think') return `<div class="field">${thinkHtml(text)}<button class="btn link isedit" data-isec="${key}">Edit Think first</button></div>`;
+    const body = `<div class="md editable" data-isec="${key}" title="Click to edit">${md(text)}</div>`;
+    if (k !== 'context' && k !== 'sources') return `<div class="field"><span class="label">${name}</span>${body}</div>`;
+    const peek = text.split('\n').find((l) => l.trim() && !/^#/.test(l.trim()))?.replace(/^\s*(>|[-*•])\s+/, '').replace(/\*\*|`|\[|\]\([^)]*\)/g, '') || '';
+    return `<details class="ifold" data-iopen="${key}" ${S.iopen.has(key) ? 'open' : ''}><summary><span class="label">${name}</span><span class="peek">${esc(peek)}</span></summary>${k === 'context' && p.from?.quote ? `<blockquote class="quote">“${esc(p.from.quote)}”</blockquote>` : ''}${body}</details>`;
+  };
+  const order = form ? SECTIONS : ['think', 'research', 'done', 'context', 'sources'].map((k) => SECTIONS.find(([x]) => x === k));
+  const sections = order.map(block).join('');
+  const decide = `<span class="decide"><button class="btn primary" data-keep="${p.id}">${rewrite && !p.text ? 'Replace description' : isUpd ? 'Add to task' : 'Keep → Your move'}</button><button class="btn big" data-drop="${p.id}">Drop</button></span>`;
+  return `<section class="editor" aria-label="Draft">
+    <div class="top"><span>${esc(p.from?.source || '')}</span><span>${esc(kindLabel(p))}</span>${isUpd ? decide : ''}</div>
+    ${isUpd ? '' : `<div class="pickarea"><span class="label">Goes to</span><span class="seg small-seg" role="group" aria-label="Board">${['work', 'personal'].map((a) => `<button aria-pressed="${p.area === a}" data-itemarea="${p.id}|${a}">${a === 'work' ? 'Work' : 'Personal'}</button>`).join('')}</span>${decide}</div>`}
+    ${isUpd ? '' : `<label class="field"><span class="label">Title</span><textarea class="titlein" rows="1" data-f="title" data-keep-focus="f-title">${esc(p.title)}</textarea></label>`}
+    ${p.from?.quote && (form || !sec.context.trim()) ? `<blockquote class="quote">“${esc(p.from.quote)}”</blockquote>` : ''}
+    ${p.why ? `<p class="small" style="margin:0"><span class="muted">Why · </span>${esc(p.why)}</p>` : ''}
+    ${isThin(p) ? '<p class="note">This came in with little context. Fill the sections so the task reads on its own later, or send it back to the agent that wrote it.</p>' : ''}
+    ${isUpd ? `<label class="target"><span class="label">${rewrite ? 'Rewrites' : 'Adds to'}</span><select data-f="task"><option value="">Pick a task</option>${open.map((t) => `<option value="${t.id}" ${t.id === p.task ? 'selected' : ''}>${esc(t.title)}</option>`).join('')}</select></label>
+      ${rewrite ? `<p class="note">Keeping this replaces the task’s description with the one below.${current ? ' The current one is in the task’s panel on the board.' : ''}</p>${sections}` : ''}
+      ${p.text || !rewrite ? `<label class="field"><span class="label">Update</span><textarea class="tall" data-f="text" data-keep-focus="f-text">${esc(p.text)}</textarea></label>` : ''}`
+    : sections}
+    ${linksHtml(p.links)}
+    <div class="actions">
+      <span class="spacer"></span>
+      ${isUpd ? '' : `<button class="btn link" data-kindto="${p.id}|fragment">Too fuzzy: make it a fragment</button>`}
+      <button class="btn link" data-kindto="${p.id}|${isUpd ? 'task' : 'update'}">${isUpd ? 'Make it its own task' : 'It updates a task…'}</button>
+    </div>
+  </section>`;
+}
+function fragmentEditor(p){
+  const picked = S.picked[p.id] || new Set();
+  const own = S.own[p.id] || [];
+  const n = picked.size + own.length;
+  const dirs = p.directions || [];
+  return `<section class="editor" aria-label="Fragment">
+    <div class="top"><span>${esc(p.from?.source || '')}</span><span>Fragment · not a task yet</span></div>
+    <div class="pickarea"><span class="label">Goes to</span><span class="seg small-seg" role="group" aria-label="Board">${['work', 'personal'].map((a) => `<button aria-pressed="${p.area === a}" data-itemarea="${p.id}|${a}">${a === 'work' ? 'Work' : 'Personal'}</button>`).join('')}</span></div>
+    <label class="field"><span class="label">The idea</span><input class="titlein" data-f="title" data-keep-focus="f-title" value="${esc(p.title)}"></label>
+    <label class="field"><span class="label">As it was said</span><textarea data-f="body" data-keep-focus="f-body">${esc(p.body)}</textarea></label>
+    ${p.why ? `<p class="small" style="margin:0;color:var(--text-3)"><b style="color:var(--text)">Why it’s not a task yet:</b> ${esc(p.why)}</p>` : ''}
+    ${linksHtml(p.links)}
+    <section aria-label="Ways to tackle it">
+      <div class="ghead" style="margin-bottom:6px"><h2 class="label" style="margin:0">Ways to tackle it</h2><span class="small muted">${dirs.length ? 'pick any, or none' : ''}</span></div>
+      ${dirs.map((d, i) => `<label class="dir ${picked.has(i) ? 'on' : ''}"><input type="checkbox" data-pick="${p.id}|${i}" ${picked.has(i) ? 'checked' : ''}><span><span class="dt">${esc(d.title)}</span>${d.body ? `<br><span class="db">${esc(d.body)}</span>` : ''}</span></label>`).join('')}
+      ${own.map((t, i) => `<div class="dir on"><span style="flex:1"><span class="dt">${esc(t)}</span><br><span class="db">Yours.</span></span><button class="btn link" data-unown="${p.id}|${i}">Remove</button></div>`).join('')}
+      ${!dirs.length ? `<p class="note">${p.wantsMore ? 'Asked for directions. The next scheduled session adds them here.' : 'No directions yet. Write your own below, or ask for some.'}</p>` : p.wantsMore ? '<p class="note">Asked for more directions. The next scheduled session adds them here.</p>' : ''}
+      <form class="ownform" data-ownform="${p.id}" autocomplete="off"><label class="sr" for="ownIn">Your own task from this fragment</label><input id="ownIn" data-keep-focus="ownIn" placeholder="Or write the task yourself…"><button class="btn" type="submit">Add</button></form>
+    </section>
+    <div class="actions">
+      <button class="btn primary" data-keep="${p.id}" ${n ? '' : 'disabled'}>${n === 0 ? 'Pick a direction to keep' : n === 1 ? 'Keep 1 task → Your move' : `Keep ${n} tasks → Your move`}</button>
+      <button class="btn big" data-park="${p.id}">Keep as a fragment</button>
+      <button class="btn big" data-drop="${p.id}">Drop</button>
+      <span class="spacer"></span>
+      <button class="btn link" data-more="${p.id}" ${p.wantsMore ? 'disabled' : ''}>${dirs.length ? 'Other directions' : 'Ask for directions'}</button>
+      <button class="btn link" data-kindto="${p.id}|task">It’s a task already</button>
+    </div>
+  </section>`;
+}
+
+// ---------- rendering: archive ----------
+function archiveView(){
+  const a = S.archive;
+  const on = S.archiveView;
+  const q = S.q.trim().toLowerCase();
+  const head = `<div class="ahead"><h1>Archive</h1><div class="seg" role="tablist" aria-label="Archive views"><button role="tab" aria-selected="${on === 'tasks'}" data-aview="tasks">Finished tasks</button><button role="tab" aria-selected="${on === 'sources'}" data-aview="sources">Sources</button></div><span class="spacer"></span><label class="sr" for="aq">Search</label><input class="search" id="aq" data-keep-focus="aq" placeholder="${on === 'tasks' ? 'Search finished tasks' : 'Search sources'}" value="${esc(S.q)}"></div>`;
+  if (!a) return `<div class="archive">${head}<p class="muted">Loading…</p></div>`;
+  if (on === 'sources') {
+    const list = a.sources.filter((s) => !q || s.source.toLowerCase().includes(q));
+    return `<div class="archive">${head}
+      <p class="small" style="margin:0;color:var(--text-3)">Every meeting note, thread and page an agent has drafted from, what came of it, and how much of it has been read. Read in full means nothing more will come out of it.</p>
+      ${list.map((s) => {
+        const cov = s.coverage === 'full' ? ['', 'Read in full'] : s.coverage === 'partial' ? ['partial', 'Partly read'] : ['unknown', 'Not stated'];
+        const counts = [`${s.tasks} ${s.tasks === 1 ? 'task' : 'tasks'}`, `${s.done} done`, s.open ? `${s.open} open` : '', s.inbox ? `${s.inbox} in the inbox` : ''].filter(Boolean).join(', ');
+        return `<div class="srow"><div class="sm">${s.url ? `<a class="sn" href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.source)}</a>` : `<span class="sn">${esc(s.source)}</span>`}<span class="small muted">${esc(counts)} · last ${esc(day(s.lastAt))}</span>${s.note ? `<span class="small" style="color:var(--text-3)">${esc(s.note)}</span>` : ''}</div><span class="cov ${cov[0]}">${cov[1]}</span></div>`;
+      }).join('') || '<p class="empty">No sources yet.</p>'}
+    </div>`;
+  }
+  const list = a.tasks.filter((t) => !q || t.title.toLowerCase().includes(q));
+  const weeks = new Map();
+  for (const t of list) { const w = Math.max(0, Math.floor((Date.now() - t.updatedAt) / (7 * 864e5))); if (!weeks.has(w)) weeks.set(w, []); weeks.get(w).push(t); }
+  const label = (w) => w === 0 ? 'This week' : w === 1 ? 'Last week' : `${w} weeks ago`;
+  return `<div class="archive">${head}
+    ${[...weeks.entries()].map(([w, ts]) => {
+      const done = ts.filter((t) => t.state === 'done').length;
+      return `<section><div class="ghead" style="margin-bottom:4px"><h2 class="label" style="margin:0">${label(w)}</h2><span class="small muted">${done} done${ts.length - done ? `, ${ts.length - done} other` : ''}</span></div>${ts.map((t) => `<div class="arow"><span class="dot ${t.state}"></span><span class="at ${t.state === 'done' ? '' : 'drop-t'}">${esc(t.title)}</span><span class="xs muted">${t.area === 'work' ? 'Work' : 'Personal'} · ${esc(NAME[t.state])} · ${esc(day(t.updatedAt))}${t.createdFrom?.source && t.createdFrom.source !== 'You' ? ` · ${esc(t.createdFrom.source)}` : ''}</span><button class="btn link" data-restore="${t.id}">Back to board</button></div>`).join('')}</section>`;
+    }).join('') || `<p class="empty">${q ? 'Nothing matches.' : 'Nothing cleared yet. Clear ended tasks from the board and they land here.'}</p>`}
+  </div>`;
+}
+
+// ---------- rendering: drawer and frame ----------
+function renderDrawer(force = false){
+  const t = S.open && task(S.open);
+  document.getElementById('drawerRoot').classList.toggle('open', !!t);
+  if (!t) return;
+  const box = document.getElementById('drawer');
+  // Rebuilding the panel under a field being typed in would lose the caret.
+  const typing = box.contains(document.activeElement) && document.activeElement.matches('input, textarea');
+  if (!force && typing && box.dataset.task === t.id) return;
+  if (box.dataset.task !== t.id) S.editDesc = null;
+  box.dataset.task = t.id;
+  const ups = (t.updates || []).map((u) => `<div class="updsep">${esc(stamp(u.at))} · ${esc(u.from?.source || 'you')}</div><div class="md">${md(u.text)}</div>`).join('');
+  const kids = S.tasks.filter((x) => x.parent === t.id);
+  const p = t.parent && task(t.parent);
+  box.innerHTML = `
+    <div class="dhead"><div class="small muted" style="flex:1;min-width:0">${p ? `↳ subtask of ${esc(p.title)} <button class="unnest" data-unnest="${t.id}">Move out</button>` : t.createdFrom ? `From ${esc(t.createdFrom.source)}` : ''}</div><span class="seg small-seg" role="group" aria-label="Board">${['work', 'personal'].map((a) => `<button aria-pressed="${t.area === a}" data-setarea="${t.id}|${a}">${a === 'work' ? 'Work' : 'Personal'}</button>`).join('')}</span>${statusChip(t, false, 'panel:')}<button class="btn link" data-close>Close</button></div>
+    <h2 class="sr">${esc(t.title)}</h2><textarea class="dtitle" data-tf="title" aria-label="Title" rows="1">${esc(t.title)}</textarea>
+    ${t.state === 'waiting' ? `<label class="dwait"><span class="label">Waiting on</span><input data-tf="waitingOn" value="${esc(t.waitingOn || '')}" placeholder="Who has the ball"></label>` : ''}
+    ${t.createdFrom?.quote ? `<blockquote class="quote">“${esc(t.createdFrom.quote)}”</blockquote>` : ''}
+    ${linksHtml(t.links) || '<span class="small muted">No links yet</span>'}
+    ${kids.length ? `<div><span class="label">Subtasks</span><div style="margin-top:4px">${kids.map((k) => `<div class="kid"><span class="dot ${k.state}"></span><button class="btn link" data-openkid="${k.id}">${esc(k.title)}</button><span class="xs muted">${esc(NAME[k.state])}</span></div>`).join('')}</div></div>` : ''}
+    ${S.editDesc === t.id ? `<div class="desced"><div class="ghead"><span class="label">Description</span><span class="spacer"></span><button class="btn link" data-descdone>Done</button></div>${SECTIONS.map(([k, name, hint]) => { const sec = S.tsecs[t.id] || parseBody(t.body); return `<label class="field"><span class="label">${name}</span><textarea data-tsec="${k}" placeholder="${hint}" ${k === 'context' ? 'class="tall"' : ''}>${esc(sec[k])}</textarea></label>`; }).join('')}${ups}</div>`
+      : `<div><div class="ghead"><span class="label">Description</span><span class="spacer"></span><button class="btn link" data-descedit="${t.id}">Edit</button></div>${descHtml(t)}${ups}</div>`}
+    <label style="display:flex;flex-direction:column;gap:6px"><span class="label">Prompt for Claude Code</span><textarea class="prompt" id="promptIn">${esc(promptFor(t))}</textarea></label>
+    <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><button class="btn primary" data-copy>Copy prompt</button><span class="small muted">Paste into Claude Code, then set the status to Claude is on it.</span></div>`;
+  fitTitle();
+}
+// A body with a Think first section shows it as its own card above the rest of the description.
+function descHtml(t){
+  const sec = parseBody(t.body);
+  const body = sec.think ? serialize({...sec, think: ''}) : t.body;
+  return `${sec.think ? thinkHtml(sec.think) : ''}<div class="md editable" data-descedit="${t.id}" title="Click to edit" style="margin-top:6px">${body ? md(body) : '<p class="muted">No description yet. Click to write one.</p>'}</div>`;
+}
+// The title wraps instead of scrolling: its box grows to its lines.
+function fitTitle(){ const el = document.querySelector('.dtitle'); if (el) { el.style.height = 'auto'; el.style.height = el.scrollHeight + 'px'; } }
+function render(){
+  document.querySelectorAll('.tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.view === S.view)));
+  document.getElementById('inboxN').textContent = S.inbox.length ? String(S.inbox.length) : '';
+  for (const a of ['work', 'personal']) {
+    document.querySelector(`[data-area="${a}"]`).setAttribute('aria-selected', String(S.area === a));
+    document.getElementById(`${a}N`).textContent = String(S.tasks.filter((t) => t.area === a && !ended(t)).length);
+  }
+  // innerHTML replaces the fields, so the one being typed in is found again and refocused.
+  const a = document.activeElement, fk = a?.dataset?.keepFocus;
+  const caret = fk && 'selectionStart' in a ? [a.selectionStart, a.selectionEnd, a.value] : null;
+  const view = document.getElementById('view');
+  view.innerHTML = S.view === 'inbox' ? inboxView() : S.view === 'archive' ? archiveView() : boardView();
+  if (fk) {
+    const el = view.querySelector(`[data-keep-focus="${fk}"]`);
+    if (el) { if (caret && el.value !== caret[2] && fk === 'addIn') el.value = caret[2]; el.focus(); if (caret) try { el.setSelectionRange(caret[0], caret[1]); } catch {} }
+  }
+  renderDrawer();
+}
+
+// ---------- events ----------
+document.addEventListener('dragstart', (e) => {
+  const el = e.target.closest?.('[draggable="true"]');
+  if (!el) return;
+  dragId = el.dataset.id;
+  el.classList.add('dragging');
+  try { e.dataTransfer.setData('text/plain', dragId); e.dataTransfer.effectAllowed = 'move'; } catch {}
+});
+document.addEventListener('dragend', (e) => {
+  e.target.classList?.remove('dragging');
+  document.querySelectorAll('.over').forEach((z) => z.classList.remove('over'));
+});
+const dropTarget = (e) => {
+  const r = e.target.closest?.('.trow[data-task]');
+  if (r && r.dataset.task !== dragId) return r;
+  return e.target.closest?.('[data-zone]');
+};
+document.addEventListener('dragover', (e) => {
+  const z = dropTarget(e);
+  if (!z || !dragId) return;
+  e.preventDefault();
+  document.querySelectorAll('.over').forEach((o) => { if (o !== z) o.classList.remove('over'); });
+  z.classList.add('over');
+});
+document.addEventListener('drop', (e) => {
+  const z = dropTarget(e);
+  if (!z || !dragId) return;
+  e.preventDefault();
+  const id = dragId; dragId = null;
+  document.querySelectorAll('.over').forEach((o) => o.classList.remove('over'));
+  if (z.dataset.task) return nestTask(id, z.dataset.task);
+  dropOnZone(id, z.dataset.zone);
+});
+document.addEventListener('mouseover', (e) => { hoverId = e.target.closest?.('.trow')?.dataset.id || null; });
+document.addEventListener('click', (e) => {
+  const ta = e.target.closest('[data-thinkall]');
+  if (ta) { const ds = [...ta.closest('.think').querySelectorAll('details')]; const open = !ds.every((d) => d.open); ds.forEach((d) => { d.open = open; }); ta.textContent = open ? 'Close all' : 'Open all'; return; }
+  const fo = e.target.closest('summary')?.parentElement;
+  if (fo?.dataset.iopen) { const k = fo.dataset.iopen; S.iopen.has(k) ? S.iopen.delete(k) : S.iopen.add(k); return; }
+  const ie = e.target.closest('[data-isec]');
+  if (ie && !e.target.closest('a') && !getSelection().toString()) { S.isec = ie.dataset.isec; render(); document.querySelector(`[data-sec="${S.isec.split('|')[1]}"]`)?.focus(); return; }
+  const de = e.target.closest('[data-descedit]');
+  if (de && !e.target.closest('a') && !getSelection().toString()) { S.editDesc = de.dataset.descedit; renderDrawer(true); document.querySelector('[data-tsec="context"]')?.focus(); return; }
+  const t = e.target.closest('button, [data-open], .drawer-bg');
+  if (!t) { if (S.menu) { S.menu = null; render(); } return; }
+  // A submit button's form must still be in the page when the submit event follows this click.
+  if (t.type === 'submit' && t.form) return;
+  const d = t.dataset;
+  if (d.menu) { S.menu = S.menu === d.menu ? null : d.menu; return render(); }
+  if (S.menu && !d.set) S.menu = null;
+  if (t.id === 'drawerBg' || t.hasAttribute('data-close')) return closeDrawer();
+  if (d.descdone !== undefined) { flushTask(S.open); S.editDesc = null; delete S.tsecs[S.open]; return renderDrawer(true); }
+  if (d.view) { S.view = d.view; S.open = null; if (d.view === 'archive') loadArchive(); return render(); }
+  if (d.set) { const [id, s] = d.set.split('|'); return setState(id, s); }
+  if (d.area) { S.area = d.area; storage.set('dashboard-area', d.area); S.menu = null; if (S.view !== 'board') S.view = 'board'; return render(); }
+  if (d.setarea) { const [id, a] = d.setarea.split('|'); return patchTask(id, {area: a}, (x) => { x.area = a; }, `Moved to ${a === 'work' ? 'Work' : 'Personal'}`); }
+  if (d.itemarea) { const [id, a] = d.itemarea.split('|'); return editItem(id, {area: a}, true); }
+  if (d.pin) return togglePin(d.pin);
+  if (d.unnest) { const x = task(d.unnest), p = x && task(x.parent); return patchTask(d.unnest, {parent: null}, (y) => { y.parent = null; }, `Moved out of “${p?.title || 'its parent'}”`); }
+  if (d.openkid) { const x = task(d.openkid); markSeen(x); S.open = x.id; return render(); }
+  if (d.clear) return clearTask(d.clear);
+  if (t.hasAttribute('data-clearall')) { S.tasks.filter(ended).forEach((x) => clearTask(x.id)); return; }
+  if (d.restore) { const id = d.restore; return write(() => { S.archive.tasks = S.archive.tasks.filter((x) => x.id !== id); S.archived = Math.max(0, S.archived - 1); toast('Back in Your move'); }, `api/dashboard/tasks/${id}`, 'PATCH', {cleared: false, state: 'you'}); }
+  if (d.aview) { S.archiveView = d.aview; S.q = ''; return render(); }
+  if (d.sel) { S.sel = d.sel; return render(); }
+  if (d.keep) return keepItem(d.keep);
+  if (t.hasAttribute('data-rewrites')) { inboxOrder().filter((p) => p.kind === 'update' && p.body != null && !p.text).forEach((p) => keepItem(p.id)); return; }
+  if (d.drop) return dropItem(d.drop);
+  if (d.park) { S.sel = nextAfter(d.park); toast('Kept as a fragment'); return render(); }
+  if (d.more) { const id = d.more; editItem(id, {wantsMore: true}, true); toast('Asked for directions. The next scheduled session adds them.'); return; }
+  if (d.kindto) { const [id, k] = d.kindto.split('|'); delete S.secs[id]; return editItem(id, k === 'fragment' ? {kind: k, wantsMore: true} : {kind: k}, true); }
+  if (d.unown) { const [id, i] = d.unown.split('|'); S.own[id].splice(Number(i), 1); return render(); }
+  if (t.hasAttribute('data-runnow')) return runNow();
+  if (t.hasAttribute('data-routineform')) { S.routineForm = !S.routineForm; return render(); }
+  if (t.hasAttribute('data-routineoff')) return saveRoutine({url: null});
+  if (t.hasAttribute('data-copy')) {
+    const ta = document.getElementById('promptIn');
+    const done = () => toast('Copied. Paste it into Claude Code, then set the status to “Claude is on it”.');
+    try { navigator.clipboard.writeText(ta.value).then(done, () => { ta.select(); document.execCommand('copy'); done(); }); } catch { ta.select(); done(); }
+    return;
+  }
+  if (d.open && t.tagName !== 'BUTTON') { const x = task(d.open); if (!x) return; markSeen(x); S.open = x.id; return render(); }
+  render();
+});
+document.addEventListener('change', (e) => {
+  const el = e.target;
+  if (el.dataset?.pick) {
+    const [id, i] = el.dataset.pick.split('|');
+    const set = S.picked[id] ||= new Set();
+    if (el.checked) set.add(Number(i)); else set.delete(Number(i));
+    return render();
+  }
+  if (el.tagName === 'SELECT' && el.dataset.f === 'task') editItem(S.sel, {task: el.value || null}, true);
+});
+let promptTimer = null;
+document.addEventListener('input', (e) => {
+  const el = e.target;
+  if (el.id === 'aq') { S.q = el.value; return render(); }
+  if (S.open && el.dataset.tf) { if (el.classList.contains('dtitle')) fitTitle(); return editTask(S.open, {[el.dataset.tf]: el.value}); }
+  if (S.open && el.dataset.tsec) {
+    const sec = S.tsecs[S.open] ||= parseBody(task(S.open).body);
+    sec[el.dataset.tsec] = el.value;
+    return editTask(S.open, {body: serialize(sec)});
+  }
+  if (el.id === 'promptIn' && S.open) {
+    const t = task(S.open), prompt = el.value;
+    t.prompt = prompt;
+    clearTimeout(promptTimer);
+    promptTimer = setTimeout(() => write(null, `api/dashboard/tasks/${t.id}`, 'PATCH', {prompt}), 700);
+    return;
+  }
+  if (!S.sel || S.view !== 'inbox') return;
+  if (el.dataset.f && el.tagName !== 'SELECT') return editItem(S.sel, {[el.dataset.f]: el.dataset.f === 'title' ? el.value.replace(/\n/g, ' ') : el.value});
+  if (el.dataset.sec) {
+    // The sections stay as typed here; the saved body is trimmed, and re-reading it would eat a trailing space.
+    const sec = S.secs[S.sel] ||= parseBody(item(S.sel).body);
+    sec[el.dataset.sec] = el.value;
+    editItem(S.sel, {body: serialize(sec)});
+  }
+});
+document.addEventListener('submit', (e) => {
+  e.preventDefault();
+  if (e.target.id === 'addForm') {
+    const input = document.getElementById('addIn'), title = input.value.trim();
+    if (!title) return;
+    input.value = '';
+    const id = `t_${key().replace(/-/g, '').slice(0, 16)}`, at = Date.now();
+    write(() => { S.tasks.push({id, title, body: '', state: 'you', waitingOn: null, parent: null, links: [], prompt: null, createdFrom: {source: 'You'}, createdAt: at, updatedAt: at, pinnedAt: null, clearedAt: null, area: S.area, updates: []}); },
+      'api/dashboard/tasks', 'POST', {id, title, area: S.area});
+    return;
+  }
+  if (e.target.id === 'routineForm') return saveRoutine({url: document.getElementById('routineUrl').value.trim(), token: document.getElementById('routineToken').value.trim()});
+  const id = e.target.dataset?.ownform;
+  if (id) {
+    const input = document.getElementById('ownIn'), title = input.value.trim();
+    if (!title) return;
+    (S.own[id] ||= []).push(title);
+    input.value = '';
+    render();
+  }
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.classList?.contains('dtitle')) { e.preventDefault(); e.target.blur(); return; }
+  if (e.key === 'Escape') {
+    if (S.menu) { S.menu = null; return render(); }
+    if (S.open) return closeDrawer();
+  }
+  if (e.target.matches?.('input, textarea, select') || e.target.isContentEditable || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.key === 'n' && !document.body.classList.contains('padopen')) { e.preventDefault(); return setPadOpen(true); }
+  const id = S.open || (S.view === 'board' ? hoverId : null);
+  const s = KEYS[e.key.toLowerCase()];
+  if (id && s) { e.preventDefault(); setState(id, s); }
+});
+document.addEventListener('visibilitychange', () => { if (!document.hidden) { idle = 0; poll(); } });
+document.getElementById('strataLink').href = BASE;
+S.area = storage.get('dashboard-area', 'work') === 'personal' ? 'personal' : 'work';
+setPadOpen(!!storage.get('dashboard-pad-open', false), false);
+load().catch((e) => { document.getElementById('view').innerHTML = `<p class="muted">Couldn’t load the dashboard: ${esc(e.message)}</p>`; });
+api('api/dashboard/routine').then((r) => { S.routine = r; render(); }, () => {});
+</script>
+</body>
+</html>

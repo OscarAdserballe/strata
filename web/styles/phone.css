@@ -1,0 +1,35 @@
+.pdoor{flex:1;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;gap:10px;padding:0 34px 14vh;}
+.pdoor-overline{font:500 10px/1 var(--mono);letter-spacing:.18em;text-transform:uppercase;color:var(--accent-deep);margin-bottom:8px;}
+.pdoor-n{font-family:var(--serif);font-size:92px;font-weight:600;line-height:1;letter-spacing:-.03em;color:var(--ink);font-variant-numeric:tabular-nums;}
+.pdoor-line{font-family:var(--serif);font-size:17px;line-height:1.5;color:var(--ink);}
+.pdoor-from{font:500 10px/1.7 var(--mono);letter-spacing:.06em;color:var(--ink-faint);max-width:32ch;}
+.pdoor-go{margin-top:26px;width:100%;max-width:300px;font:600 15px/1 var(--sans);letter-spacing:.01em;color:#fff;background:var(--accent);border:none;border-radius:99px;padding:17px 22px;cursor:pointer;box-shadow:var(--shadow);}
+.pdoor-go:active{background:var(--accent-deep);}
+.pdoor-mark{font-size:30px;color:var(--good);margin-bottom:4px;}
+@media (max-width: 620px){
+  .clm{margin:26px 0 14px;padding:8px 10px 9px;}
+  .clm-row{margin-left:calc(var(--d, 0) * 13px);gap:8px;}
+  .clm-row.d0 .clm-l{font-size:13.5px;}
+  .clm-row.d1 .clm-l,.clm-row.d2 .clm-l,.clm-row.d3 .clm-l,.clm-row.d4 .clm-l{font-size:12px;}
+  .clm-n{font-size:8px;padding:2px 4px;}
+  .clm-c{font-size:8.5px;}
+  .lhead{padding:18px 22px 10px;}
+  .lwrap{padding-bottom:calc(28px + env(safe-area-inset-bottom));}
+  .rhead{padding:16px 18px 10px;}
+  .rcard{margin-top:3vh;padding:0 20px;}
+  .rdone{margin-top:10vh;padding:0 20px;}
+  .q{font-size:19px;line-height:1.44;}
+  .rwrap{padding-bottom:calc(32px + env(safe-area-inset-bottom));}
+  .rcard .keys{margin-top:22px;gap:9px;}
+  .rcard .keys button.tk{flex:1 1 auto;padding:13px 10px;font-size:11.5px;text-align:center;}
+  .smap{padding:6px 14px 34px;}
+  .smcount{font-size:36px;}
+  .smtopic{padding:16px 15px 18px;border-radius:11px;}
+  .smtree.sub{margin-left:1px;padding-left:10px;}
+  .smcard{padding:5px 8px 5px 8px;gap:7px;}
+  .smq{font-size:13px;}
+  .smtree > .smnode > .smclabel .smctext{font-size:14px;}
+  .smgrid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;}
+  .smtname{font-size:13px;}
+  .rtree{margin-top:30px;}
+}

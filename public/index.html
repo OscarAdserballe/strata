@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>Strata — reading room</title>
+<meta name="theme-color" content="#fbf8f2" />
+<link rel="manifest" href="manifest.json" />
+<link rel="apple-touch-icon" href="apple-touch-icon.png" />
+<link rel="icon" type="image/png" href="apple-touch-icon.png" />
+<!--STRATA_PRELOAD-->
+<link rel="stylesheet" href="dist/main.css?v=dev" />
+</head>
+<body>
+  <div id="root"></div>
+  <!-- The server replaces the dev stamp and the base path below as it serves the page. -->
+  <script>window.STRATA_BUILD = "dev"; window.STRATA_BASE = "__STRATA_BASE__";</script>
+  <script type="module" src="dist/main.js?v=dev"></script>
+</body>
+</html>

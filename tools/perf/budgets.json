@@ -1,0 +1,52 @@
+{
+  "$comment": "Checked by tools/perf/budgets.mjs against the production-shaped fixture, once per PR (CI job `test`). Bundle sizes, payloads and request counts are ceilings with about 20% headroom over what main measures, so ordinary feature growth and browser differences pass and only real bloat fails; zero-counts (room renders, refetches) stay exact because any is a bug. `t.ms` values are loose ceilings for a shared CI runner at 1x CPU that only catch the catastrophic (the timing comparison against main is the perf-timing job). Calibrated 2026-09-24 on main after #70-#74; measured values are in docs/performance-audit-2026-09-24.md. Budgets don't ratchet down; raising one needs a reason in the PR.",
+  "bundle": {
+    "dist/main.js": 250,
+    "dist/main.css": 35
+  },
+  "payloadsKB": {
+    "boards": 24,
+    "register": 85,
+    "biggest-board": 75,
+    "marked-board": 260
+  },
+  "scenarios": {
+    "home/cold": { "w.commits": 10, "w.requests": 25, "t.ms": 1500 },
+    "home/sw:sw-warm": { "extra.pageFromWorker": ["eq", 1], "extra.snapshotReads": ["eq", 3], "w.requests": 25, "t.ms": 1200 },
+    "board/first": { "w.requests": 8, "t.ms": 800 },
+    "pdf-large/cold": { "t.ms": 3000 },
+    "pdf-marked/cold": { "t.ms": 2500 },
+    "pdf-marked/reopen": { "t.ms": 1200, "extra.workerFetches": 0, "extra.pdfWorkers": ["eq", 1] },
+    "scroll-marked/steps": { "extra.roomRenders": 0, "extra.otherPagePaints": 0, "extra.drawsMissingMarks": 0, "extra.markedPageDraws": ["min", 1], "extra.pagesDrew": ["min", 1] },
+    "scroll-marked/wheel": { "extra.roomRenders": 0, "extra.pagesDrawn": ["min", 1], "w.longtasks.ms": 100, "t.ms": 250 },
+    "highlight/marked": { "extra.roomRenders": 0, "extra.menuRoomRenders": 0, "extra.marksOnPage": ["min", 1], "extra.mkboxInsertsDuringPaint": 12, "w.requests": 1, "w.commits": 5, "t.ms": 120 },
+    "reader/toast": { "extra.roomRenders": 0, "extra.shown": ["min", 1], "w.commits": 2 },
+    "reader/find": { "extra.roomRenders": 0, "extra.pagetextFetches": ["eq", 1], "extra.typedWhileOut": ["min", 1], "extra.found": ["min", 2] },
+    "reader/split": { "extra.roomRenders": 0, "extra.moved": ["min", 1], "extra.commitsPerMove": 1, "extra.markRepaints": 16 },
+    "reader/zoom": { "extra.roomRenders": 0, "extra.stepped": ["min", 1], "w.commits": 7, "extra.markRepaints": 24 },
+    "flip-prose/key-n": { "extra.roomRenders": 0, "extra.flipped": ["min", 12], "extra.deckFetches": 0, "extra.seenFetches": 0, "extra.commitsPerKey": 3, "w.longtasks.ms": 100, "t.ms": 150 },
+    "flip-pdf/key-n": { "extra.roomRenders": 0, "extra.flipped": ["min", 12], "extra.deckFetches": 0, "extra.seenFetches": 0, "extra.canvasesLost": 0, "extra.canvasesHeld": ["min", 1], "extra.commitsPerKey": 3, "w.longtasks.ms": 100, "t.ms": 150 },
+    "cards-only/toggle": { "extra.againFetches": 0, "extra.firstFetches": ["min", 1], "extra.cards": ["min", 1], "t.ms": 150 },
+    "chat/focus-opens-thread": { "w.longtasks.ms": 200, "t.ms": 400 },
+    "chat/keystroke": { "extra.typed": ["min", 1], "extra.commitsPerKey": 1.2, "w.longtasks.ms": 100, "t.ms": 60 },
+    "idle/home": { "t.commits30s": 2, "t.requests30s": 2 },
+    "idle/pdf-chat": { "t.commits30s": 2, "t.requests30s": 2, "w.longtasks.ms": 0 },
+    "reader-cache/reopen": { "t.firstOpenFetches": ["min", 1], "t.reopenFetches": 0 },
+    "continue/home": { "extra.stateFetches": 0, "extra.deckFetches": 0, "extra.workerFetches": 0, "extra.fonts": 0, "extra.warmsBeforePage": 0, "w.requests": 10, "t.card": 250, "t.ms": 800 },
+    "deck-open/board-page": { "extra.deckFetches": 0, "extra.workerFetches": 0, "extra.fonts": 0, "w.requests": 6, "t.card": 200, "t.ms": 600 },
+    "review/home": { "extra.reviewFetches": 0, "extra.fonts": 0, "t.ms": 150 },
+    "reload-reader/pair": { "extra.deckInRender": 0, "extra.deckFetches": 1, "extra.seenFetches": ["eq", 1], "t.card": 1000 },
+    "board-page/drag-files": { "extra.roomRenders": 0, "extra.shown": ["min", 1], "w.commits": 2 },
+    "board-page/key-h": { "extra.roomRenders": 0, "extra.countsLanded": ["min", 1], "extra.commitsPerKey": 2, "w.longtasks.ms": 100, "t.ms": 150 },
+    "board-page/log-typing": { "extra.roomRenders": 0, "extra.typed": ["min", 1], "extra.commitsPerKey": 1.2, "w.longtasks.ms": 100, "t.ms": 60 },
+    "agent/outline": { "t.ms": 50 },
+    "agent/overview": { "t.ms": 50 },
+    "agent/kept": { "t.ms": 50, "extra.tokens": ["min", 500] },
+    "agent/changes": { "t.ms": 50 },
+    "agent/search": { "t.ms": 60 },
+    "agent/text-section": { "t.ms": 50, "extra.tokens": ["min", 500] },
+    "agent/chat": { "t.ms": 50, "extra.tokens": ["min", 500] },
+    "agent/search-chat": { "t.ms": 50 },
+    "board-page/plan-write": { "extra.roomRenders": 0, "extra.saved": ["min", 2], "extra.planWrites": 2, "w.requests": 2, "w.commits": 4 }
+  }
+}

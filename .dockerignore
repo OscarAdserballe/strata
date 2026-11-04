@@ -1,0 +1,16 @@
+.git
+.claude
+.agents
+.codex
+.env
+backups
+courses
+data
+dist
+node_modules
+secrets
+test
+tmp
+*.test.ts
+**/*.test.ts
+**/*.test.mjs

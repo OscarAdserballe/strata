@@ -1,0 +1,6 @@
+.connection-banner{position:fixed;top:0;left:0;right:0;z-index:var(--layer-banner);display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:8px;padding:10px 16px;background:#fff0cd;color:#543e18;border-bottom:1px solid #d6b974;font:13px/1.5 var(--sans);}
+.connection-banner button{border:1px solid currentColor;border-radius:5px;padding:3px 10px;background:transparent;color:inherit;cursor:pointer;}
+.offline-boards{padding:20px 24px;}
+.offline-boards h2{font:500 12px/1.5 var(--sans);color:var(--ink-soft);}
+.offline-boards button{display:block;width:100%;padding:14px 0;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;color:var(--ink);font:18px/1.4 var(--serif);cursor:pointer;}
+.veil.launcher,.app .bench-lib{top:var(--connection-height,0px);}

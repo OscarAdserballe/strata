@@ -1,0 +1,22 @@
+.bh-dl{background:none;border:1px solid var(--line);border-radius:5px;padding:4px 8px;
+       font:500 9.5px/1 var(--mono);letter-spacing:.06em;color:var(--ink-faint);cursor:pointer;}
+.bh-dl:hover{border-color:var(--accent-line);color:var(--accent-deep);background:var(--accent-soft);}
+.bh-dl:disabled{opacity:.6;cursor:default;}
+.bh-distil{display:flex;align-items:baseline;gap:9px;margin-top:13px;
+           font:500 10px/1.5 var(--mono);letter-spacing:.04em;color:var(--ink-faint);}
+.bh-distil .bh-dname{color:var(--ink-soft);flex:0 0 auto;}
+.bh-distil .bh-dwhat{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.bh-distil.err .bh-dwhat{color:oklch(0.55 0.15 30);}
+.bh-retry{flex:0 0 auto;background:none;border:none;padding:0;font:inherit;letter-spacing:inherit;
+          color:var(--accent-deep);cursor:pointer;text-decoration:underline;text-underline-offset:2px;}
+
+.note-head{display:flex;align-items:center;gap:10px;font:500 9.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:oklch(0.76 0.01 70);margin-bottom:20px;}
+.note-head .saved{margin-left:auto;color:var(--good);opacity:.75;}
+/* JS sizes the editor to its text, so the page scrolls rather than the box */
+.note-edit{display:block;width:100%;min-height:58vh;border:none;outline:none;background:transparent;resize:none;overflow:hidden;
+  font-family:var(--serif);font-size:16.5px;line-height:1.68;color:var(--ink);padding:0;tab-size:2;white-space:pre-wrap;}
+.note-edit::placeholder{color:oklch(0.80 0.01 70);font-style:italic;}
+.note-read{min-height:34vh;cursor:text;}
+.note-read > :first-child{margin-top:0;}
+.prose p.glow{animation:glow 2.2s ease-out both;border-radius:6px;}
+@keyframes glow{0%{background:transparent;box-shadow:none}12%{background:oklch(0.94 0.05 248);box-shadow:0 0 0 8px oklch(0.94 0.05 248)}68%{background:oklch(0.94 0.05 248);box-shadow:0 0 0 8px oklch(0.94 0.05 248)}100%{background:transparent;box-shadow:none}}

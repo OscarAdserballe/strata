@@ -1,0 +1,6 @@
+.save-chip{position:fixed;right:14px;bottom:calc(14px + env(safe-area-inset-bottom));z-index:var(--layer-saving);display:flex;align-items:center;gap:6px;max-width:calc(100vw - 28px);padding:5px 6px 5px 12px;white-space:nowrap;background:var(--paper);border:1px solid var(--line);border-radius:999px;box-shadow:var(--shadow-soft);font:500 10px/1.4 var(--mono);letter-spacing:.04em;color:var(--ink-faint);}
+.save-chip:not(.failed){padding-right:12px;}
+.save-chip.failed{color:var(--ink-soft);}
+.save-chip button{border:none;background:none;cursor:pointer;padding:3px 8px;border-radius:999px;font:inherit;letter-spacing:inherit;color:var(--accent-deep);}
+.save-chip button:hover{background:var(--accent-soft);}
+@media(max-width:600px){.save-chip{bottom:calc(64px + env(safe-area-inset-bottom));}}

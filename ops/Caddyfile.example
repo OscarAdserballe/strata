@@ -1,0 +1,4 @@
+# Every account enters through one gateway; the room workers have no published ports.
+strata.example.com {
+	reverse_proxy 127.0.0.1:8803
+}

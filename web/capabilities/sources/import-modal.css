@@ -1,0 +1,40 @@
+.import-modal{--card:var(--card-bg,#fffdf9);--blue:var(--accent,#466781);--muted:var(--ink-soft,#807e75);font-family:var(--sans);font-size:14px;}
+.import-modal button{font:inherit;cursor:pointer;color:inherit;}
+.import-modal button:disabled{opacity:.4;cursor:default;}
+.import-modal :focus-visible{outline:2px solid var(--blue);outline-offset:3px;}
+.import-modal .text-button{border:0;background:none;padding:4px 0;font-size:11px;color:var(--blue);}
+.import-modal{width:560px;max-width:calc(100vw - 32px);max-height:min(560px,85dvh);padding:0;border:1px solid #dad6cb;border-radius:10px;background:var(--card);color:var(--ink);box-shadow:0 24px 90px #29271d30,0 3px 12px #29271d12;overflow:hidden}
+.import-modal[open]{display:flex;flex-direction:column}
+.import-modal::backdrop{background:#302f2c28;backdrop-filter:blur(2px)}
+.import-modal .modal-header{padding:23px 24px 17px;display:flex;gap:18px;align-items:flex-start;flex-shrink:0}
+.import-modal .modal-header h2{font:500 21px/1.25 var(--serif);margin:0}
+.import-modal .modal-header p{font-size:12px;line-height:1.5;color:var(--muted);margin:9px 0 0}
+.import-modal .close{margin:-5px -8px 0 auto;padding:4px 8px;font-size:23px;line-height:1;color:var(--muted);background:none;border:0;flex-shrink:0}
+.import-modal .outline-toolbar{display:flex;justify-content:space-between;align-items:center;padding:8px 24px;border-top:1px solid var(--line);border-bottom:1px solid var(--line);flex-shrink:0}
+.import-modal .outline-toolbar>span{font-size:11px;color:var(--muted)}
+.import-modal .outline{padding:0 16px 13px;overflow-y:auto;min-height:0;overscroll-behavior:contain;scrollbar-width:thin;scrollbar-color:#d5d0c4 transparent}
+.import-modal .unit-divider{display:flex;justify-content:space-between;align-items:center;margin:13px 7px 4px;padding:5px 0;color:var(--blue);font:10px var(--mono);border-bottom:1px solid #dce3e5}
+.import-modal .unit-divider button{border:0;background:none;color:var(--muted);padding:2px 0;font-size:10px}
+.import-modal .unit-divider button:hover{color:var(--blue)}
+.import-modal .outline-row{min-height:34px;display:flex;align-items:center;gap:7px;padding:5px 0;border-radius:3px}
+.import-modal .outline-row:hover{background:#f3f1eb}
+.import-modal .row-indent{width:calc(var(--depth)*11px);flex-shrink:0}
+.import-modal .disclosure{display:block;width:13px;flex-shrink:0;font-size:17px;line-height:1;border:0;background:none;color:var(--muted);padding:2px 0}
+.import-modal input[type=checkbox]{accent-color:var(--blue);width:13px;height:13px;margin:0 2px 0 0;flex-shrink:0;cursor:pointer}
+.import-modal .row-label{flex:1;min-width:0;font-size:12px;line-height:1.4;overflow-wrap:anywhere}
+.import-modal .page{font:9px var(--mono);width:22px;text-align:right;color:var(--muted);flex-shrink:0}
+.import-modal .split, .import-modal .split-space{width:30px;flex-shrink:0}
+.import-modal .split{font-size:9px;border:0;background:none;color:var(--muted);padding:4px 0;opacity:0}
+.import-modal .outline-row:hover .split, .import-modal .split:focus-visible{opacity:1;color:var(--blue)}
+.import-modal .excluded .row-label{color:#a9a59b;text-decoration:line-through}
+.import-modal .modal-footer{border-top:1px solid var(--line);padding:14px 22px;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-shrink:0}
+.import-modal .modal-footer>div{display:flex;align-items:center;gap:14px}
+.import-modal .modal-footer [role=status]{font-size:11px;color:var(--muted)}
+.import-modal .reset{font-size:10px}
+.import-modal .cancel{font-size:12px;border:0;background:none;padding:8px 2px;color:var(--muted)}
+.import-modal .primary{background:#41647a;color:white;border:1px solid #385b70;border-radius:5px;padding:8px 16px;font-size:12px;white-space:nowrap}
+.import-modal .primary:hover{background:#34556a}
+@media(hover:none){.import-modal .split{opacity:1}}
+@media(max-width:600px){.import-modal .modal-header{padding:20px 18px 15px}.import-modal .modal-header h2{font-size:19px}.import-modal .modal-header p{font-size:11px}.import-modal .outline-toolbar{padding:8px 18px}.import-modal .outline{padding:0 10px 10px}.import-modal .row-indent{width:calc(var(--depth)*7px)}.import-modal .row-label{font-size:11px}.import-modal .outline-row{min-height:37px;gap:5px}.import-modal .modal-footer{padding:12px 16px}.import-modal .modal-footer>div{gap:10px}.import-modal .primary{padding:8px 12px}.import-modal .split{opacity:1}}
+
+.import-budget-error { margin: 0; padding: 10px 20px; color: #a33c2e; font-size: 13px; }

@@ -1,0 +1,9 @@
+/* Blue, not yellow: a find hit must not read as a highlight you made. */
+.findbar{position:absolute;top:10px;right:24px;z-index:24;display:flex;align-items:center;gap:2px;background:var(--card-bg);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow-soft);padding:3px 4px 3px 11px;}
+.findbar input{border:none;outline:none;background:none;font:400 12.5px/1.4 var(--sans);color:var(--ink);width:158px;}
+.findbar input::placeholder{color:var(--ink-faint);}
+.findbar .fb-n{font:500 9.5px/1 var(--mono);letter-spacing:.02em;color:var(--ink-faint);white-space:nowrap;padding:0 5px;}
+.findbar button{border:none;background:none;color:var(--ink-faint);cursor:pointer;font:500 11px/1 var(--sans);padding:5px 6px;border-radius:5px;}
+.findbar button:hover{color:var(--accent-deep);background:var(--accent-soft);}
+.findmk{background:oklch(0.87 0.075 248);border-radius:2px;box-decoration-break:clone;-webkit-box-decoration-break:clone;padding:1px 0;}
+.findbox{position:absolute;background:oklch(0.72 0.12 248 / 0.35);border-radius:2px;pointer-events:none;z-index:3;}

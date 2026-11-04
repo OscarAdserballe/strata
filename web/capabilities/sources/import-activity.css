@@ -1,0 +1,29 @@
+.import-activity { margin: 24px 0; border-top: 1px solid var(--line, #d8d4cc); padding-top: 20px; }
+.import-activity h2 { margin: 0; }
+.import-activity .home-section-head > span, .import-hint { font-size: 12px; color: var(--muted, #68635a); }
+.import-activity ul { list-style: none; padding: 0; margin: 12px 0; }
+.import-activity li { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 12px; border-bottom: 1px solid var(--line, #d8d4cc); }
+.import-copy { min-width: 0; display: grid; gap: 5px; }
+.import-copy strong { font-size: 14px; overflow-wrap: anywhere; }
+.import-copy > span { font-size: 12px; }
+.import-actions { display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+.import-actions button { font: inherit; font-size: 12px; cursor: pointer; padding: 6px 9px; background: transparent; color: inherit; border: 1px solid var(--line, #d8d4cc); border-radius: 3px; }
+.import-actions button:disabled { opacity: .5; cursor: wait; }
+.import-activity .import-attention { border-left: 3px solid #a9662a; background: #a9662a09; }
+.import-activity .import-error { color: #a14324; font-size: 12px; margin: 3px 0; overflow-wrap: anywhere; }
+.import-activity progress { width: min(280px, 100%); height: 5px; accent-color: #687c5b; }
+.import-activity summary { font-size: 12px; cursor: pointer; }
+@media(max-width: 640px) { .import-activity li { align-items: flex-start; flex-direction: column; gap: 10px; } }
+
+.imports-status { position: relative; display: inline-flex; align-items: center; }
+.imports-status > button { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.imports-status.attention > button { color: #a9662a; }
+.imports-status .dk-spin { flex: none; }
+.imports-status.floating { position: fixed; left: 14px; bottom: 14px; z-index: var(--layer-imports); }
+.imports-status.floating .imports-pop { top: auto; bottom: calc(100% + 6px); left: 0; right: auto; }
+.imports-status.floating > button { background: var(--paper, #fbf9f4); border: 1px solid var(--line, #d8d4cc); border-radius: 999px; padding: 5px 12px; font: 400 12px/1.4 var(--sans); cursor: pointer; }
+.imports-pop { position: absolute; top: calc(100% + 6px); right: 0; z-index: var(--layer-imports-pop); width: min(560px, calc(100vw - 32px)); max-height: min(70vh, 640px); overflow: auto;
+  background: var(--paper, #fbf9f4); border: 1px solid var(--line, #d8d4cc); border-radius: 8px; box-shadow: 0 12px 32px rgba(0,0,0,.14); padding: 4px 16px 8px; text-align: left;
+  font: 400 13px/1.45 var(--sans); letter-spacing: normal; color: var(--ink, #2b2823); }
+.imports-pop .import-activity { margin: 0; border-top: 0; }
+.imports-pop-x { position: absolute; top: 8px; right: 8px; border: 0; background: none; cursor: pointer; color: var(--ink-soft, #68635a); font-size: 13px; }

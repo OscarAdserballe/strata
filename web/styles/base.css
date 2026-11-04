@@ -1,0 +1,19 @@
+*{box-sizing:border-box;}
+html,body{margin:0;height:100%;overflow:hidden;}
+/* iPad Safari's toolbar makes 100% taller than the visible area; dvh is the honest unit. */
+@supports (height:100dvh){html,body{height:100dvh;}}
+body{background:var(--paper);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased;-webkit-tap-highlight-color:transparent;}
+#root{height:100%;padding-top:var(--connection-height,0px);box-sizing:border-box;}
+
+button{font-family:inherit;}
+::-webkit-scrollbar{width:9px;height:9px;}
+::-webkit-scrollbar-thumb{background:oklch(0.86 0.01 80);border-radius:20px;border:3px solid var(--paper-2);}
+@keyframes kg-rise{from{transform:translateY(8px);opacity:0;}to{transform:none;opacity:1;}}
+@keyframes kg-pulse{0%,100%{opacity:1;}50%{opacity:0.3;}}
+@keyframes kg-fade{from{opacity:0}to{opacity:1}}
+.kg-pulse{display:inline-block;animation:kg-pulse 1.1s ease-in-out infinite;color:var(--accent);}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+
+.app{display:flex;flex-direction:column;height:100%;}
+.boot{height:100%;display:grid;place-items:center;font-family:var(--serif);font-style:italic;color:var(--ink-soft);}
+kbd{font-family:var(--mono);font-size:9px;border:1px solid var(--line);border-radius:3px;padding:1px 4px;color:var(--ink-faint);background:var(--paper);}

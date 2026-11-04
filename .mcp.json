@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "strata": {
+      "type": "http",
+      "url": "${STRATA_MCP_URL}",
+      "headers": { "Authorization": "Bearer ${STRATA_TOKEN:-set-by-proxy}" }
+    }
+  }
+}

@@ -1,0 +1,65 @@
+.treeview{max-width:760px;}
+.thead{display:flex;align-items:center;gap:12px;font:500 9px/1 var(--mono);letter-spacing:.11em;
+       text-transform:uppercase;color:oklch(0.74 0.01 70);padding-bottom:11px;border-bottom:1px solid var(--line-soft);}
+.thead .tsrc{color:var(--ink-soft);max-width:46%;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.thead .tstate{color:var(--accent-deep);}
+.thead .tgrow{flex:1;}
+.tclose{background:none;border:1px solid var(--line);border-radius:4px;padding:3px 7px;cursor:pointer;
+        font:inherit;letter-spacing:.09em;color:var(--ink-faint);text-transform:uppercase;}
+.tclose:hover{border-color:var(--accent-line);color:var(--accent-deep);background:var(--accent-soft);}
+
+.tq{font-family:var(--serif);font-style:italic;font-size:16.5px;line-height:1.5;color:var(--ink-soft);
+    margin:22px 0 30px;padding-left:15px;border-left:2px solid var(--accent-line);}
+
+.ttree,.tkids,.tqs{list-style:none;margin:0;padding:0;}
+.ttree > .tnode{margin-bottom:11px;}
+.ttree > .tnode.open{margin-bottom:26px;}
+.tkids{margin:11px 0 0 3px;padding-left:26px;border-left:1px solid var(--line);}
+.tkids > .tnode{margin-top:11px;}
+.tkids > .tnode.open{margin-top:17px;}
+.tkids .tlabel{font-size:15px;}
+.tkids .tkids .tlabel{font-size:14px;}
+
+.trow{display:flex;align-items:baseline;gap:18px;}
+.tclaim{flex:1;min-width:0;padding-right:4px;cursor:pointer;}
+.tclaim:hover .tlabel{color:var(--accent-deep);}
+.ttw{display:inline-block;width:15px;margin-left:-19px;font:500 10px/1 var(--mono);color:oklch(0.72 0.012 70);vertical-align:1px;}
+.ttw.leaf{color:oklch(0.85 0.01 75);}
+.tinside{font:500 9px/1 var(--mono);letter-spacing:.06em;color:oklch(0.78 0.012 70);margin-left:10px;white-space:nowrap;}
+.tlabel{font-family:var(--serif);font-size:16.5px;line-height:1.44;color:var(--ink);}
+.tkind{font:500 8.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:oklch(0.74 0.01 70);
+       border:1px solid var(--line);border-radius:3px;padding:2px 5px;margin-right:9px;vertical-align:2px;white-space:nowrap;}
+.tkind.k-procedure,.tkind.k-move{color:var(--good);border-color:var(--good-soft);background:var(--good-soft);}
+.tkind.k-boundary{color:var(--warn);border-color:oklch(0.93 0.05 55);background:oklch(0.975 0.02 55);}
+
+.tmarks{flex:0 0 auto;display:flex;align-items:baseline;gap:9px;font:500 9.5px/1 var(--mono);letter-spacing:.05em;}
+.tcards{background:none;border:none;padding:0;cursor:pointer;font:inherit;letter-spacing:inherit;color:var(--ink-faint);}
+.tcards:hover{color:var(--accent-deep);}
+.tcards.none{color:oklch(0.83 0.01 75);cursor:default;}
+.tanchor{background:none;border:1px solid transparent;border-radius:3px;padding:2px 5px;cursor:pointer;
+         font:inherit;letter-spacing:inherit;color:var(--accent-deep);white-space:nowrap;}
+.tanchor:hover{border-color:var(--accent-line);background:var(--accent-soft);}
+
+.tgloss{margin:0 0 26px;padding-bottom:20px;border-bottom:1px solid var(--line);}
+.tsynth{margin:0 0 22px;padding:12px 14px 10px;border-left:2px solid var(--accent-line);background:var(--accent-soft);border-radius:0 8px 8px 0;}
+.tsynth-l{font:500 8.5px/1 var(--mono);letter-spacing:.11em;text-transform:uppercase;color:var(--accent-deep);margin-bottom:6px;}
+.tsynth .ttree > .tnode{margin-bottom:0;}
+.tsynth .tlabel{font-style:italic;}
+.tsynth .tkind.k-synthesis{display:none;}
+.tglosshead{font:500 9.5px/1 var(--mono);letter-spacing:.09em;text-transform:uppercase;
+            color:var(--ink-faint);cursor:pointer;padding-left:19px;}
+.tglosshead:hover{color:var(--accent-deep);}
+.tglossl{list-style:none;margin:14px 0 0;padding:0;}
+.tglossl li{display:flex;align-items:baseline;gap:12px;margin-top:7px;}
+.tterm{flex:0 0 32%;font-family:var(--serif);font-size:14.5px;color:var(--ink);}
+.tkernel{flex:1;min-width:0;font-family:var(--serif);font-size:14px;line-height:1.5;color:var(--ink-faint);}
+.tglossl .tanchor{flex:0 0 auto;font:500 9.5px/1 var(--mono);letter-spacing:.05em;}
+
+.tqs{margin:9px 0 0;}
+.tqs li{font-family:var(--serif);font-size:14px;line-height:1.55;color:var(--ink-faint);
+        padding-left:16px;position:relative;margin-top:3px;}
+.tqs li::before{content:"?";position:absolute;left:0;color:oklch(0.80 0.012 70);font-size:12.5px;}
+
+.tnote{font-family:var(--serif);font-size:15px;line-height:1.6;color:var(--ink-soft);margin:30px 0 0;}
+.tnote.err{color:var(--warn);}
+.tlink{background:none;border:none;padding:0;font:inherit;color:var(--accent-deep);cursor:pointer;text-decoration:underline;}

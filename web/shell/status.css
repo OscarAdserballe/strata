@@ -1,0 +1,29 @@
+.status{display:flex;align-items:center;height:30px;flex:0 0 auto;padding:0 15px;border-bottom:1px solid var(--line-soft);font:500 10px/1 var(--mono);letter-spacing:.04em;color:var(--ink-faint);}
+.status .seg{padding:0 12px;border:none;border-right:1px solid var(--line-soft);height:100%;display:flex;align-items:center;gap:8px;background:none;font:inherit;color:inherit;letter-spacing:inherit;max-width:26vw;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;}
+.status .seg:first-child{padding-left:0;}
+.status button.seg{cursor:pointer;}
+.status .seg.addsrc{position:relative;font-size:15px;line-height:1;padding:0 12px;overflow:visible;}
+.addmenu{position:absolute;top:calc(100% + 4px);left:0;z-index:var(--layer-menu);display:flex;flex-direction:column;min-width:172px;padding:3px;
+         border:1px solid var(--line);border-radius:6px;background:var(--card-bg);box-shadow:var(--shadow);}
+.addmenu button{display:block;width:100%;text-align:left;border:none;background:none;cursor:pointer;padding:7px 9px;border-radius:4px;
+                font:500 9.5px/1.35 var(--mono);letter-spacing:.03em;color:var(--ink-soft);}
+.addmenu button b{display:block;font-weight:500;color:var(--ink);font-size:10.5px;margin-bottom:2px;}
+.addmenu button:hover{background:var(--accent-soft);color:var(--accent-deep);}
+.addmenu .addmenu-study{border-top:1px solid var(--line-soft);border-radius:0 0 4px 4px;color:var(--ink-faint);}
+.status button.seg:hover{color:var(--accent-deep);background:var(--accent-soft);}
+/* Disabled but still present, so the bar doesn't reflow. */
+.status button.seg:disabled{cursor:default;color:var(--ink-faint);background:none;}
+.status .seg.k{color:var(--ink-soft);}
+.status .grow{flex:1;border:none;max-width:none;}
+.status .owned{color:var(--good);letter-spacing:.14em;}
+.status .hint{color:oklch(0.73 0.008 70);display:flex;gap:9px;align-items:center;max-width:none;}
+.status .back{padding:0 10px;color:var(--ink-faint);font-size:12px;}
+.status .back:hover{color:var(--accent-deep);}
+.status .help{padding:0 13px;border-right:none;color:var(--ink-faint);font-size:12px;}
+.status .seg.on{color:var(--accent-deep);background:var(--accent-soft);}
+.status .seg.dim{color:oklch(0.74 0.01 70);}
+.status button.seg.fresh{color:var(--accent-deep);background:var(--accent-soft);border-radius:4px;height:20px;align-self:center;margin-right:8px;border-right:none;}
+.status button.seg.fresh:hover{background:var(--accent-line);}
+/* Named `newcard`, not `mint`: the composer's stylesheet already owns `.mint`. */
+.status .seg.newcard{display:inline-flex;align-items:center;}
+.status .seg.newcard svg{display:block;}

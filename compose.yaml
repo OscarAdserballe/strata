@@ -1,0 +1,60 @@
+# One file to run Strata: copy it, fill .env and secrets/strata_accounts.json, then `docker compose up -d`.
+# On a server, `docker compose --profile autoupdate up -d` also starts the updater, which follows the published image.
+name: strata
+
+services:
+  strata:
+    image: ${STRATA_IMAGE:-ghcr.io/oscaradserballe/strata:latest}
+    build: .
+    init: true
+    restart: unless-stopped
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: ["/tmp:rw,nosuid,nodev,noexec,size=64m"]
+    ports:
+      - "127.0.0.1:${STRATA_PORT:-8080}:8080"
+    environment:
+      STRATA_ACCOUNTS_FILE: /run/secrets/strata_accounts
+      STRATA_ORIGIN: ${STRATA_ORIGIN:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:?set GEMINI_API_KEY in .env}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      STRATA_DASHBOARD_LINKS: ${STRATA_DASHBOARD_LINKS:-}
+    volumes:
+      - rooms:/data
+      # the updater's backups land here; the directory must be writable by uid 1000
+      - ${STRATA_BACKUP_DIR:-./backups}:/backups
+    secrets: [strata_accounts]
+
+  # Every STRATA_UPDATE_EVERY seconds: back up once a day, and when the published image changes, back up,
+  # recreate, wait for healthy and roll back if not. Its logic ships inside the running image (ops/update.sh).
+  updater:
+    image: docker:27.5.1-cli
+    profiles: [autoupdate]
+    restart: unless-stopped
+    init: true
+    # compose resolves ./ paths against this directory, so the updater sees it at the same path as the host
+    working_dir: ${PWD}
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ${PWD}:${PWD}:ro
+    environment:
+      STRATA_UPDATE_EVERY: ${STRATA_UPDATE_EVERY:-60}
+    entrypoint: ["sh", "-c"]
+    command:
+      - |
+        while :; do
+          cid="$$(docker compose ps -aq strata)"
+          if [ -n "$$cid" ] && docker cp "$$cid:/app/ops/update.sh" /tmp/update.sh; then sh /tmp/update.sh || true
+          else docker compose up -d --no-deps strata || true; fi
+          sleep "$$STRATA_UPDATE_EVERY"
+        done
+
+secrets:
+  strata_accounts:
+    file: ./secrets/strata_accounts.json
+
+volumes:
+  rooms:
+    name: strata-rooms

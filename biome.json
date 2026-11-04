@@ -1,0 +1,32 @@
+{
+  "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
+  "files": {
+    "includes": ["web/**", "server/**", "shared/**", "test/**/*.ts", "tools/*.mjs", "tools/*.test.ts", "tools/perf/**", "tools/race/**", "tools/figma/**", "!dist", "!web/vendor", "!public"]
+  },
+  "formatter": {
+    "enabled": false
+  },
+  "linter": {
+    "enabled": true,
+    "rules": {
+      "recommended": false,
+      "correctness": {
+        "noUndeclaredVariables": "error",
+        "noUnusedImports": "error",
+        "noInvalidUseBeforeDeclaration": "error",
+        "noConstAssign": "error",
+        "noUnreachable": "error",
+        "useExhaustiveDependencies": "off"
+      },
+      "suspicious": {
+        "noDuplicateObjectKeys": "error",
+        "noDuplicateCase": "error",
+        "noDoubleEquals": "off",
+        "noAssignInExpressions": "off"
+      }
+    }
+  },
+  "javascript": {
+    "globals": ["pdfjsLib"]
+  }
+}
