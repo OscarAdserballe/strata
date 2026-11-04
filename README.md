@@ -1,30 +1,6 @@
 # Strata
 
-A self-hosted reading room for studying. You read a PDF, an article, a transcript or a live HTML page, and
-everything that belongs to a passage lies over the page as a sheet tied to it: the cards distilled from it, your
-notes, the questions you ask and their answers. Each course keeps a running log. The cards you choose to keep come
-back on a spaced schedule. An agent can read the whole room and write into it through the same paths you use.
-
-## Principles
-
-1. **The text is the centre.** Cards, notes, questions and answers lie over the page as sheets tied to the
-   passage they are about. Nothing takes you to another screen to think about what you just read.
-2. **You choose what to keep.** Cards are distilled for you, but only the ones you keep enter review.
-   The kept set is what you know; the rest is scaffolding.
-3. **A course is a running log, not a folder.** Each board has a log that moves forward, and the room's
-   agent writes into it.
-4. **Agents see what a board holds, and no more.** Every table a board owns is a kind the agent can read,
-   and every change it makes is an op through the save path a person uses. See [docs/agent.md](docs/agent.md).
-5. **One person, one process, one file.** A room is a SQLite file and its own process. A backup is a file
-   copy, and so is moving out.
-6. **Every write is idempotent and ordered**, so a slow or lossy network loses nothing. The race gate exists
-   because this was once false. See [docs/data-layer.md](docs/data-layer.md).
-7. **Speed is a feature with a budget.** Hot journeys have ceilings, production is timed on real devices,
-   and a change that passes every check but makes the room slower is a regression.
-8. **Self-hosted, and honest about what it calls out to.** One container, your own key for the model,
-   optional keys for the rest, and nothing phones home.
-
-The engineering rules behind these, and the checks that hold them, are in [AGENTS.md](AGENTS.md).
+description coming soon
 
 ## Run it
 
