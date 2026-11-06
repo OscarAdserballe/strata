@@ -34,6 +34,11 @@ async function deck(t, boardId, rid, fronts) {
   return pair.deck;
 }
 const readerUrl = (t, boardId, s) => `${t.base}/?board=${boardId}&resource=${s.rid}&pair=${s.pair}`;
+// the reader opens no card by itself: ↵ brings the card in hand up on its words, once the deck has come
+async function handUp(page, filter) {
+  const q = filter ? page.locator(".q").filter({ hasText: filter }) : page.locator(".q");
+  for (let i = 0; i < 80 && !(await q.count()); i++) { await page.keyboard.press("Enter"); await page.waitForTimeout(250); }
+}
 const essay = (title, unique) => `# ${title}
 
 ## 1 What the page shows
@@ -391,6 +396,7 @@ const drillGrades = {
     const page = await t.open({ latency: true, drop: { match: isGrade, pick: dropped, key: receipt },
       lostAck: { match: isGrade, pick: lost, key: receipt } });
     await page.goto(readerUrl(t, b.id, s));
+    await handUp(page);
     const q = page.locator(".q").first();
     await q.waitFor();
     await t.net.idle(400);
@@ -534,6 +540,7 @@ function deleteOpenSource({ name, last }) {
       }, ["strata.at." + b.id, keptDeck, keptAt]);
       await page.goto(readerUrl(t, b.id, doomed));
       await proseShown(page, doomedLine);
+      await handUp(page, "Doomed card");
       await page.locator(".q").filter({ hasText: "Doomed card" }).first().waitFor();
       await t.net.idle(400);
       await page.getByRole("button", { name: "boards", exact: true }).click();
@@ -783,6 +790,7 @@ const keepsToggle = {
     const target = cards[0];
     const page = await t.open({ latency: true });
     await page.goto(readerUrl(t, b.id, s));
+    await handUp(page);
     await page.locator(".q").first().waitFor();
     await t.net.idle(400);
     await page.keyboard.press("r");
@@ -1363,6 +1371,7 @@ const cardEditLost = {
     const isEdit = (e) => e.method === "PATCH" && e.path.split("?")[0].startsWith(`/api/decks/${slug}/cards/`);
     const page = await t.open({ latency: true, lostAck: { match: isEdit, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(readerUrl(t, b.id, s));
+    await handUp(page);
     const q = page.locator(".q").first();
     await q.waitFor();
     await t.net.idle(400);

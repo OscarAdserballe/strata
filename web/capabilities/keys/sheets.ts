@@ -8,7 +8,7 @@ export const ROOM: readonly KeyGroup[] = [
     ["n / p", "next / previous card"],
     ["1–4", "answer a multiple choice (then 1/2 judge it, like any card)"],
     ["1 / 2", "missed / got it — the grade is what moves you on (unrevealed, they reveal)"],
-    ["↵", "show me where this card lives (shuffled: goes to its page)"],
+    ["↵", "the card in hand, opened on its words (shuffled: its page, once answered)"],
     ["e", "rewrite this card in your own words (⌘↵ formats · esc leaves)"],
     ["c", "make a card of the thread's last answer (the card button makes one from scratch)"],
     ["r", "the keeps — choose what to keep of this deck (on home: the whole board; in the library: every board · r or esc leaves)"],
@@ -24,7 +24,7 @@ export const ROOM: readonly KeyGroup[] = [
   ]],
   ["marking", [
     ["select", "drag over a passage — highlight / note comes up over it"],
-    ["click", "a highlight — open its note"],
+    ["click", "a highlight — open its note; a card's words — open the card"],
     ["esc", "close the note (it saves)"],
     ["⌘Z / ⌘Y", "take back the last mark / put it back (⇧⌘Z too)"],
     ["remove", "in the open note, to take the mark back"],
