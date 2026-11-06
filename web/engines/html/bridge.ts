@@ -288,11 +288,25 @@ const pageDom: LayerDom = {
     }
     if (boxEl) return { key: keyFor(boxEl), block: boxEl as HTMLElement, kind: "block", anchor: boxEl };
     const at = boundary(r);
+    // a card lives on its own words: they are its place and open it
+    if (at && it.kind === "card") return { ...at, key: "w:" + it.id, tint, words: true };
     return at ? { ...at, tint } : null;
   },
   place(s: Spot) {
     const spot = s as PageSpot, z = scale || 1, X = scrollX, Y = scrollY;
     const b = spot.block.getBoundingClientRect();
+    if (spot.words && spot.tint) {
+      const rs = [...spot.tint.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
+      if (!rs.length) return null;
+      const bottom = Math.max(...rs.map((r) => r.bottom)), last = rs.filter((r) => r.bottom > bottom - 2);
+      const wide = b.width >= 320 * z ? b : (spot.block.parentElement ?? spot.block).getBoundingClientRect();
+      return {
+        passage: { top: Math.min(...rs.map((r) => r.top)) + Y, bottom: bottom + Y, left: Math.min(...rs.map((r) => r.left)) + X, right: Math.max(...rs.map((r) => r.right)) + X },
+        column: { left: wide.left + X, right: wide.right + X },
+        hang: { x: Math.min(...last.map((r) => r.left)) + X, y: bottom + Y },
+        width: document.documentElement.clientWidth, unit: z, perClient: 1,
+      };
+    }
     let bottom = b.bottom;
     // a card on a heading asks about the section under it: its sheet lies after that text, not over it
     if (/^H[1-6]$/.test(spot.block.tagName)) {
@@ -348,6 +362,7 @@ const pageDom: LayerDom = {
     }
   },
   clearTicks() { if (overlay) { clearTicks(overlay.root); overlay.root.replaceChildren(); } },
+  surface: () => document,
 };
 const drawer = layerDrawer(pageDom);
 let layerItems: LayerItem[] = [];
@@ -373,7 +388,9 @@ function drawLayers() {
 
 const style = document.createElement("style");
 style.textContent = `::highlight(strata-mark){background-color:rgba(255,214,64,.42)}
-::highlight(strata-card){background-color:rgba(64,120,200,.18)}
+::highlight(strata-card){background-color:rgba(64,120,200,.13);text-decoration:underline dotted 2px rgba(65,103,138,.75)}
+::highlight(strata-card-done){text-decoration:underline solid 2px rgba(88,124,95,.6)}
+::highlight(strata-card-on){background-color:rgba(64,120,200,.26);text-decoration:underline solid 2px rgba(43,80,114,.95)}
 ::highlight(strata-ask){background-color:rgba(42,36,31,.09)}
 ::highlight(strata-noted){background-color:rgba(255,224,110,.45);text-decoration:underline 2px rgba(214,170,40,.8)}
 ::highlight(strata-open){background-color:rgba(255,206,60,.62);text-decoration:underline 2px rgba(170,120,20,.95)}

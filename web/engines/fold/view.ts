@@ -3,7 +3,7 @@
 
 export interface FoldReply { who: "you" | "agent"; text: string }
 export interface FoldNote { kind: "note"; id: string; quote: string; text: string; editing: boolean; replies: FoldReply[] }
-/** A card on a passage: its sheet is open until it is graded or closed. */
+/** A card on its words: its sheet opens when they are clicked or it is turned over, and shuts once graded or closed. */
 export interface FoldCard {
   kind: "card"; id: string; where: string; q: string;
   /** the host draws the card's face into a slot (maths and all); without one the question and answer are text */

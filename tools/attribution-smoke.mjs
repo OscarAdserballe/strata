@@ -21,15 +21,25 @@ try {
     await page.goto(`${base}/?board=${board.id}&pair=${pair.id}`, { waitUntil: "networkidle" });
     await page.locator(".page-col [data-b]").first().waitFor();
     await page.waitForTimeout(1200);
+    // a card lies shut on its words until they are clicked; then its sheet hangs just under them
+    const words = await page.evaluate(() => {
+      const h = CSS.highlights.get("strata-card"), r = h && [...h][0];
+      const rs = r ? [...r.getClientRects()] : [];
+      return rs.length ? { text: r.toString(), x: rs[0].left + 4, y: rs[0].top + rs[0].height / 2, bottom: Math.max(...rs.map((x) => x.bottom)) } : null;
+    });
+    const before = await page.locator(".layer-plane > [data-fold]").count();
+    assert.equal(before, 0, "no card's sheet opens by itself");
+    if (words) { await page.mouse.click(words.x, words.y); await page.waitForTimeout(500); }
     const under = await page.evaluate((q) => {
       const sheet = [...document.querySelectorAll(".layer-plane > [data-fold]")].find((f) => f.textContent.includes(q));
-      const block = sheet ? document.querySelector(`.page-col [data-b="${sheet.dataset.fold.slice(1)}"]`) : null;
-      return block ? { tag: block.tagName, text: block.textContent.trim().slice(0, 60) } : null;
+      return sheet ? { top: sheet.getBoundingClientRect().top } : null;
     }, "Attribution " + source);
-    if (placed) assert.ok(under && /^Diversification reduces/.test(under.text), `the card sits under ${JSON.stringify(under)}, not the passage its quote names`);
-    else assert.equal(under, null, `a card with no quote is placed nowhere, not under ${JSON.stringify(under)}`);
+    if (placed) {
+      assert.ok(words && /^Diversification reduces the risk of individual investments/.test(words.text), `the card's words are its quote, not ${JSON.stringify(words)}`);
+      assert.ok(under && under.top > words.bottom && under.top - words.bottom < 40, `the card's sheet hangs just under its words: ${JSON.stringify({ words, under })}`);
+    } else assert.ok(!words && !under, `a card with no quote is placed nowhere, not on ${JSON.stringify(words)}`);
     await api(`/api/boards/${board.id}/minted/${made.id}`, "DELETE");
   }
   assert.deepEqual(errors, []);
-  console.log("✓ a quote puts the card under its passage; a heading reference places it nowhere");
+  console.log("✓ a quote puts the card on its words, opened by a click; a heading reference places it nowhere");
 } finally { await browser.close(); await api(`/api/boards/${board.id}`, "DELETE"); }
