@@ -142,6 +142,8 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
   // the card words on the page that open a sheet, and the ones under the pointer
   let targets: { key: string; range: Range; ids: string[] }[] = [];
   let hover: string | null = null, tints: Tints = { card: [], ask: [] };
+  // the card in hand: when the drill's keys move it, it opens; when a sheet's own buttons moved it, nothing opens by itself
+  let hand: string | null = null, bySheet = 0;
   const heard = new WeakSet<object>();
   // where the reader dropped a sheet, kept while this source is open; and which sheet is on top
   const moved = new Map<string, { x: number; y: number }>();
@@ -247,6 +249,11 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
   function draw(items: readonly LayerItem[], on: LayerIntents): void {
     last = { items, on };
     listen();
+    const held = items.find((it) => it.kind === "card" && it.held)?.id ?? null;
+    if (held !== hand) {
+      if (hand !== null && held !== null && Date.now() - bySheet > 1500) wanted.add(held);
+      hand = held;
+    }
     const groups = new Map<string, { spot: Spot; items: LayerItem[] }>();
     // what shows: a card the reader opened from its words or turned over, what is being written or asked, and what the
     // reader opened; a sheet holds only what shows
@@ -319,7 +326,9 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
       }, {
         ...on,
         // an item's buttons outlive this draw: they redraw whatever was drawn last
-        later: (id) => { shut.add(id); pinned.delete(id); on.later(id); redraw(); },
+        later: (id) => { bySheet = Date.now(); shut.add(id); pinned.delete(id); on.later(id); redraw(); },
+        grade: (id, got) => { bySheet = Date.now(); on.grade(id, got); },
+        show: (id) => { bySheet = Date.now(); on.show(id); },
         shut: () => {
           for (const it of g.items) pinned.delete(it.id);
           for (const it of g.items) if (it.kind === "card" || it.kind === "ask") shut.add(it.id);
@@ -421,7 +430,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
     openFor: (ids) => { for (const id of ids) { wanted.add(id); shut.delete(id); } redraw(); },
     forget: () => {
       pinned.clear(); wanted.clear(); shut.clear(); asked.clear(); moved.clear(); tall.clear(); order = []; shown = []; last = null;
-      targets = []; hover = null; tints = { card: [], ask: [] };
+      targets = []; hover = null; tints = { card: [], ask: [] }; hand = null; bySheet = 0;
       watcher?.disconnect(); watcher = null;
       dom.closeExcept(new Set()); dom.clearTicks(); dom.tint?.({ card: [], ask: [], "card-done": [], "card-on": [] });
     },

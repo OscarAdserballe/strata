@@ -102,7 +102,7 @@ try {
   const now = await page.evaluate(() => document.querySelector(".page").scrollTop);
   check("t keeps your place in the book", was > 100 && Math.abs(now - was) < 40, `${Math.round(was)} → ${Math.round(now)}`);
 
-  // every open card draws its face once its page draws: walk the book until the one in hand shows
+  // an open card draws its face once its page draws: walk the book until the one in hand shows
   const handQ = async () => {
     for (let i = 0; i < 120; i++) {
       const t = await page.evaluate(() => document.querySelector(".fi-face[data-hand] .q")?.textContent || null);
@@ -112,6 +112,8 @@ try {
     }
     throw new Error("the card in hand never drew its face");
   };
+  // the page lies quiet until the drill's keys are used: n brings the next card in hand up on its words
+  await page.keyboard.press("n");
   const q = await handQ();
   await page.keyboard.press("n");
   await page.waitForFunction((q) => document.querySelector(".fi-face[data-hand] .q")?.textContent !== q, q, { timeout: 5000 }).catch(() => {});
