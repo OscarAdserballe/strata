@@ -190,6 +190,17 @@ function dashboardParts(): void {
   }
 }
 
+// Stages replace the six states: open tasks go to the backlog, what was pinned for Today is tomorrow
+// morning's pick in to-do, and what Claude had is ready for review. state and pinned_at stay mirrored.
+function dashboardStages(): void {
+  addColumn("dashboard_tasks", "stage", "TEXT");
+  addColumn("dashboard_tasks", "morning_at", "INTEGER");
+  db.exec(`UPDATE dashboard_tasks SET
+    stage = CASE WHEN state IN ('done','dropped') THEN state WHEN state = 'claude' THEN 'review' WHEN pinned_at IS NOT NULL THEN 'todo' ELSE 'backlog' END,
+    morning_at = CASE WHEN state IN ('done','dropped') THEN NULL ELSE pinned_at END
+    WHERE stage IS NULL`);
+}
+
 const MIGRATIONS: [name: string, run: () => void][] = [
   ["resource-columns", resourceColumns],
   ["bytes-move-out", bytesMoveOut],
@@ -267,6 +278,7 @@ const MIGRATIONS: [name: string, run: () => void][] = [
       set.run(work.test(parse<DashFrom | null>(t.created_from, null)?.source ?? "") ? "work" : "personal", t.id);
     }
   }],
+  ["dashboard-stages", dashboardStages],
   // A note can sit on a page's labelled box (data-strata-id) rather than on words.
   ["marks-box", () => addColumn("marks", "box", "TEXT")],
   ["comments-to-notes", commentsToNotes],

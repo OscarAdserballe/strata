@@ -2008,16 +2008,16 @@ const resplitRaces = {
 
 const dashboardTriage = {
   name: "dashboard-triage",
-  what: "an agent's inbox batch is sent four times with answers lost; you keep each item while the first two keeps lose their answers, then move a task to Later from its status menu; each lands exactly once",
+  what: "an agent's inbox batch is sent four times with answers lost; you send each item on while the first two keeps lose their answers, then move the task to to-do from its row; each lands exactly once",
   checks: {
     agent: "the batch sent four times under one key made three inbox items",
     kept: "each item was kept once: one task, one subtask, one update, and nothing left in the inbox",
-    moved: "the moved task is in Later on the server",
+    moved: "the moved task is in to-do on the server",
   },
   async run(t) {
     const tag = `${t.seed}-${Date.now().toString(36)}`;
     const parent = `t_race${t.seed}${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_]/g, "");
-    await t.api("/api/dashboard/tasks", "POST", { id: parent, title: `Race parent ${tag}`, body: "Holds a subtask and an update." });
+    await t.api("/api/dashboard/tasks", "POST", { id: parent, title: `Race parent ${tag}`, body: "Holds a subtask and an update.", area: "work" });
     const { token } = await t.api("/api/agent/tokens", "POST", { name: `race ${t.seed}`, write: true });
     let n = 0;
     const call = async (args, signal) => {
@@ -2028,7 +2028,7 @@ const dashboardTriage = {
       return body.result.content[0].text;
     };
     const lose = (args, ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return call(args, c.signal).catch(() => null); };
-    const from = { source: `Race transcript ${tag}` };
+    const from = { source: `Slack · race transcript ${tag}` };
     const batch = { key: `race-dash-${tag}`, items: [
       { kind: "task", title: `Race task ${tag}`, from },
       { kind: "subtask", parent, title: `Race subtask ${tag}`, from },
@@ -2041,10 +2041,13 @@ const dashboardTriage = {
     const keeps = (e) => e.method === "POST" && /\/api\/dashboard\/inbox\/[^/]+\/keep$/.test(e.path);
     const page = await t.open({ latency: true, lostAck: { match: keeps, pick: new Set([1, 2]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dashboard`);
+    await page.getByRole("tab", { name: "Triage" }).click();
+    await page.getByRole("tab", { name: /^Work/ }).click();
     await page.getByRole("tab", { name: /^Inbox/ }).click();
-    for (const name of [`Race task ${tag}`, `Race subtask ${tag}`, `→ Race parent ${tag}`]) {
-      await page.locator(".irow", { hasText: name }).click();
-      await page.getByRole("button", { name: /^(Keep → Your move|Add to task)$/ }).click();
+    for (const name of [`Race task ${tag}`, `Race subtask ${tag}`, `Race parent ${tag}`]) {
+      const row = page.locator(".ir", { hasText: name });
+      await row.click();
+      await row.getByRole("button", { name: "→ Backlog" }).click();
     }
     const until = performance.now() + GRACE_MS * 2;
     let open = 3;
@@ -2059,85 +2062,79 @@ const dashboardTriage = {
     const updates = t.sql("SELECT COUNT(*) n FROM dashboard_updates WHERE task_id = ? AND text = ?", parent, `Race update ${tag}`)[0].n;
     t.check("kept", open === 0 && tasks === 1 && subs === 1 && updates === 1, `${open} still open; ${tasks} task(s), ${subs} subtask(s), ${updates} update(s)`);
 
-    await page.getByRole("tab", { name: /^Personal/ }).click();
-    const row = page.locator(".trow", { hasText: `Race task ${tag}` });
+    await page.getByRole("tab", { name: /^Backlog/ }).click();
+    const row = page.locator(".r", { hasText: `Race task ${tag}` });
     await row.waitFor();
-    await row.getByRole("button", { name: "Your move", exact: true }).click();
-    await page.getByRole("menuitemradio", { name: /^Later/ }).click();
+    await row.hover();
+    await row.getByRole("button", { name: "→ To-do" }).click();
     const until2 = performance.now() + GRACE_MS;
-    let state = "";
+    let stage = "";
     for (;;) {
-      state = t.sql("SELECT state FROM dashboard_tasks WHERE title = ?", `Race task ${tag}`)[0]?.state ?? "";
-      if (state === "later" || performance.now() > until2) break;
+      stage = t.sql("SELECT stage FROM dashboard_tasks WHERE title = ?", `Race task ${tag}`)[0]?.stage ?? "";
+      if (stage === "todo" || performance.now() > until2) break;
       await sleep(250);
     }
-    t.check("moved", state === "later", `the task is "${state}" on the server`);
+    t.check("moved", stage === "todo", `the task is "${stage}" on the server`);
   },
 };
 
 const dashboardWrites = {
   name: "dashboard-writes",
-  what: "on a lossy wire, with other seeds typing in the same scratch pad at once, you pin a task, type in the pad and fill a draft's Context, with the first answers lost; each write lands once and nobody's pad lines are lost",
+  what: "on a lossy wire you pick a task for tomorrow morning, then open its doc and type a title and notes with the first answers lost; each write lands once",
   checks: {
-    pinned: "the pinned task is on Today on the server",
-    pad: "the scratch pad on the server holds this tab's lines exactly once, beside whatever other tabs typed",
-    draft: "the draft's body on the server holds the Context typed into it, once",
-    title: "the title typed in the task panel, closed before its save, is the title on the server",
+    picked: "the picked task is in to-do with a morning pick on the server",
+    title: "the title typed in the doc, closed before its save, is the title on the server",
+    notes: "the notes typed in the doc are on the server, once",
   },
   async run(t) {
     const tag = `${t.seed}-${Date.now().toString(36)}`;
     const id = `t_pin${t.seed}${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_]/g, "");
-    await t.api("/api/dashboard/tasks", "POST", { id, title: `Race pin ${tag}`, body: "## Context\nPinned under loss." });
-    const { id: draft } = await t.api("/api/dashboard/inbox", "POST", { kind: "task", title: `Race draft ${tag}` });
-    const lost = (e) => e.write && /\/api\/dashboard\/(pad|inbox\/[^/]+|tasks\/[^/]+)$/.test(e.path) && e.method !== "POST";
+    await t.api("/api/dashboard/tasks", "POST", { id, title: `Race pin ${tag}`, body: "Picked under loss.", area: "work" });
+    const lost = (e) => e.write && /\/api\/dashboard\/tasks\/[^/]+$/.test(e.path) && e.method !== "POST";
     const page = await t.open({ latency: true, lostAck: { match: lost, pick: new Set([1, 2, 3]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dashboard`);
-    await page.getByRole("tab", { name: /^Personal/ }).click();
-    const row = page.locator(".trow", { hasText: `Race pin ${tag}` });
+    await page.getByRole("tab", { name: "Triage" }).click();
+    await page.getByRole("tab", { name: /^Work/ }).click();
+    await page.getByRole("tab", { name: /^Backlog/ }).click();
+    const row = page.locator(".r", { hasText: `Race pin ${tag}` });
     await row.waitFor();
-    await row.getByRole("button", { name: "Pin to Today" }).click();
+    await row.hover();
+    await row.getByRole("button", { name: "Tomorrow morning" }).click();
 
-    await page.getByRole("button", { name: "Open the scratch pad" }).click();
+    await page.getByRole("tab", { name: /^To-do/ }).click();
+    const moved = page.locator(".r", { hasText: `Race pin ${tag}` });
+    await moved.waitFor();
+    await moved.locator(".t").click();
+    const title = page.locator("#sheet .dtitle");
+    await title.focus();
     await page.keyboard.press("Control+End");
-    await page.locator("#padEd").pressSequentially(`\npad ${tag}\nsecond line`, { delay: 15 });
-    await page.getByRole("button", { name: "Close the scratch pad" }).click();
-
-    await row.locator(".tt").click();
-    await page.locator(".dtitle").focus();
+    await title.pressSequentially(" edited", { delay: 15 });
+    const notes = page.locator("#sheet .dbody");
+    await notes.focus();
     await page.keyboard.press("Control+End");
-    await page.locator(".dtitle").pressSequentially(" edited", { delay: 15 });
+    await notes.pressSequentially(`\nNotes ${tag}`, { delay: 15 });
     await page.keyboard.press("Escape");
 
-    await page.getByRole("tab", { name: /^Inbox/ }).click();
-    await page.locator(".irow", { hasText: `Race draft ${tag}` }).click();
-    await page.locator('[data-sec="context"]').pressSequentially(`Context ${tag}`, { delay: 15 });
-
     const until = performance.now() + GRACE_MS * 2;
-    let pinned = null, pad = "", body = "", title = "";
+    let rowDb = null;
     for (;;) {
-      pinned = t.sql("SELECT pinned_at FROM dashboard_tasks WHERE id = ?", id)[0]?.pinned_at ?? null;
-      pad = t.sql("SELECT text FROM dashboard_pad WHERE id = 1")[0]?.text ?? "";
-      body = t.sql("SELECT json_extract(item,'$.body') b FROM dashboard_inbox WHERE id = ?", draft)[0]?.b ?? "";
-      title = t.sql("SELECT title FROM dashboard_tasks WHERE id = ?", id)[0]?.title ?? "";
-      const mine = pad.split(`>pad ${tag}<`).length - 1;
-      if ((pinned && mine === 1 && body === `## Context\nContext ${tag}` && title === `Race pin ${tag} edited`) || performance.now() > until) break;
+      rowDb = t.sql("SELECT stage, morning_at, title, body FROM dashboard_tasks WHERE id = ?", id)[0] ?? null;
+      if ((rowDb && rowDb.stage === "todo" && rowDb.morning_at && rowDb.title === `Race pin ${tag} edited` && rowDb.body === `Picked under loss.\nNotes ${tag}`) || performance.now() > until) break;
       await sleep(250);
     }
     await t.net.idle(500);
-    t.check("pinned", !!pinned, `pinned_at is ${pinned}`);
-    const mine = pad.split(`>pad ${tag}<`).length - 1;
-    t.check("pad", mine === 1, `this tab's line is there whole ${mine} time(s) in ${JSON.stringify(pad.slice(-240))}`);
-    t.check("title", title === `Race pin ${tag} edited`, `the title is ${JSON.stringify(title)}`);
-    t.check("draft", body === `## Context\nContext ${tag}`, `the draft body is ${JSON.stringify(body.slice(0, 120))}`);
+    t.check("picked", !!rowDb?.morning_at && rowDb.stage === "todo", `stage ${rowDb?.stage}, morning_at ${rowDb?.morning_at}`);
+    t.check("title", rowDb?.title === `Race pin ${tag} edited`, `the title is ${JSON.stringify(rowDb?.title)}`);
+    t.check("notes", rowDb?.body === `Picked under loss.\nNotes ${tag}`, `the notes are ${JSON.stringify(rowDb?.body?.slice(0, 120))}`);
   },
 };
 
 const dashboardAdd = {
   name: "dashboard-add",
-  what: "you add two tasks from the board on a lossy wire, the first add's answer lost, then pin the second; each task is on the server once, in Your move, and the pin lands",
+  what: "you add two threads to the backlog on a lossy wire, the first add's answer lost, then pick the second for tomorrow morning; each thread is on the server once and the pick lands",
   checks: {
-    added: "each task added from the board is on the server once, in Your move",
-    pinned: "the second task, pinned while its add was still settling, is on Today",
+    added: "each thread added from the backlog is on the server once",
+    picked: "the second thread, picked while its add was still settling, is in to-do for tomorrow morning",
   },
   async run(t) {
     const tag = `${t.seed}-${Date.now().toString(36)}`;
@@ -2145,22 +2142,26 @@ const dashboardAdd = {
     const adds = (e) => e.write && /\/api\/dashboard\/tasks(\/[^/]+)?$/.test(e.path);
     const page = await t.open({ latency: true, lostAck: { match: adds, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dashboard`);
+    await page.getByRole("tab", { name: "Triage" }).click();
+    await page.getByRole("tab", { name: /^Backlog/ }).click();
     for (const title of titles) {
       await page.locator("#addIn").fill(title);
       await page.getByRole("button", { name: "Add", exact: true }).click();
     }
-    await page.locator(".trow", { hasText: titles[1] }).getByRole("button", { name: "Pin to Today" }).click();
+    const row = page.locator(".r", { hasText: titles[1] });
+    await row.hover();
+    await row.getByRole("button", { name: "Tomorrow morning" }).click();
     const until = performance.now() + GRACE_MS * 2;
     let rows = [];
     for (;;) {
-      rows = titles.map((title) => t.sql("SELECT state, pinned_at FROM dashboard_tasks WHERE title = ?", title));
-      if ((rows.every((r) => r.length === 1) && rows[1][0].pinned_at) || performance.now() > until) break;
+      rows = titles.map((title) => t.sql("SELECT stage, morning_at FROM dashboard_tasks WHERE title = ?", title));
+      if ((rows.every((r) => r.length === 1) && rows[1][0].morning_at) || performance.now() > until) break;
       await sleep(250);
     }
     await t.net.idle(500);
-    rows = titles.map((title) => t.sql("SELECT state, pinned_at FROM dashboard_tasks WHERE title = ?", title));
-    t.check("added", rows.every((r) => r.length === 1 && r[0].state === "you"), rows.map((r, i) => `${titles[i]}: ${r.length} row(s) ${r.map((x) => x.state).join(",")}`).join("; "));
-    t.check("pinned", !!rows[1][0]?.pinned_at, `pinned_at is ${rows[1][0]?.pinned_at}`);
+    rows = titles.map((title) => t.sql("SELECT stage, morning_at FROM dashboard_tasks WHERE title = ?", title));
+    t.check("added", rows.every((r) => r.length === 1), rows.map((r, i) => `${titles[i]}: ${r.length} row(s) ${r.map((x) => x.stage).join(",")}`).join("; "));
+    t.check("picked", rows[1][0]?.stage === "todo" && !!rows[1][0]?.morning_at, `stage ${rows[1][0]?.stage}, morning_at ${rows[1][0]?.morning_at}`);
   },
 };
 

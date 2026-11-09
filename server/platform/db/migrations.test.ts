@@ -36,3 +36,22 @@ test("existing dashboard tasks get an area from their source once; one already s
   const area = (id: string) => (db.prepare("SELECT area FROM dashboard_tasks WHERE id = ?").get(id) as { area: string }).area;
   assert.deepEqual(["t_a1", "t_a2", "t_a3", "t_a4"].map(area), ["work", "personal", "work", "personal"]);
 });
+
+test("existing dashboard tasks get a stage once: open ones go to the backlog, pinned ones to to-do as tomorrow morning's pick, Claude's to review", () => {
+  const db = new DatabaseSync(":memory:");
+  migrate(db);
+  const add = db.prepare("INSERT INTO dashboard_tasks (id,title,body,state,links,created_at,updated_at,pinned_at,stage) VALUES (?,?,?,?,'[]',0,0,?,?)");
+  add.run("t_s1", "Open", "", "you", null, null);
+  add.run("t_s2", "Pinned", "", "you", 5, null);
+  add.run("t_s3", "With Claude", "", "claude", null, null);
+  add.run("t_s4", "Parked", "", "later", null, null);
+  add.run("t_s5", "Finished", "", "done", 7, null);
+  add.run("t_s6", "Already staged", "", "you", null, "thinking");
+  migrate(db);
+  migrate(db);
+  const row = (id: string) => ({ ...(db.prepare("SELECT stage, morning_at FROM dashboard_tasks WHERE id = ?").get(id) as { stage: string; morning_at: number | null }) });
+  assert.deepEqual(["t_s1", "t_s2", "t_s3", "t_s4", "t_s5", "t_s6"].map(row), [
+    { stage: "backlog", morning_at: null }, { stage: "todo", morning_at: 5 }, { stage: "review", morning_at: null },
+    { stage: "backlog", morning_at: null }, { stage: "done", morning_at: null }, { stage: "thinking", morning_at: null },
+  ]);
+});
