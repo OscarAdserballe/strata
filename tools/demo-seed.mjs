@@ -415,23 +415,20 @@ await agent("apply", { board: exploreBoard.id, key: "seed-explorations-1", ops: 
 ] });
 console.log("· explorations: a live HTML page, a note waiting on the agent and one it answered");
 
-// the dashboard: tasks in every open state, both areas, a subtask, a research write-up, an inbox and the pad
+// the dashboard: threads in every open stage, both areas, one picked for tomorrow morning, and an inbox
 const task = (body) => j("/api/dashboard/tasks", { method: "POST", body: JSON.stringify(body) });
 const patch = (id, body) => j(`/api/dashboard/tasks/${id}`, { method: "PATCH", body: JSON.stringify(body) });
 await task({ id: "t_review01", title: "Show the review ladder on the strip", area: "work",
   body: "## Context\nKept cards return on a ladder, but the strip only shows a total.\n\n## Done when\n- Each kept card's rung is visible from home\n- A stuck card is named with its source\n\n## Research\nThree layouts on the explorations board; B (a pip per card) was picked, with a count over the bottom rung.\n\nLeft for you: whether the phone door shows the ladder at all.\n\n## Sources\n- explorations/review-ladder.html — the three layouts and the comment thread" });
-await task({ id: "t_reviewa1", title: "Draw B with a count on the bottom rung", area: "work" });
-await patch("t_reviewa1", { parent: "t_review01", state: "claude" });
-await task({ id: "t_exam0001", title: "Register for the January exam", area: "personal", state: "waiting" });
-await patch("t_exam0001", { waitingOn: "the faculty office to open registration", pinned: true });
-await task({ id: "t_johansen", title: "Derive the Johansen trace statistic cold", area: "personal", state: "later" });
+await patch("t_review01", { stage: "thinking" });
+await task({ id: "t_reviewa1", title: "Draw B with a count on the bottom rung", area: "work", stage: "review" });
+await task({ id: "t_exam0001", title: "Register for the January exam", area: "personal" });
+await patch("t_exam0001", { morning: true });
+await task({ id: "t_johansen", title: "Derive the Johansen trace statistic cold", area: "personal" });
 await j("/api/dashboard/inbox", { method: "POST", body: JSON.stringify({ kind: "task", title: "Split the slide deck's one section", area: "work",
-  why: "The lecture-four deck has 23 pages in one section, so it makes one deck.", from: { source: "You" } }) });
-await j("/api/dashboard/inbox", { method: "POST", body: JSON.stringify({ kind: "update", task: "t_review01", text: "B reads well on desktop; on a 390px phone the pips run off the strip.", from: { source: "Strata · explorations" } }) });
-const pad = await j("/api/dashboard");
-await j("/api/dashboard/pad", { method: "PUT", headers: { "Content-Type": "application/json", "If-Match": `"${pad.pad.rev}"` },
-  body: JSON.stringify({ text: "<h2>This week</h2><ul><li>Lecture 4 cards before Thursday</li><li>Ask about the exam room</li></ul>" }) });
-console.log("· dashboard: four tasks (one with research), a subtask, two inbox items and the pad");
+  context: "The lecture-four deck has 23 pages in one section, so it makes one deck.", from: { source: "You" } }) });
+await j("/api/dashboard/inbox", { method: "POST", body: JSON.stringify({ title: "B reads well on desktop; on a 390px phone the pips run off the strip", area: "work", context: "Seen on the explorations board.", from: { source: "Strata · explorations" } }) });
+console.log("· dashboard: four threads across the stages, one for tomorrow morning, and two inbox items");
 
 // drill history in the shapes the app emits, so the decks' progress pips have something to show
 const drill = async (boardId, slug, seen, done) => {
