@@ -1,6 +1,8 @@
 # Strata
 
-description coming soon
+A reader that wraps layers around what you read: the structure found beneath a text, and the highlights,
+questions and flashcards you add above it. Why it exists, in
+[Strata, or: trying to think through the interface design of consuming knowledge](https://blog.oscaradserballe.com/strata/).
 
 ## Run it
 
