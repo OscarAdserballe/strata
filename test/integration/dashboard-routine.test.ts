@@ -75,11 +75,11 @@ test("a refused fire shows why on the page, and disconnecting forgets the token"
   assert.equal((await send("/api/dashboard/routine/run", "POST", {}, "routine-run-0004")).status, 400);
 });
 
-test("a task added on the board goes straight to Your move", async () => {
+test("a task added on the board goes straight to the backlog", async () => {
   const made = await send("/api/dashboard/tasks", "POST", { id: "t_boardadd1", title: "Why does the pump go quiet?", area: "work" }, "board-add-0001");
   assert.equal(made.status, 201);
   const { tasks, inbox } = (await server.api("/api/dashboard")).body;
   assert.deepEqual(inbox, []);
   const t = tasks.find((x: { id: string }) => x.id === "t_boardadd1");
-  assert.deepEqual([t.state, t.area, t.createdFrom.source], ["you", "work", "You"]);
+  assert.deepEqual([t.stage, t.area, t.createdFrom.source], ["backlog", "work", "You"]);
 });

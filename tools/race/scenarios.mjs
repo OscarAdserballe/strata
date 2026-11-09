@@ -2008,16 +2008,14 @@ const resplitRaces = {
 
 const dashboardTriage = {
   name: "dashboard-triage",
-  what: "an agent's inbox batch is sent four times with answers lost; you send each item on while the first two keeps lose their answers, then move the task to to-do from its row; each lands exactly once",
+  what: "an agent's inbox batch is sent four times with answers lost; you send each item on while the first two keeps lose their answers, then move a task to to-do from its row; each lands exactly once",
   checks: {
     agent: "the batch sent four times under one key made three inbox items",
-    kept: "each item was kept once: one task, one subtask, one update, and nothing left in the inbox",
+    kept: "each item was kept once as a thread, and nothing is left in the inbox",
     moved: "the moved task is in to-do on the server",
   },
   async run(t) {
     const tag = `${t.seed}-${Date.now().toString(36)}`;
-    const parent = `t_race${t.seed}${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_]/g, "");
-    await t.api("/api/dashboard/tasks", "POST", { id: parent, title: `Race parent ${tag}`, body: "Holds a subtask and an update.", area: "work" });
     const { token } = await t.api("/api/agent/tokens", "POST", { name: `race ${t.seed}`, write: true });
     let n = 0;
     const call = async (args, signal) => {
@@ -2029,11 +2027,8 @@ const dashboardTriage = {
     };
     const lose = (args, ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return call(args, c.signal).catch(() => null); };
     const from = { source: `Slack · race transcript ${tag}` };
-    const batch = { key: `race-dash-${tag}`, items: [
-      { kind: "task", title: `Race task ${tag}`, from },
-      { kind: "subtask", parent, title: `Race subtask ${tag}`, from },
-      { kind: "update", task: parent, text: `Race update ${tag}`, from },
-    ] };
+    const titles = [`Race task ${tag}`, `Race second ${tag}`, `Race third ${tag}`];
+    const batch = { key: `race-dash-${tag}`, items: titles.map((title) => ({ title, context: "Under loss.", from })) };
     await Promise.all([lose(batch, (t.seed * 7) % 20), lose(batch, 0), call(batch), call(batch)]);
     const items = t.sql("SELECT COUNT(*) n FROM dashboard_inbox WHERE json_extract(item,'$.from.source') = ?", from.source)[0].n;
     t.check("agent", items === 3, `${items} inbox items from one batch`);
@@ -2044,7 +2039,7 @@ const dashboardTriage = {
     await page.getByRole("tab", { name: "Triage" }).click();
     await page.getByRole("tab", { name: /^Work/ }).click();
     await page.getByRole("tab", { name: /^Inbox/ }).click();
-    for (const name of [`Race task ${tag}`, `Race subtask ${tag}`, `Race parent ${tag}`]) {
+    for (const name of titles) {
       const row = page.locator(".ir", { hasText: name });
       await row.click();
       await row.getByRole("button", { name: "→ Backlog" }).click();
@@ -2057,10 +2052,8 @@ const dashboardTriage = {
       await sleep(250);
     }
     await t.net.idle(500);
-    const tasks = t.sql("SELECT COUNT(*) n FROM dashboard_tasks WHERE title = ?", `Race task ${tag}`)[0].n;
-    const subs = t.sql("SELECT COUNT(*) n FROM dashboard_tasks WHERE title = ? AND parent_id = ?", `Race subtask ${tag}`, parent)[0].n;
-    const updates = t.sql("SELECT COUNT(*) n FROM dashboard_updates WHERE task_id = ? AND text = ?", parent, `Race update ${tag}`)[0].n;
-    t.check("kept", open === 0 && tasks === 1 && subs === 1 && updates === 1, `${open} still open; ${tasks} task(s), ${subs} subtask(s), ${updates} update(s)`);
+    const counts = titles.map((title) => t.sql("SELECT COUNT(*) n FROM dashboard_tasks WHERE title = ?", title)[0].n);
+    t.check("kept", open === 0 && counts.every((n) => n === 1), `${open} still open; threads: ${counts.join(", ")}`);
 
     await page.getByRole("tab", { name: /^Backlog/ }).click();
     const row = page.locator(".r", { hasText: `Race task ${tag}` });

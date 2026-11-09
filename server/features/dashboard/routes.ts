@@ -1,6 +1,6 @@
 import { sendJson } from "../../platform/http/http.ts";
 import { route, type Route } from "../../platform/router/router.ts";
-import { addItems, archive, checkItem, createTask, dropItem, editItem, keepItem, padOf, patchTask, snapshot, taskView, writePad } from "./dashboard.ts";
+import { addItems, archive, checkItem, createTask, dropItem, editItem, keepItem, patchTask, snapshot, taskView } from "./dashboard.ts";
 import { dashboardRepo as q } from "./repo.ts";
 import { fireRoutine, recordRun, routineView, setRoutine } from "./routine.ts";
 
@@ -9,7 +9,7 @@ const ID = "([A-Za-z0-9_]{3,60})";
 export const dashboardRoutes: Route[] = [
   route("GET", "/api/dashboard", ({ res }) => { sendJson(res, 200, snapshot()); }),
 
-  // Loaded only when the Archive tab opens: the board never pays for what you cleared.
+  // Loaded only when the Done fold opens: the board never pays for what you cleared.
   route("GET", "/api/dashboard/archive", ({ res }) => { sendJson(res, 200, archive()); }),
 
   // An item you add yourself goes through the same inbox as an agent's.
@@ -56,13 +56,4 @@ export const dashboardRoutes: Route[] = [
     const ran = await fireRoutine();
     commit(() => ({ status: 200, body: recordRun(ran) }));
   }, { receipt: "atomic" }),
-
-  // The pad is written whole, so a save based on an older rev is refused rather than silently overwriting.
-  route("PUT", "/api/dashboard/pad", async ({ body, commit, ifMatch }) => {
-    const b = await body();
-    commit(() => {
-      ifMatch(padOf().rev, padOf);
-      return { status: 200, body: writePad(b.text) };
-    });
-  }, { receipt: "atomic", maxBody: 1024 * 1024 }),
 ];

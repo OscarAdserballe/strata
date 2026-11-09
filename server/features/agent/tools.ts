@@ -17,8 +17,7 @@ import { budgetOf } from "./render.ts";
 import { AgentError, boardList, boardOf, changes, CHANGE_KINDS, importContext, openLink, outline, render, search, SEARCH_KINDS, text, type Filter } from "./kinds.ts";
 import { checkOps, OP_SCHEMAS, OPS, opLine, runOps } from "./ops.ts";
 import { publicOrigin, uploadUrl, type Caller, type Scope } from "./tokens.ts";
-import { addItems, checkItem, checkSources, COVERAGE, DashError, LINK_KINDS, noteSources, patchTask, STAGES as DASH_STAGES, STATES as DASH_STATES, taskRef } from "../dashboard/dashboard.ts";
-import type { TaskRow } from "../dashboard/repo.ts";
+import { addItems, checkItem, DashError, LINK_KINDS, STAGES as DASH_STAGES } from "../dashboard/dashboard.ts";
 import { renderDashboard } from "../dashboard/render.ts";
 
 export interface Env { req: IncomingMessage; caller: Caller }
@@ -52,45 +51,17 @@ const ACCEPTED = /\.(pdf|md|markdown|txt|html?)$/i;
 const dash = <T,>(fn: () => T): T => { try { return fn(); } catch (e) { if (e instanceof DashError) throw new AgentError(e.message); throw e; } };
 const DASH_LINK = schema({ kind: { type: "string", enum: [...LINK_KINDS] }, ref: { type: "string", description: "e.g. GD-247, PR #42, #north-beds" }, title: STR, url: STR }, ["kind", "ref"]);
 const DASH_FROM = schema({ source: { type: "string", description: "e.g. Notion · 1:1 with Mara · 23 Oct" }, url: STR, quote: { type: "string", description: "The words it came from." } }, ["source"]);
-const DASH_DIRECTION = schema({ title: { type: "string", description: "The task this direction would become." }, body: { type: "string", description: "One or two lines: the approach, and what it costs or tells you." } }, ["title"]);
-const EDIT_FIELDS = [["title", "title"], ["body", "body"], ["stage", "stage"], ["state", "state"], ["waitingOn", "waiting_on"], ["parent", "parent_id"], ["links", "links"], ["prompt", "prompt"], ["area", "area"]] as const satisfies readonly (readonly [string, keyof TaskRow])[];
-const DASH_EDIT = {
-  type: "object", additionalProperties: false, required: ["task"],
-  properties: {
-    task: { type: "string", description: "The task's id or exact title." },
-    title: STR,
-    body: { type: "string", description: "The whole new notes. The reader writes these in Thinking, so only on request." },
-    stage: { type: "string", enum: [...DASH_STAGES], description: "Where it sits: backlog, todo, thinking, review, done or dropped." },
-    state: { type: "string", enum: [...DASH_STATES], description: "The older name for stage; prefer stage." },
-    waitingOn: { type: "string", description: "Who it waits on, with state waiting." },
-    parent: { type: ["string", "null"], description: "The parent task's id; null makes it a task of its own." },
-    links: { type: "array", maxItems: 20, items: DASH_LINK, description: "Replaces the task's links." },
-    prompt: { type: ["string", "null"], description: "What Copy prompt hands over for this task; null goes back to the default." },
-    area: { type: "string", enum: ["work", "personal"] },
-  },
-};
 const DASH_ITEM = {
-  type: "object", additionalProperties: false, required: ["kind", "from"],
+  type: "object", additionalProperties: false, required: ["title", "from"],
   properties: {
-    kind: { type: "string", enum: ["task", "subtask", "update", "fragment"], description: "task is the one to use. subtask, update and fragment are still accepted but on their way out." },
-    title: { type: "string", description: "task, subtask, fragment: the title, one line." },
-    context: { type: "string", description: "task: a line or two on what this is and why it came up, at most 400 characters. The reader writes the rest themselves, so don't draft a plan." },
-    body: { type: "string", description: "task, subtask: longer notes in Markdown, only when the context line can't hold it. update: notes added under the task's own. fragment: the idea as it was said." },
-    parent: { type: "string", description: "subtask: the parent task's id or exact title." },
-    task: { type: "string", description: "update: the task's id or exact title." },
-    text: { type: "string", description: "update: what to add to the task as a dated note. Required unless body is given." },
-    directions: { type: "array", maxItems: 8, items: DASH_DIRECTION, description: "fragment: two to four different ways to tackle it, each a task the reader may pick." },
-    fragment: { type: "string", description: "fragment: an open fragment's inbox id (in_…): add these directions to it instead of making a new one. Use it when dashboard_read marks a fragment as wanting more directions." },
-    links: { type: "array", maxItems: 20, items: DASH_LINK }, from: DASH_FROM,
-    why: { type: "string", description: "One line on why it belongs here; for a fragment, why it is not a task yet." },
-    area: { type: "string", enum: ["work", "personal"], description: "Which board it lands on once kept. Default: work for Slack, Linear, GitHub and meeting sources, personal otherwise; a subtask follows its parent." },
+    kind: { type: "string", enum: ["task"] },
+    title: { type: "string", description: "One line, the way the person would say it." },
+    context: { type: "string", description: "A line or two on what this is and why it came up, at most 400 characters. The reader writes the rest themselves, so don't draft a plan." },
+    links: { type: "array", maxItems: 20, items: DASH_LINK, description: "What it is about and already exists: the Linear issue, PR, Slack thread, Notion page." },
+    from: DASH_FROM,
+    area: { type: "string", enum: ["work", "personal"], description: "Which backlog it lands in. Default: work for Slack, Linear, GitHub and meeting sources, personal otherwise." },
   },
 };
-const DASH_SOURCE = schema({
-  source: { type: "string", description: "The same text as the items' from.source." }, url: STR,
-  coverage: { type: "string", enum: [...COVERAGE], description: "full: nothing more will come out of it. partial: there is more to read." },
-  note: { type: "string", description: "partial: what is left, e.g. Read up to 24 Oct 14:10." },
-}, ["source", "coverage"]);
 
 export const TOOLS: Tool[] = [
   {
@@ -263,62 +234,26 @@ export const TOOLS: Tool[] = [
   // The dashboard is its own app that borrows this MCP server, so it gets its own tools instead of apply ops.
   {
     name: "dashboard_add_items", title: "Add to the dashboard inbox", scope: "write",
-    description: "Puts items in the dashboard's inbox; the reader sends each to the backlog or to-do, or drops it. A task is a title, a line or two of context, where it came from (from, with the words it came from as quote) and links to what already exists: Linear issues, GitHub PRs, Slack threads, Notion pages. The reader writes the design notes themselves in Thinking, so don't draft a plan or a spec. Read dashboard_read first and don't add what is already there. All or nothing.",
-    inputSchema: schema({ key: KEY, items: { type: "array", minItems: 1, maxItems: 50, items: DASH_ITEM }, sources: { type: "array", maxItems: 50, items: DASH_SOURCE, description: "How much of each place you drafted from you have read; the Archive lists them." } }, ["key", "items"]),
+    description: "Puts tasks in the dashboard's inbox; the reader sends each to the backlog or to-do, or drops it. A task is a title, a line or two of context, where it came from (from, with the words it came from as quote) and links to what already exists: Linear issues, GitHub PRs, Slack threads, Notion pages. The reader writes the notes themselves in Thinking, so don't draft a plan or a spec. Read dashboard_read first and don't add what is already there. All or nothing.",
+    inputSchema: schema({ key: KEY, items: { type: "array", minItems: 1, maxItems: 50, items: DASH_ITEM } }, ["key", "items"]),
     write: async (x) => {
       if (!Array.isArray(x.items) || !x.items.length || x.items.length > 50) fail("items is a list of 1 to 50 items.");
       const items = dash(() => (x.items as unknown[]).map((it, i) => checkItem(it, `items[${i}]`)));
-      const sources = dash(() => checkSources(x.sources));
       return () => {
         const ids = addItems(items);
-        noteSources(sources);
-        logEvent(db, APP, "dashboard_add", { n: ids.length, kinds: items.map((i) => i.kind), sources: sources.length }, null);
-        return `${ids.length} in the dashboard inbox: ${ids.join(", ")}. The reader keeps or drops each.${sources.length ? ` Noted ${sources.length} source${sources.length > 1 ? "s" : ""}.` : ""}`;
-      };
-    },
-  },
-  {
-    name: "dashboard_edit_tasks", title: "Edit dashboard tasks in place", scope: "write",
-    description: "Changes tasks already on the dashboard, in place: titles, links, stage or area, when the reader asked for it. Name each task by id or exact title (dashboard_read lists them). Each field you pass replaces that field; fields you leave out stay as they are. links replaces the task's links. All or nothing: one bad edit and nothing is written. The answer says what each edit changed.",
-    inputSchema: schema({ key: KEY, edits: { type: "array", minItems: 1, maxItems: 50, items: DASH_EDIT } }, ["key", "edits"]),
-    write: async (x) => {
-      if (!Array.isArray(x.edits) || !x.edits.length || x.edits.length > 50) fail("edits is a list of 1 to 50 edits.");
-      const edits = (x.edits as unknown[]).map((e, i) => {
-        const o = (e ?? {}) as Record<string, unknown>;
-        if (typeof e !== "object" || e === null || Array.isArray(e)) fail(`edits[${i}] is an object.`);
-        const { task, ...fields } = o;
-        const odd = Object.keys(fields).filter((f) => !EDIT_FIELDS.some(([name]) => name === f));
-        if (odd.length) fail(`edits[${i}]: ${odd.join(", ")} can't be edited here; the fields are ${EDIT_FIELDS.map(([f]) => f).join(", ")}.`);
-        if (!taskRef(task)) fail(`edits[${i}].task: no task "${String(task ?? "")}". Name it by id or exact title; dashboard_read lists them.`);
-        if (!Object.keys(fields).length) fail(`edits[${i}] changes nothing.`);
-        return { task, fields };
-      });
-      return () => {
-        const done = edits.map(({ task, fields }, i) => {
-          try {
-            const before = taskRef(task) ?? fail(`no task "${String(task)}"`);
-            const after = patchTask(before.id, fields);
-            const changed = EDIT_FIELDS.filter(([f, col]) => f in fields && before[col] !== after[col]).map(([f]) => f);
-            const was = changed.includes("title") ? ` (was "${before.title}")` : changed.includes("state") ? ` (was ${before.state})` : "";
-            return `${i + 1}. ${after.id} "${after.title}"${was}: ${changed.length ? changed.join(", ") : "already so"}.`;
-          } catch (e) {
-            return fail(`edits[${i}]: ${(e as Error).message} Nothing was written.`);
-          }
-        });
-        logEvent(db, APP, "dashboard_edit", { n: edits.length, fields: [...new Set(edits.flatMap((e) => Object.keys(e.fields)))] }, null);
-        return `Edited ${edits.length} task${edits.length > 1 ? "s" : ""}:\n${done.join("\n")}`;
+        logEvent(db, APP, "dashboard_add", { n: ids.length }, null);
+        return `${ids.length} in the dashboard inbox: ${ids.join(", ")}. The reader keeps or drops each.`;
       };
     },
   },
   {
     name: "dashboard_read", title: "Read the dashboard", scope: "read",
-    description: "Everything on the dashboard as Markdown: each task with its notes, links and subtasks, grouped by stage (Backlog, To-do with tomorrow morning's picks first, Thinking, Review), then the inbox, the reader's scratch pad, then the sources. Pass task for one task in full, stages to narrow, done_since to include finished and archived ones.",
+    description: "Everything on the dashboard as Markdown: each thread with its notes and links, grouped by stage (Backlog, To-do with tomorrow morning's picks first, Thinking, Review), then the inbox. Pass task for one thread in full, stages to narrow, done_since to include finished and archived ones.",
     inputSchema: schema({
-      task: { type: "string", description: "A task's id or exact title: that task in full." },
+      task: { type: "string", description: "A thread's id or exact title: that thread in full." },
       stages: { type: "array", items: { type: "string", enum: [...DASH_STAGES] }, description: "Only these stages. Default: the four open ones." },
-      states: { type: "array", items: { type: "string", enum: [...DASH_STATES] }, description: "The older names for stages; prefer stages." },
-      done_since: { type: "string", description: "A date, e.g. 2026-10-20: also show tasks done or dropped since then." },
-      area: { type: "string", enum: ["work", "personal"], description: "Only that board's tasks. Default: both." },
+      done_since: { type: "string", description: "A date, e.g. 2026-10-20: also show threads done or dropped since then." },
+      area: { type: "string", enum: ["work", "personal"], description: "Only that backlog's threads. Default: both." },
       cursor: CURSOR, max_tokens: MAX,
     }),
     read: (x) => renderDashboard(x, budgetOf(x.max_tokens)),
