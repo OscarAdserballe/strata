@@ -1,4 +1,4 @@
-// The dashboard: its page, its routes, and the two MCP tools that feed and read it.
+// The dashboard: its page, its routes, and the MCP tools that feed and read it.
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { useServer } from "../support/server.ts";
@@ -24,7 +24,7 @@ test("the page is served at /dashboard and starts empty", async () => {
   const page = await server.fetch("/dashboard");
   assert.equal(page.status, 200);
   const html = await page.text();
-  assert.match(html, /<title>Dashboard<\/title>/);
+  assert.match(html, /<title>Focus<\/title>/);
   assert.match(html, /<script nonce="/, "inline scripts carry the response's CSP nonce");
   assert.deepEqual(await dash(), { tasks: [], inbox: [], pad: { text: "", rev: 0 }, archived: 0, links: [] });
 });
@@ -59,7 +59,8 @@ test("an agent adds a task, a subtask and an update; you keep them and the board
   assert.equal(after.inbox.length, 0);
   assert.equal(after.tasks.length, 4);
   const gate = after.tasks.find((t) => t.title.startsWith("Fix the sticking"));
-  assert.equal(gate.state, "you");
+  assert.equal(gate.stage, "backlog", "a kept task starts in the backlog");
+  assert.equal(gate.state, "you", "the old state column stays in step");
   assert.equal(gate.links.length, 2);
   assert.equal(gate.createdFrom.source, "Notion · Garden committee sync · 23 Oct");
   assert.equal(after.tasks.find((t) => t.title.startsWith("Reset"))?.parent, "t_fail0001");
@@ -83,15 +84,21 @@ test("dashboard_add_items refuses a bad item and writes none of the batch", asyn
   assert.equal((await dash()).inbox.length, before);
 });
 
-test("tasks move between states, nest one level deep, and drop items stay dropped", async () => {
+test("tasks move between stages, nest one level deep, and drop items stay dropped", async () => {
   const { tasks } = await dash();
   const gate = tasks.find((t) => t.title.startsWith("Fix the sticking"));
-  const moved = await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { state: "waiting", waitingOn: "Tomas" }, "dash-move-00001");
+  const moved = await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { stage: "todo" }, "dash-move-00001");
   assert.equal(moved.status, 200);
-  assert.equal(moved.body.state, "waiting");
-  assert.equal(moved.body.waitingOn, "Tomas");
-  assert.equal((await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { state: "claude" }, "dash-move-00002")).body.waitingOn, null, "leaving waiting clears who it waits on");
-  assert.equal((await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { state: "nowhere" }, "dash-move-00003")).status, 400);
+  assert.equal(moved.body.stage, "todo");
+  assert.equal(moved.body.state, "you");
+  const picked = await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { morning: true }, "dash-move-00002");
+  assert.ok(picked.body.morningAt > 0, "picked for tomorrow morning");
+  assert.equal(picked.body.pinnedAt, picked.body.morningAt, "pinned_at mirrors the pick for older readers");
+  assert.equal((await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { stage: "thinking" }, "dash-move-00003")).body.stage, "thinking");
+  const legacy = await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { state: "claude" }, "dash-move-00004");
+  assert.equal(legacy.body.stage, "review", "an older caller's claude state lands in review");
+  assert.equal((await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { stage: "nowhere" }, "dash-move-00005")).status, 400);
+  assert.equal((await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { state: "nowhere" }, "dash-move-00006")).status, 400);
 
   const sub = tasks.find((t) => t.title.startsWith("Reset"));
   const deep = await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { parent: sub.id }, "dash-nest-00001");
@@ -113,16 +120,17 @@ test("dashboard_read gives the board as Markdown, and one task in full", async (
   const all = await call("dashboard_read");
   assert.equal(all.isError, false, all.text);
   assert.match(all.text, /^# Dashboard · /);
-  assert.match(all.text, /Inbox 1 · Your move \d+ · Claude 1/);
-  assert.match(all.text, /## Claude is on it\n### Fix the sticking gate on "#12" · t_\w+ · work · under Compost rota/);
+  assert.match(all.text, /Inbox 1 · Backlog \d+ · To-do \d+ · Thinking \d+ · Review 1/);
+  assert.match(all.text, /## Review\n### Fix the sticking gate on "#12" · t_\w+ · work · under Compost rota/);
   assert.match(all.text, /Links: slack #north-beds <https:\/\/example\.slack\.com\/archives\/C1\/p1> · linear GD-247 \(Earlier latch repair\)/);
   assert.match(all.text, /── \d{4}-\d\d-\d\d \d\d:\d\d · Notion · 1:1 with Mara · 23 Oct ──\nMara wants the seed count first\./);
   assert.match(all.text, /## Inbox\n- in_\w+ · task · "Rain gauge reading" · from Notion · Garden committee sync · 23 Oct/);
 
   const one = await call("dashboard_read", { task: "Compost rota" });
   assert.match(one.text, /^### Compost rota · t_ir000001/);
-  assert.match(one.text, /Subtasks: Fix the sticking gate on "#12" \(t_\w+, claude\)/);
-  assert.match((await call("dashboard_read", { states: ["waiting"] })).text, /Nothing on the dashboard yet\./);
+  assert.match(one.text, /Subtasks: Fix the sticking gate on "#12" \(t_\w+, review\)/);
+  assert.match((await call("dashboard_read", { stages: ["thinking"] })).text, /Nothing on the dashboard yet\./);
+  assert.match((await call("dashboard_read", { states: ["claude"] })).text, /## Review\n### Fix the sticking gate/, "an older prompt's state names still narrow");
   assert.match((await call("dashboard_read", { task: "nope" })).text, /No task "nope"/);
 });
 
@@ -146,17 +154,21 @@ test("a fragment arrives with directions, gets more on request, and keeps as the
   assert.equal(grown.wantsMore, false);
   assert.match((await call("dashboard_add_items", { key: "dispatch-frag-0003", items: [{ kind: "fragment", fragment: "in_nope", directions: [{ title: "x" }], from }] })).text, /is no open fragment/);
 
-  const none = await send(`/api/dashboard/inbox/${frag.id}/keep`, "POST", {}, "dash-frag-keep-00");
-  assert.equal(none.status, 400);
-  assert.match(none.body.error, /Pick a direction/);
   const kept = await send(`/api/dashboard/inbox/${frag.id}/keep`, "POST", { picked: [0, 2], own: ["Write it up for Mara"] }, "dash-frag-keep-01");
   assert.equal(kept.status, 200, JSON.stringify(kept.body));
   assert.equal(kept.body.result.split(",").length, 3);
   const made = (await dash()).tasks.filter((t) => kept.body.result.split(",").includes(t.id));
   assert.deepEqual(made.map((t) => t.title).sort(), ["List the beds with no notes", "Spike: catalogue one bed's seeds", "Write it up for Mara"]);
-  assert.ok(made.every((t) => t.state === "you" && t.createdFrom.source === from.source));
+  assert.ok(made.every((t) => t.stage === "backlog" && t.createdFrom.source === from.source));
   assert.equal(made.find((t) => t.title.startsWith("Spike")).body,
     "## Context\nHalf a day.\n\nFrom the fragment “Seed library from Mara's harvest notes”: can we build a seed library straight from Mara's harvest notes?\n\n## Sources\n- Notion · Personal brain dump · 23 Oct <https://app.notion.com/p/abc>");
+
+  await call("dashboard_add_items", { key: "dispatch-frag-0004", items: [{ kind: "fragment", title: "Plain fragment", body: "just a thought", from: { source: "Notion · Another dump · 24 Oct" }, directions: [{ title: "A way" }] }] });
+  const plain = (await dash()).inbox.find((i) => i.title === "Plain fragment");
+  const asOne = await send(`/api/dashboard/inbox/${plain.id}/keep`, "POST", { stage: "todo" }, "dash-frag-keep-02");
+  assert.equal(asOne.status, 200, JSON.stringify(asOne.body));
+  const one = (await dash()).tasks.find((t) => t.id === asOne.body.result);
+  assert.deepEqual([one.title, one.body, one.stage], ["Plain fragment", "just a thought", "todo"], "no direction picked keeps the fragment as one task, in the stage asked for");
 });
 
 test("an inbox draft is edited before it is kept, and becomes a fragment when too fuzzy", async () => {
@@ -170,8 +182,11 @@ test("an inbox draft is edited before it is kept, and becomes a fragment when to
   const t = (await dash()).tasks.find((x) => x.id === kept.body.result);
   assert.equal(t.title, "Investigate late compost deliveries");
   assert.equal(t.body, body);
-  assert.equal(t.state, "you");
+  assert.equal(t.stage, "backlog");
   assert.equal((await send(`/api/dashboard/inbox/${own.body.id}`, "PATCH", { title: "too late" }, "dash-edit-0003")).status, 400, "a triaged item can't be edited");
+  assert.equal((await send(`/api/dashboard/inbox/${own.body.id}/keep`, "POST", { stage: "done" }, "dash-edit-keep-2")).body.outcome, "kept", "a kept item replays; the stage is checked only on the first keep");
+  const odd = await send("/api/dashboard/inbox", "POST", { kind: "task", title: "Odd stage" }, "dash-edit-own-003");
+  assert.equal((await send(`/api/dashboard/inbox/${odd.body.id}/keep`, "POST", { stage: "done" }, "dash-edit-keep-3")).status, 400, "an item can only be kept into an open stage");
 
   const fuzzy = await send("/api/dashboard/inbox", "POST", { kind: "task", title: "A tracker overview I triage into" }, "dash-edit-own-002");
   const asFrag = await send(`/api/dashboard/inbox/${fuzzy.body.id}`, "PATCH", { kind: "fragment", wantsMore: true }, "dash-edit-0004");
@@ -181,31 +196,39 @@ test("an inbox draft is edited before it is kept, and becomes a fragment when to
   assert.equal((await send(`/api/dashboard/inbox/${fuzzy.body.id}/drop`, "POST", {}, "dash-edit-drop-1")).status, 200);
 });
 
-test("the tool flags a thin task body, and a full one with no Think first", async () => {
-  const r = await call("dashboard_add_items", { key: "dispatch-thin-0001", items: [
-    { kind: "task", title: "Reply to Mara", body: "She asked in #beds.", from: FROM },
-    { kind: "task", title: "Full one", body: "## Context\n" + "x".repeat(220), from: FROM },
-    { kind: "task", title: "Thought through", body: "## Context\n" + "x".repeat(220) + "\n\n## Think first\n**TL;DR:** decide the contract.", from: FROM },
+test("a task arrives with a line of context, which becomes its notes; the answer carries no nags", async () => {
+  const r = await call("dashboard_add_items", { key: "dispatch-ctx-00001", items: [
+    { kind: "task", title: "Reply to Mara", context: "She asked in #beds, twice.", from: FROM },
+    { kind: "task", title: "Both given", context: "Short.", body: "Longer notes.", from: FROM },
+    { kind: "task", title: "Context too long", context: "x".repeat(500), from: FROM },
   ] });
-  assert.match(r.text, /\nThin: items\[0\] "Reply to Mara" has under 200 characters of body\./);
-  assert.match(r.text, /\nNo Think first: items\[1\] "Full one"\. Unless it is a one-step chore/);
-  assert.doesNotMatch(r.text, /Thought through/);
-  for (const i of (await dash()).inbox.filter((x) => x.from?.source === FROM.source)) await send(`/api/dashboard/inbox/${i.id}/drop`, "POST", {}, `dash-thin-drop-${i.id.slice(3)}`);
+  assert.equal(r.isError, false, r.text);
+  assert.match(r.text, /^3 in the dashboard inbox: in_\w+, in_\w+, in_\w+\. The reader keeps or drops each\.$/);
+  const rows = (await dash()).inbox.filter((x) => x.from?.source === FROM.source);
+  assert.deepEqual(rows.map((i) => [i.context, i.body]), [["She asked in #beds, twice.", "She asked in #beds, twice."], ["Short.", "Longer notes."], ["x".repeat(400), "x".repeat(400)]]);
+  assert.match((await call("dashboard_read")).text, /- in_\w+ · task · "Reply to Mara" · from Notion · 1:1 with Mara · 23 Oct\n  She asked in #beds, twice\./);
+  const kept = await send(`/api/dashboard/inbox/${rows[0].id}/keep`, "POST", { stage: "todo" }, "dash-ctx-keep-001");
+  const t = (await dash()).tasks.find((x) => x.id === kept.body.result);
+  assert.deepEqual([t.body, t.stage], ["She asked in #beds, twice.", "todo"]);
+  assert.equal((await send(`/api/dashboard/tasks/${t.id}`, "PATCH", { stage: "dropped" }, "dash-ctx-drop-001")).body.state, "dropped", "the old state column follows an ended stage");
+  for (const i of rows.slice(1)) await send(`/api/dashboard/inbox/${i.id}/drop`, "POST", {}, `dash-ctx-drop-${i.id.slice(3)}`);
 });
 
-test("pins put tasks on Today, ending unpins, and cleared tasks move to the archive with their sources", async () => {
+test("a pick for tomorrow morning lifts a task into to-do, ending clears it, and cleared tasks move to the archive with their sources", async () => {
   const { tasks } = await dash();
   const a = tasks.find((t) => t.title.startsWith("Spike"));
   const b = tasks.find((t) => t.title === "Write it up for Mara");
-  const pinned = await send(`/api/dashboard/tasks/${a.id}`, "PATCH", { pinned: true }, "dash-pin-000001");
-  assert.ok(pinned.body.pinnedAt > 0);
+  const picked = await send(`/api/dashboard/tasks/${a.id}`, "PATCH", { pinned: true }, "dash-pin-000001");
+  assert.ok(picked.body.morningAt > 0, "pinned is the older name for morning");
+  assert.equal(picked.body.stage, "todo", "a backlog task picked for the morning moves to to-do");
   const read = await call("dashboard_read");
-  assert.match(read.text, /^# Dashboard · .*\nWork \d+ open · Personal \d+ open\nToday 1 · /);
-  assert.match(read.text, /## Today\n### Spike: catalogue one bed's seeds · t_\w+ · personal/);
-  assert.equal((await send(`/api/dashboard/tasks/${a.id}`, "PATCH", { pinned: "yes" }, "dash-pin-000002")).status, 400);
+  assert.match(read.text, /^# Dashboard · .*\nWork \d+ open · Personal \d+ open\nInbox \d+ · Backlog \d+ · To-do \d+ \(1 for tomorrow morning\) · /);
+  assert.match(read.text, /## To-do\n### Spike: catalogue one bed's seeds · t_\w+ · personal · tomorrow morning/);
+  assert.equal((await send(`/api/dashboard/tasks/${a.id}`, "PATCH", { morning: "yes" }, "dash-pin-000002")).status, 400);
 
-  const done = await send(`/api/dashboard/tasks/${a.id}`, "PATCH", { state: "done" }, "dash-pin-000003");
-  assert.equal(done.body.pinnedAt, null, "an ended task leaves Today");
+  const done = await send(`/api/dashboard/tasks/${a.id}`, "PATCH", { stage: "done" }, "dash-pin-000003");
+  assert.equal(done.body.morningAt, null, "an ended task loses its pick");
+  assert.equal(done.body.state, "done");
   await send(`/api/dashboard/tasks/${a.id}`, "PATCH", { cleared: true }, "dash-clear-00001");
   await send(`/api/dashboard/tasks/${b.id}`, "PATCH", { state: "dropped", cleared: true }, "dash-clear-00002");
   const board = await dash();
@@ -232,6 +255,7 @@ test("pins put tasks on Today, ending unpins, and cleared tasks move to the arch
 
   const back = await send(`/api/dashboard/tasks/${a.id}`, "PATCH", { cleared: false, state: "you" }, "dash-clear-00003");
   assert.equal(back.body.clearedAt, null);
+  assert.equal(back.body.stage, "backlog", "restored with an older caller's state, it lands in the backlog");
   assert.ok((await dash()).tasks.some((t) => t.id === a.id), "a restored task is back on the board");
 });
 
@@ -251,20 +275,21 @@ test("the scratch pad saves whole, and a save based on an older rev is refused",
   assert.match((await call("dashboard_read")).text, /## Scratch pad \(the reader's own notes; ideas here may become fragments\)\nDashboard\n\n- seed library\?\?\n- watering & tools\npoke at the compost/);
 });
 
-test("an agent proposes a rewritten description; keeping it replaces the task's body", async () => {
+test("an agent sends notes for a task; keeping them puts them under the task's own", async () => {
   const { tasks } = await dash();
   const t = tasks.find((x) => x.title === "Compost rota");
   const body = "## Context\nFour volunteers signed up for the rota.\n\n## Done when\n- Each has a week.";
   const r = await call("dashboard_add_items", { key: "dispatch-rewrite-01", items: [{ kind: "update", task: t.id, body, from: FROM }] });
   assert.equal(r.isError, false, r.text);
   assert.match((await call("dashboard_read")).text, new RegExp(`- in_\\w+ · rewrite · new description → ${t.id} · from`));
+  assert.ok(t.body.length > 0, "the task has notes of its own to keep");
   assert.match((await call("dashboard_add_items", { key: "dispatch-rewrite-02", items: [{ kind: "update", task: t.id, from: FROM }] })).text, /items\[0\]\.text is required/);
   const item = (await dash()).inbox.find((i) => i.kind === "update" && i.task === t.id);
   const kept = await send(`/api/dashboard/inbox/${item.id}/keep`, "POST", {}, "dash-rewrite-keep1");
   assert.equal(kept.status, 200, JSON.stringify(kept.body));
   const after = (await dash()).tasks.find((x) => x.id === t.id);
-  assert.equal(after.body, body);
-  assert.equal(after.updates.length, t.updates.length, "a rewrite alone adds no dated update");
+  assert.equal(after.body, `${t.body}\n\n${body}`, "the agent's notes go under the reader's, never over them");
+  assert.equal(after.updates.length, t.updates.length, "notes alone add no dated update");
 });
 
 test("every task is work or personal: guessed from its source, set by the agent or the page, and dashboard_read filters by it", async () => {
@@ -298,11 +323,11 @@ test("an agent edits kept tasks in place, all or nothing, and a resent key repla
   const body = "## Context\nOne sheet for every bed.\n\n## Done when\n- Every bed reaches one sheet.";
   const edits = [
     { task: "Watering log, one sheet", body, prompt: "Help me think first.", links: [{ kind: "linear", ref: "GD-838" }] },
-    { task: "t_ir000001", title: "Compost rota, four volunteers", state: "waiting", waitingOn: "Mara" },
+    { task: "t_ir000001", title: "Compost rota, four volunteers", stage: "review", waitingOn: "Mara" },
   ];
   const r = await call("dashboard_edit_tasks", { key: "migrate-run-000001", edits });
   assert.equal(r.isError, false, r.text);
-  assert.match(r.text, /^Edited 2 tasks:\n1\. t_fail0001 "Watering log, one sheet": body, links, prompt\.\n2\. t_ir000001 "Compost rota, four volunteers" \(was "Compost rota"\): title, state, waitingOn\.$/);
+  assert.match(r.text, /^Edited 2 tasks:\n1\. t_fail0001 "Watering log, one sheet": body, links, prompt\.\n2\. t_ir000001 "Compost rota, four volunteers" \(was "Compost rota"\): title, stage, waitingOn\.$/);
   assert.equal((await call("dashboard_edit_tasks", { key: "migrate-run-000001", edits })).text, r.text, "a resent key changes nothing and replays the answer");
 
   const { tasks } = await dash();
@@ -310,8 +335,8 @@ test("an agent edits kept tasks in place, all or nothing, and a resent key repla
   assert.equal(fail.body, body);
   assert.equal(fail.prompt, "Help me think first.");
   assert.deepEqual(fail.links.map((l: { ref: string }) => l.ref), ["GD-838"], "links are replaced, not merged");
-  assert.equal(fail.state, "you", "a field left out stays as it was");
-  assert.deepEqual([ir.title, ir.state, ir.waitingOn], ["Compost rota, four volunteers", "waiting", "Mara"]);
+  assert.equal(fail.stage, "backlog", "a field left out stays as it was");
+  assert.deepEqual([ir.title, ir.stage, ir.waitingOn], ["Compost rota, four volunteers", "review", "Mara"]);
 
   const bad = await call("dashboard_edit_tasks", { key: "migrate-run-000002", edits: [{ task: "t_fail0001", prompt: null }, { task: "t_ir000001", state: "someday" }] });
   assert.equal(bad.isError, true);

@@ -38,9 +38,9 @@ revokes them.
 | `capture` | A web page, arXiv abstract or YouTube transcript, through the app's own capture |
 | `apply` | A batch of typed operations, all or nothing; each op's fields are in its input schema |
 | `create_board` | A new board, with a handle and a purpose |
-| `dashboard_add_items` | Tasks, subtasks, updates and fragments into the dashboard's inbox, for the reader to keep or drop, and how much of each source was read |
-| `dashboard_edit_tasks` | Tasks already on the dashboard, changed in place: title, body, state, links, prompt, area, all or nothing |
-| `dashboard_read` | The dashboard as Markdown: Today, every task with body, updates, links and subtasks, the inbox, then the sources |
+| `dashboard_add_items` | Tasks into the dashboard's inbox: a title, a line of context and where it came from, for the reader to send on or drop |
+| `dashboard_edit_tasks` | Tasks already on the dashboard, changed in place when the reader asked: title, links, stage, area, all or nothing |
+| `dashboard_read` | The dashboard as Markdown: every task by stage (backlog, to-do, thinking, review) with notes, links and subtasks, then the inbox |
 
 Every answer is Markdown, cut to about 6k tokens (up to 24k with `max_tokens`), and ends with the exact
 call for the next part. Ids carry a prefix (`src_`, `sec_`, `deck_`, `card_`, `q_`, `hl_`, `grp_`, `ms_`,
@@ -56,17 +56,22 @@ key, so a resent call replays the first answer. `apply`'s operations are in `ser
 a new one is a new entry there, and both apply's schema and the guide list it automatically.
 
 The dashboard (`server/features/dashboard`, page at `<room>/dashboard`) is a separate app the room only
-hosts: no board owns it, so it has its own tools instead of `apply` ops. New work goes through the
-inbox: `dashboard_add_items` only fills it, and the reader edits, keeps or drops each item there.
-`dashboard_edit_tasks` changes tasks already kept, for a rewrite or migration the reader asked for; it
-never pins, clears or deletes, and each field it leaves out stays as it was.
-Run now on the board wakes the reader's own scheduled research routine through its API trigger
+hosts: no board owns it, so it has its own tools instead of `apply` ops. A task is a thread the reader
+moves forward by hand through four stages, backlog → to-do → thinking → review, then done or dropped
+(`stage`; the older `state` column mirrors it, open stages reading as `you`). A to-do thread may carry
+`morning_at`, the reader's pick for tomorrow morning; picking a backlog thread lifts it into to-do.
+New work goes through the inbox: `dashboard_add_items` only fills it, with a title, a line of `context`
+and where it came from, and the reader sends each item to the backlog or to-do, or drops it. The notes
+on a thread (`body`) are the reader's own, written in Thinking; an agent's notes sent as an update go
+under them, never over them. Subtasks, fragments and updates are still accepted and on their way out.
+`dashboard_edit_tasks` changes tasks already kept when the reader asked; it never pins, clears or
+deletes, and each field it leaves out stays as it was.
+Run now on the board wakes the reader's own scheduled routine through its API trigger
 (`server/features/dashboard/routine.ts`): the Fire URL and token are set on the board and never sent
 back, a run carries no task list because the routine reads the board itself, and runs are a minute apart.
-Everything kept lands in Your move. An idea too broad or fuzzy to be a task is a fragment with a few
-directions; the reader keeps the ones they pick as tasks, or asks for more, which the next session adds
-by naming the fragment. Every task is work or personal (`area`): the page shows one board at a time, and an item that names no area goes where its source suggests. `dashboard_read` also carries the reader's scratch pad as plain text, so a session can turn what was jotted there into fragments. The `sources` argument records how much of each place was read; the Archive and
-`dashboard_read` list it, so a later session skips what is read in full.
+Every task is work or personal (`area`): the page shows one backlog at a time, and an item that names
+no area goes where its source suggests. `dashboard_read` also carries the reader's scratch pad as plain
+text and the `sources` an agent said it read; both are kept for now and go when the older tools do.
 
 `<board>/chat` reads both chat tables, the board's and per-source thread (`messages`) and Ask on a card
 (`card_messages`), newest first, cleared turns included and marked. A question asked at words of a source
