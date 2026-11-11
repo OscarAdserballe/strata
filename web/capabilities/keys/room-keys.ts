@@ -127,7 +127,8 @@ export function makeKeyHandler(ctx: RoomKeysCtx): (e: KeyboardEvent) => void {
     else if (k === "p") a.move(-1);
     else if (k === "enter") {
       if (driftRef.current && !(isDone && c)) { a.log("drift_adopt", { board: b.activeId, to: driftRef.current.label || null }); a.adoptDrift(); return; }
-      if (isDone && c) {
+      // in the reader the card in hand opens on its words, answered or not; shuffled, only once answered
+      if (c && (isDone || !r.solo)) {
         a.log("jump_to_source", { board: b.activeId, card: c.id, solo: !!r.solo });
         if (r.solo) a.goToCardSource(c); else a.jumpToCard();
       }

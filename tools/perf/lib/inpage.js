@@ -134,8 +134,9 @@
     boardShown: () => { const h = q(".bp-hname"); return !q(".veil.launcher") && !!h && !!h.textContent.trim() && !!q(".bp-rail .bp-it") && !!q(".bp-big"); },
     newCanvas: () => [...document.querySelectorAll(".slide canvas")].some((c) => !c.__perfOld),
     newTlayer: () => [...document.querySelectorAll(".slide .tlayer")].some((c) => !c.__perfOld),
-    // a card of the deck: in its sheet over its words, or in the column when cards are alone
-    newRoomCard: () => [...document.querySelectorAll(".fi-face .q, .deck .q-meta")].some((c) => !c.__perfOld),
+    // a card of the deck: washed on its words, open in its sheet, or in the column when cards are alone
+    newRoomCard: () => [...document.querySelectorAll(".fi-face .q, .deck .q-meta")].some((c) => !c.__perfOld)
+      || (() => { const h = window.CSS?.highlights?.get("strata-card"); return !!h && h !== P._oldWash && h.size > 0; })(),
     reviewCard: () => !!q(".rcard .q-meta") || !!q(".rdone"),
   };
   P.probeNames = Object.keys(PROBES);
@@ -156,7 +157,7 @@
   P.arm = (names, reset = true) => {
     if (names.includes("newCanvas")) document.querySelectorAll(".slide canvas").forEach((c) => { c.__perfOld = true; });
     if (names.includes("newTlayer")) document.querySelectorAll(".slide .tlayer").forEach((c) => { c.__perfOld = true; });
-    if (names.includes("newRoomCard")) document.querySelectorAll(".fi-face .q, .deck .q-meta").forEach((c) => { c.__perfOld = true; });
+    if (names.includes("newRoomCard")) { document.querySelectorAll(".fi-face .q, .deck .q-meta").forEach((c) => { c.__perfOld = true; }); P._oldWash = window.CSS?.highlights?.get("strata-card") ?? null; }
     for (const n of names) { if (!PROBES[n]) throw new Error("no probe " + n); if (reset) { delete P.marks[n]; delete P.marks[n + ":paint"]; } pending.add(n); }
     if (!mo) { mo = new MutationObserver(check); mo.observe(document, { subtree: true, childList: true }); }
     if (!rafOn) { rafOn = true; requestAnimationFrame(tick); }

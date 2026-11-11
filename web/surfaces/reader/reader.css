@@ -23,7 +23,9 @@
 /* sheets lie on a zero-height plane at the top of the scroller: they scroll with the page and sit above it */
 .layer-plane{position:relative;height:0;z-index:var(--layer-page-layers);}
 /* the words a card or a question sits on, washed in its layer's colour (a note's are its highlight) */
-::highlight(strata-card){background-color:oklch(0.62 0.13 248 / 0.18);}
+::highlight(strata-card){background-color:oklch(0.62 0.13 248 / 0.13);text-decoration:underline dotted 2px oklch(0.50 0.072 248 / 0.75);}
+::highlight(strata-card-done){text-decoration:underline solid 2px oklch(0.55 0.05 150 / 0.6);}
+::highlight(strata-card-on){background-color:oklch(0.62 0.13 248 / 0.26);text-decoration:underline solid 2px oklch(0.42 0.072 248);}
 ::highlight(strata-ask){background-color:oklch(0.265 0.012 60 / 0.08);}
 .page:has(> .htmlsrc) > .layer-plane{display:none;}
 

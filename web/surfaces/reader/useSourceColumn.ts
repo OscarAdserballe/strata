@@ -656,7 +656,8 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
     const at = quoteOfAnchor(c.source); if (!pageRef.current) return;
     if (!at) { room.toast("this card has no place in the source"); return; }
     if (room.live().treeOpen) { readerTop.current = 0; setTreeOpen(false); }
-    if (await adapterOf(drawnAs(s.kind)).reveal(anchorOf({ source: c.source }))) return;
+    const a = adapterOf(drawnAs(s.kind));
+    if (await a.reveal(anchorOf({ source: c.source }))) { a.openLayers?.([c.id]); return; }
     room.toast("that part isn't in this source");
   }
 

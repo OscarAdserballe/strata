@@ -4,7 +4,6 @@ import { glideTo, waitForAnchor } from "../position/scroll.ts";
 import { clearTicks, drawTick } from "../fold/view.ts";
 import { type Box, type LayerDom, type LayerIntents, type LayerItem, type Spot, layerDrawer, tintWords } from "../fold/layers.ts";
 import { compileQuote } from "../../../shared/reading/compile-quote.ts";
-import { mergeRects, rectsToFractions } from "../../../shared/reading/marks.ts";
 import { textLayerRange, type PageTextIndex } from "../find/paint.ts";
 import { proseRange } from "../prose/paint.ts";
 import type { ProseMaps } from "../prose/offsets.ts";
@@ -21,6 +20,8 @@ export interface SourceAdapter {
   drawLayers(items: readonly LayerItem[], on: LayerIntents): void;
   /** a new source starts with every sheet shut */
   forgetLayers(): void;
+  /** opens these items' sheets, as a click on their words would */
+  openLayers?(ids: readonly string[]): void;
   /** a PDF page's text came in: whether a card waits on it for its place */
   pageDrawn?(n: number): boolean;
 }
@@ -67,16 +68,26 @@ function readerPlane(host: AdapterHost): Pick<LayerDom, "sheet" | "closeExcept" 
   };
 }
 
+/** Where a card's words are on the plane, and the start of their last line, where its sheet hangs. */
+function wordsBox(f: PlaneFrame, words: Range): { passage: Box; hang: { x: number; y: number } } | null {
+  const rs = [...words.getClientRects()].filter((r) => r.width > 0 && r.height > 0).map((r) => f.box(r));
+  if (!rs.length) return null;
+  const bottom = Math.max(...rs.map((r) => r.bottom)), last = rs.filter((r) => r.bottom > bottom - 2);
+  return {
+    passage: { top: Math.min(...rs.map((r) => r.top)), bottom, left: Math.min(...rs.map((r) => r.left)), right: Math.max(...rs.map((r) => r.right)) },
+    hang: { x: Math.min(...last.map((r) => r.left)), y: bottom },
+  };
+}
+
 interface PlaneFrame { width: number; perClient: number; box(b: { top: number; bottom: number; left: number; right: number }): Box }
 
 // A PDF's passage is a page, or lines of a book's page as fractions of it: nothing cuts the page, the sheet lies over it.
-interface PdfSpot extends Spot { page: number; top: number; bottom: number; slide: boolean; words?: { left: number; right: number; bottom: number } }
+interface PdfSpot extends Spot { page: number; top: number; bottom: number; slide: boolean; picked?: { left: number; right: number; bottom: number } }
 function pdfDom(host: AdapterHost): LayerDom & { pageDrawn(n: number): boolean } {
   const slideOf = (n: number) => host.scroller()?.querySelector<HTMLElement>("#pg-" + n) ?? null;
   const plane = readerPlane(host);
   // pages a card waits on for its words
   const waiting = new Set<number>();
-  const cardLine = new Map<string, string>();
   return {
     pageDrawn: (n) => waiting.has(n),
     tint: plane.tint,
@@ -92,42 +103,34 @@ function pdfDom(host: AdapterHost): LayerDom & { pageDrawn(n: number): boolean }
           const r = compileQuote(it.anchor.quote, { text: idx!.text });
           tint = r.ok ? textLayerRange(slide!, idx!, r.at.start, r.at.end) : null;
         }
-        if (it.kind === "card") {
-          const words = tint;
-          if (!words || !slide || !n) return null;
-          const box = (slide.querySelector("canvas") ?? slide).getBoundingClientRect();
-          const rs = mergeRects(rectsToFractions([...words.getClientRects()], box));
-          if (!rs.length) return null;
-          const top = Math.min(...rs.map((x) => x[1])), bottom = Math.max(...rs.map((x) => x[1] + x[3]));
-          const at = { left: Math.min(...rs.map((x) => x[0])), right: Math.max(...rs.map((x) => x[0] + x[2])), bottom };
-          if (slide.offsetWidth > slide.offsetHeight * 1.15) return { key: "pg" + n, block: slide, page: n, top: 0, bottom: 1, slide: true, words: at, tint: words } as PdfSpot;
-          // a card's line is read once: mid-resize the text layer lags its canvas, and a key that moved would rebuild its sheet
-          const line = `${it.id}@${n}`, key = cardLine.get(line) ?? `pg${n}:${Math.round(bottom * 400)}`;
-          cardLine.set(line, key);
-          return { key, block: slide, page: n, top, bottom, slide: false, words: at, tint: words } as PdfSpot;
-        }
+        // a card's words are its place, on a book's page and a slide alike; its key is the card's, so a resize can't move it
+        if (it.kind === "card") return tint && slide && n ? { key: "w:" + it.id, block: slide, page: n, top: 0, bottom: 1, slide: false, tint, words: true } as PdfSpot : null;
       }
       const n = it.anchor.page, rs = it.anchor.rects ?? [];
       const slide = n ? slideOf(n) : null;
       if (!n || !slide) return null;
-      const words = rs.length ? { left: Math.min(...rs.map((r) => r[0])), right: Math.max(...rs.map((r) => r[0] + r[2])), bottom: Math.max(...rs.map((r) => r[1] + r[3])) } : undefined;
-      if (slide.offsetWidth > slide.offsetHeight * 1.15) return { key: "pg" + n, block: slide, page: n, top: 0, bottom: 1, slide: true, words, tint } as PdfSpot;
+      const picked = rs.length ? { left: Math.min(...rs.map((r) => r[0])), right: Math.max(...rs.map((r) => r[0] + r[2])), bottom: Math.max(...rs.map((r) => r[1] + r[3])) } : undefined;
+      if (slide.offsetWidth > slide.offsetHeight * 1.15) return { key: "pg" + n, block: slide, page: n, top: 0, bottom: 1, slide: true, picked, tint } as PdfSpot;
       if (!rs.length) return null;
       const top = Math.min(...rs.map((r) => r[1])), bottom = Math.max(...rs.map((r) => r[1] + r[3]));
-      return { key: `pg${n}:${Math.round(bottom * 400)}`, block: slide, page: n, top, bottom, slide: false, words, tint } as PdfSpot;
+      return { key: `pg${n}:${Math.round(bottom * 400)}`, block: slide, page: n, top, bottom, slide: false, picked, tint } as PdfSpot;
     },
     place(s) {
       const spot = s as PdfSpot, f = plane.frame();
       if (!f) return null;
+      if (spot.words && spot.tint) {
+        const w = wordsBox(f, spot.tint), pg = f.box(spot.block.getBoundingClientRect());
+        return w ? { ...w, column: { left: pg.left, right: pg.right }, width: f.width, unit: 1, perClient: f.perClient } : null;
+      }
       const pg = f.box(spot.block.getBoundingClientRect()), h = pg.bottom - pg.top, w = pg.right - pg.left;
       if (h <= 0) return null;
       // words picked on a page: the bracket and the sheet go by the words, not the page's edges
-      const col = spot.words && !spot.slide ? { left: pg.left + spot.words.left * w, right: pg.left + Math.max(spot.words.right, 0.6) * w } : { left: pg.left, right: pg.right };
+      const col = spot.picked && !spot.slide ? { left: pg.left + spot.picked.left * w, right: pg.left + Math.max(spot.picked.right, 0.6) * w } : { left: pg.left, right: pg.right };
       return {
         passage: { left: col.left, right: col.right, top: pg.top + spot.top * h, bottom: pg.top + spot.bottom * h },
         column: col, width: f.width, unit: 1, perClient: f.perClient,
         // a slide is read whole: its sheet lies over it, under the picked words if there are any, rather than over the next slide
-        dock: spot.slide ? (spot.words ? pg.top + spot.words.bottom * h + 8 : pg.top + h * 0.5) : undefined,
+        dock: spot.slide ? (spot.picked ? pg.top + spot.picked.bottom * h + 8 : pg.top + h * 0.5) : undefined,
       };
     },
     sheet: plane.sheet,
@@ -143,6 +146,7 @@ function pdfDom(host: AdapterHost): LayerDom & { pageDrawn(n: number): boolean }
       for (const t of at.querySelectorAll<HTMLElement>(".ftick")) t.style.pointerEvents = "auto";
     },
     clearTicks() { host.scroller()?.querySelectorAll(".ftick-at").forEach((n) => n.remove()); },
+    surface: () => host.scroller(),
   };
 }
 
@@ -165,7 +169,7 @@ function pageAdapter(kind: string, host: AdapterHost): SourceAdapter {
       if (it.kind === "card") {
         const r = doc ? compileQuote(it.anchor.quote, { text: doc.text }) : null;
         const at = r?.ok && doc ? proseRange(col, doc.maps, r.at.start, r.at.end) : null;
-        return at ? { key: "b" + at.block.dataset.b, block: at.block, tint: at.range } : null;
+        return at ? { key: "w:" + it.id, block: at.block, tint: at.range, words: true } : null;
       }
       const at = it.anchor.block != null ? col.querySelector(`[data-b="${it.anchor.block}"]`)
         : it.kind === "note" ? col.querySelector(`[data-mark="${it.id}"]`)
@@ -178,15 +182,18 @@ function pageAdapter(kind: string, host: AdapterHost): SourceAdapter {
       const col = column(), f = plane.frame();
       if (!col || !f) return null;
       const c = f.box(col.getBoundingClientRect()), cs = getComputedStyle(col);
+      const inner = { left: c.left + parseFloat(cs.paddingLeft || "0"), right: c.right - parseFloat(cs.paddingRight || "0") };
+      if (spot.words && spot.tint) {
+        const w = wordsBox(f, spot.tint);
+        return w ? { ...w, column: inner, width: f.width, unit: 1, perClient: f.perClient } : null;
+      }
       // a card on a heading asks about the section under it: its sheet lies after that text, not over it
       let end: Element = spot.block;
       if (/^H[1-6]$/.test(spot.block.tagName)) for (let n = spot.block.nextElementSibling; n && !/^H[1-6]$/.test(n.tagName); n = n.nextElementSibling) if (n instanceof HTMLElement && n.dataset.b) end = n;
       const passage = f.box(spot.block.getBoundingClientRect());
       if (end !== spot.block) passage.bottom = f.box(end.getBoundingClientRect()).bottom;
       return {
-        passage,
-        column: { left: c.left + parseFloat(cs.paddingLeft || "0"), right: c.right - parseFloat(cs.paddingRight || "0") },
-        width: f.width, unit: 1, perClient: f.perClient,
+        passage, column: inner, width: f.width, unit: 1, perClient: f.perClient,
       };
     },
     sheet: plane.sheet,
@@ -194,6 +201,7 @@ function pageAdapter(kind: string, host: AdapterHost): SourceAdapter {
     tint: plane.tint,
     tick: (spot, marks, peek, open) => drawTick(spot.block, spot.key, marks, peek, open),
     clearTicks() { const c = column(); if (c) clearTicks(c); },
+    surface: () => host.scroller(),
   } : pdfDom(host);
   const drawer = layerDrawer(dom);
   return {
@@ -201,6 +209,7 @@ function pageAdapter(kind: string, host: AdapterHost): SourceAdapter {
     pageDrawn: (n) => !prose && (dom as ReturnType<typeof pdfDom>).pageDrawn(n),
     drawLayers: (items, on) => drawer.draw(items, on),
     forgetLayers: () => drawer.forget(),
+    openLayers: (ids) => drawer.openFor(ids),
     blockOf: (a) => anchorEl(host.scroller(), kind, a),
     async reveal(a) {
       const el = await waitForAnchor(() => host.scroller(), kind, a) as HTMLElement | null;
