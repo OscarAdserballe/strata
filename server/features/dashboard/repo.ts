@@ -8,6 +8,10 @@ export interface TaskRow {
 }
 export interface UpdateRow { id: string; task_id: string; at: number; text: string; from_json: string | null; links: string }
 export interface InboxRow { id: string; kind: string; item: string; at: number; handled_at: number | null; outcome: string | null; result_id: string | null }
+export interface VersionRow { task_id: string; n: number; resource_id: string; landed: string; at: number }
+export interface PressRow { id: string; task_id: string; kind: string; stage: string; version: number | null; at: number; session_url: string | null }
+export interface NoteRow { id: string; resource_id: string; quote: string; note: string; box: string | null; created_at: number }
+export interface ReplyRow { id: string; mark_id: string; author: string; text: string; created_at: number }
 export interface RoutineRow { url: string; token: string; ran_at: number | null; session_url: string | null; error: string | null; updated_at: number }
 
 export const dashboardRepo = {
@@ -26,6 +30,24 @@ export const dashboardRepo = {
   insInbox: stmt("INSERT INTO dashboard_inbox (id,kind,item,at) VALUES (?,?,?,?)"),
   setInbox: stmt("UPDATE dashboard_inbox SET kind=?, item=? WHERE id = ? AND handled_at IS NULL"),
   handleInbox: stmt("UPDATE dashboard_inbox SET handled_at=?, outcome=?, result_id=? WHERE id = ? AND handled_at IS NULL"),
+  setStage: stmt("UPDATE dashboard_tasks SET stage = ?, state = ?, morning_at = NULL, pinned_at = NULL, cleared_at = ?, updated_at = ? WHERE id = ?"),
+  // Dispatch: versions and presses; a version whose source was removed from its board is skipped.
+  versions: stmt<VersionRow>("SELECT v.* FROM dashboard_versions v JOIN resources r ON r.id = v.resource_id ORDER BY v.task_id, v.n"),
+  versionsOf: stmt<VersionRow>("SELECT v.* FROM dashboard_versions v JOIN resources r ON r.id = v.resource_id WHERE v.task_id = ? ORDER BY v.n"),
+  lastN: stmt<{ n: number }>("SELECT COALESCE(MAX(n), 0) AS n FROM dashboard_versions WHERE task_id = ?"),
+  insVersion: stmt("INSERT INTO dashboard_versions (task_id, n, resource_id, landed, at) VALUES (?,?,?,?,?)"),
+  presses: stmt<PressRow>("SELECT * FROM dashboard_presses ORDER BY task_id, at, rowid"),
+  pressesOf: stmt<PressRow>("SELECT * FROM dashboard_presses WHERE task_id = ? ORDER BY at, rowid"),
+  lastPress: stmt<PressRow>("SELECT * FROM dashboard_presses WHERE task_id = ? ORDER BY at DESC, rowid DESC LIMIT 1"),
+  insPress: stmt("INSERT INTO dashboard_presses (id, task_id, kind, stage, version, at, session_url) VALUES (?,?,?,?,?,?,?)"),
+  dispatched: stmt<{ task_id: string }>("SELECT DISTINCT task_id FROM dashboard_presses"),
+  // The reader's notes are marks with words in them, on the version's source.
+  noteCounts: stmt<{ resource_id: string; n: number }>(`SELECT m.resource_id, COUNT(*) AS n FROM dashboard_versions v
+    JOIN marks m ON m.resource_id = v.resource_id WHERE m.note IS NOT NULL AND trim(m.note) <> '' GROUP BY m.resource_id`),
+  notesOn: stmt<NoteRow>("SELECT id, resource_id, quote, note, box, created_at FROM marks WHERE resource_id = ? AND note IS NOT NULL AND trim(note) <> '' ORDER BY created_at, id"),
+  repliesOn: stmt<ReplyRow>("SELECT id, mark_id, author, text, created_at FROM mark_replies WHERE resource_id = ? ORDER BY created_at, id"),
+  noteMark: stmt<{ id: string; board_id: string; resource_id: string; note: string | null }>("SELECT id, board_id, resource_id, note FROM marks WHERE id = ?"),
+  insAgentReply: stmt("INSERT INTO mark_replies (id,board_id,mark_id,resource_id,author,text,created_at,updated_at) VALUES (?,?,?,?,'agent',?,?,?)"),
   routine: stmt<RoutineRow>("SELECT url, token, ran_at, session_url, error, updated_at FROM dashboard_routine WHERE id = 1"),
   putRoutine: stmt(`INSERT INTO dashboard_routine (id,url,token,updated_at) VALUES (1,?,?,?)
     ON CONFLICT(id) DO UPDATE SET url=excluded.url, token=excluded.token, ran_at=NULL, session_url=NULL, error=NULL, updated_at=excluded.updated_at`),

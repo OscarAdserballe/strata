@@ -61,6 +61,7 @@ test("it speaks MCP: initialize, the twelve tools, notifications", async () => {
   assert.deepEqual(tools.map((t) => `${t.name}(${(t.inputSchema.required ?? []).join(",")})`), [
     "whoami()", "get_outline()", "get_context(id)", "get_text(id)", "search(queries)", "get_changes(board)", "get_guide()",
     "request_upload(board,key,files)", "get_import(id)", "capture(board,key,url)", "apply(board,key,ops)", "create_board(key,title)", "dashboard_add_items(key,items)", "dashboard_read()",
+    "dashboard_board()", "dashboard_open(id)", "dashboard_post(key,id)",
   ]);
   assert.equal((await rpc("no/such")).body.error.code, -32601);
 });

@@ -19,6 +19,7 @@ import { checkOps, OP_SCHEMAS, OPS, opLine, runOps } from "./ops.ts";
 import { publicOrigin, uploadUrl, type Caller, type Scope } from "./tokens.ts";
 import { addItems, checkItem, DashError, LINK_KINDS, STAGES as DASH_STAGES } from "../dashboard/dashboard.ts";
 import { renderDashboard } from "../dashboard/render.ts";
+import { board as dispatchBoard, open as openThread, preparePost } from "../dashboard/dispatch.ts";
 
 export interface Env { req: IncomingMessage; caller: Caller }
 type Args = Record<string, unknown>;
@@ -48,6 +49,7 @@ export const GUIDE_TOPICS = [...GUIDE.keys()];
 
 const ACCEPTED = /\.(pdf|md|markdown|txt|html?)$/i;
 
+const dashAsync = async <T,>(fn: () => Promise<T>): Promise<T> => { try { return await fn(); } catch (e) { if (e instanceof DashError) throw new AgentError(e.message); throw e; } };
 const dash = <T,>(fn: () => T): T => { try { return fn(); } catch (e) { if (e instanceof DashError) throw new AgentError(e.message); throw e; } };
 const DASH_LINK = schema({ kind: { type: "string", enum: [...LINK_KINDS] }, ref: { type: "string", description: "e.g. GD-247, PR #42, #north-beds" }, title: STR, url: STR }, ["kind", "ref"]);
 const DASH_FROM = schema({ source: { type: "string", description: "e.g. Notion · 1:1 with Mara · 23 Oct" }, url: STR, quote: { type: "string", description: "The words it came from." } }, ["source"]);
@@ -257,6 +259,32 @@ export const TOOLS: Tool[] = [
       cursor: CURSOR, max_tokens: MAX,
     }),
     read: (x) => renderDashboard(x, budgetOf(x.max_tokens)),
+  },
+  // Dispatch: one object, a thread { id, title, text, stage, page, notes }, and three calls on it.
+  {
+    name: "dashboard_board", title: "Dispatch: the board", scope: "read",
+    description: "Every open thread on the dashboard as JSON [{ id, title, stage }], those in implementing first. A thread in implementing is waiting on you: open it.",
+    inputSchema: schema({}),
+    read: () => JSON.stringify(dispatchBoard(), null, 1),
+  },
+  {
+    name: "dashboard_open", title: "Dispatch: one thread", scope: "read",
+    description: "One thread in full as JSON { id, title, text, stage, page, notes: [{ id, on, text }] }: page is the newest version's HTML (null before the first), notes are the reader's on that version, oldest first, on naming the words each is on. A note on nothing is a press: Go or Send back, and the newest one says what to do. No page: write one. Send back: revise the page. Go: build it, or merge if the page is already the built one.",
+    inputSchema: schema({ id: { type: "string", description: "The thread's id, from dashboard_board." } }, ["id"]),
+    read: (x) => JSON.stringify(dash(() => openThread(String(x.id ?? ""))), null, 1),
+  },
+  {
+    name: "dashboard_post", title: "Dispatch: say something back", scope: "write",
+    description: "page: the next version, a whole self-contained HTML page; posting it hands the thread back to the reader, and Strata decides where it lands from their last press. replies: { noteId: \"text\" }, said under each of the reader's notes; they can go any time. A page is only taken while the thread is implementing.",
+    inputSchema: schema({
+      key: KEY, id: { type: "string", description: "The thread's id." },
+      page: { type: "string", description: "The next version's HTML." },
+      replies: { type: "object", additionalProperties: { type: "string" }, description: "{ noteId: \"text\" }, ids from dashboard_open's notes." },
+    }, ["key", "id"]),
+    write: (x) => dashAsync(async () => {
+      const run = await preparePost(String(x.id ?? ""), { page: x.page, replies: x.replies });
+      return () => { const said = dash(run); logEvent(db, APP, "dispatch_post", { page: x.page !== undefined, replies: x.replies ? Object.keys(x.replies as object).length : 0 }, null); return said; };
+    }),
   },
 ];
 

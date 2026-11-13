@@ -29,7 +29,7 @@ export function setRoutine(b: Record<string, unknown>): RoutineView {
 }
 
 /** Fires the routine; awaited before the route's commit, which records what came back. */
-export async function fireRoutine(): Promise<Ran> {
+export async function fireRoutine(text = "Run now, from the dashboard."): Promise<Ran> {
   const r = q.routine.get();
   if (!r) throw new DashError("Connect the research routine first.");
   if (r.ran_at && Date.now() - r.ran_at < COOLDOWN) throw Object.assign(new DashError("A run started under a minute ago."), { httpStatus: 409 });
@@ -37,7 +37,7 @@ export async function fireRoutine(): Promise<Ran> {
     const res = await fetchWithTimeout(r.url, {
       method: "POST", timeout: 15_000,
       headers: { Authorization: `Bearer ${r.token}`, "anthropic-beta": "experimental-cc-routine-2026-04-01", "anthropic-version": "2023-06-01", "Content-Type": "application/json" },
-      body: JSON.stringify({ text: "Run now, from the dashboard." }),
+      body: JSON.stringify({ text }),
     });
     const body = (await res.json().catch(() => ({}))) as { claude_code_session_url?: unknown };
     if (!res.ok) return { at: now(), sessionUrl: null, error: `The routine answered ${res.status}${res.status === 401 ? ": the token is wrong or was regenerated" : res.status === 429 ? ": too many runs this hour" : ""}.` };
@@ -51,4 +51,25 @@ export async function fireRoutine(): Promise<Ran> {
 export function recordRun(ran: Ran): RoutineView {
   q.routineRan.run(ran.at, ran.sessionUrl, ran.error);
   return routineView();
+}
+
+// STRATA_ROUTINE_STUB=1 (the preview room sets it): a wake is logged and given a made-up session, never sent.
+const STUB = process.env.STRATA_ROUTINE_STUB === "1";
+const stub = { ranAt: 0, n: 0, url: null as string | null };
+
+export interface Woken { ran: Ran | null; sessionUrl: string | null }
+
+/** Sending a thread, Go and Send back wake the routine; within the cooldown the run already going picks it up. */
+export async function wake(why: string): Promise<Woken> {
+  if (STUB) {
+    if (Date.now() - stub.ranAt < COOLDOWN) { console.log(`[routine stub] ${why}: a run started under a minute ago, so none is fired`); return { ran: null, sessionUrl: stub.url }; }
+    stub.ranAt = Date.now(); stub.url = `https://example.invalid/stub-session/${++stub.n}`;
+    console.log(`[routine stub] would fire the routine: ${why} → ${stub.url}`);
+    return { ran: null, sessionUrl: stub.url };
+  }
+  const r = q.routine.get();
+  if (!r) return { ran: null, sessionUrl: null };
+  if (r.ran_at && Date.now() - r.ran_at < COOLDOWN) return { ran: null, sessionUrl: r.session_url };
+  const ran = await fireRoutine(why);
+  return { ran, sessionUrl: ran.sessionUrl };
 }
