@@ -1,4 +1,4 @@
-// The fifteen MCP tools. tools/list is built from this list, so a tool exists only by being here.
+// The MCP tools. tools/list is built from this list, so a tool exists only by being here.
 import { readFileSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import { q } from "../repo.ts";

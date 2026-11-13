@@ -55,7 +55,7 @@ export const dashboardRoutes: Route[] = [
     const w = await wake(`Sent to Dispatch: ${q.task.get(params[0])?.title ?? params[0]}`);
     commit(() => {
       if (w.ran) recordRun(w.ran);
-      return { status: 200, body: { press: sendThread(params[0], w.sessionUrl) } };
+      return { status: 200, body: { press: sendThread(params[0], w.sessionUrl), pane: pane(q.inboxOpen.all().length) } };
     });
   }, { receipt: "atomic" }),
 
@@ -65,7 +65,7 @@ export const dashboardRoutes: Route[] = [
     const w = await wake(`${b.kind === "go" ? "Go" : "Send back"}: ${q.task.get(params[0])?.title ?? params[0]}`);
     commit(() => {
       if (w.ran) recordRun(w.ran);
-      return { status: 200, body: { press: pressThread(params[0], b.kind, w.sessionUrl) } };
+      return { status: 200, body: { press: pressThread(params[0], b.kind, w.sessionUrl), pane: pane(q.inboxOpen.all().length) } };
     });
   }, { receipt: "atomic" }),
 

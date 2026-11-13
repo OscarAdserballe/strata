@@ -12,6 +12,7 @@ Needs Node 24 and a Gemini API key.
 npm install
 npx playwright install chromium    # only for the browser checks
 tools/preview.sh                   # a throwaway room on :8804, seeded, with a fake model
+tools/preview.sh --dispatch        # the same, with Dispatch's threads seeded: open :8804/dispatch
 ```
 
 In Docker: one container, where a login gateway starts a private room (its own process and SQLite

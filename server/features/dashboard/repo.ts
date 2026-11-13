@@ -40,6 +40,8 @@ export const dashboardRepo = {
   pressesOf: stmt<PressRow>("SELECT * FROM dashboard_presses WHERE task_id = ? ORDER BY at, rowid"),
   lastPress: stmt<PressRow>("SELECT * FROM dashboard_presses WHERE task_id = ? ORDER BY at DESC, rowid DESC LIMIT 1"),
   insPress: stmt("INSERT INTO dashboard_presses (id, task_id, kind, stage, version, at, session_url) VALUES (?,?,?,?,?,?,?)"),
+  // The pane's revision: every Dispatch write moves a thread, and moving it stamps updated_at.
+  paneRev: stmt<{ rev: number }>("SELECT COALESCE(MAX(updated_at), 0) AS rev FROM dashboard_tasks"),
   dispatched: stmt<{ task_id: string }>("SELECT DISTINCT task_id FROM dashboard_presses"),
   // The reader's notes are marks with words in them, on the version's source.
   noteCounts: stmt<{ resource_id: string; n: number }>(`SELECT m.resource_id, COUNT(*) AS n FROM dashboard_versions v

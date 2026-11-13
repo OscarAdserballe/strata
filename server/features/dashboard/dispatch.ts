@@ -168,7 +168,7 @@ export interface PressView { kind: string; stage: string; version: number | null
 export interface DispatchThread { id: string; title: string; stage: string; links: Link[]; updatedAt: number; versions: VersionView[]; press: PressView | null; lands: string | null }
 
 /** What the left pane shows: threads in Decide, Implementing and Review (those Dispatch sent), and the inbox count. */
-export function pane(inbox: number): { board: string | null; inbox: number; threads: DispatchThread[] } {
+export function pane(inbox: number): { rev: number; board: string | null; inbox: number; threads: DispatchThread[] } {
   const counts = new Map(q.noteCounts.all().map((r) => [r.resource_id, r.n]));
   const vs = new Map<string, VersionView[]>();
   for (const v of q.versions.all()) {
@@ -185,5 +185,5 @@ export function pane(inbox: number): { board: string | null; inbox: number; thre
       press: p ? { kind: p.kind, stage: p.stage, version: p.version, at: p.at, sessionUrl: p.session_url } : null,
       lands: stage === "implementing" ? landsIn(p) : null }];
   });
-  return { board: dispatchBoardId(), inbox, threads };
+  return { rev: q.paneRev.get()!.rev, board: dispatchBoardId(), inbox, threads };
 }

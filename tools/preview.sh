@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
-# tools/preview.sh [--keep] [--real]: run Strata on a throwaway DB with a fake model (PORT, default 8804).
+# tools/preview.sh [--keep] [--real] [--dispatch]: run Strata on a throwaway DB with a fake model (PORT, default 8804).
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 PORT="${PORT:-8804}"
 DB="${STRATA_PREVIEW_DB:-$(mktemp -d)/strata-preview.db}"
-KEEP=0; REAL=0
+KEEP=0; REAL=0; DISPATCH=0
 for a in "$@"; do
   case "$a" in
     --keep) KEEP=1; DB="${TMPDIR:-/tmp}/strata-preview.db" ;;
     --real) REAL=1 ;;
+    --dispatch) DISPATCH=1 ;;
     *) echo "unknown flag: $a" >&2; exit 2 ;;
   esac
 done
@@ -17,6 +18,8 @@ done
 NODE="$(command -v node)"
 export STRATA_PORT="$PORT" STRATA_OPEN=1 STRATA_DB="$DB"
 export STRATA_COURSES="$PWD/test/fixtures/courses"
+# The dashboard's routine is never fired from a preview: a wake is logged instead.
+export STRATA_ROUTINE_STUB=1
 # Keep the generated book's bookmarks as sections so the smoke can exercise PDF navigation.
 export STRATA_MIN_SECTION_WORDS="${STRATA_PREVIEW_MIN_SECTION_WORDS:-100}"
 # Set the key empty, not unset: distilling reads it directly and the shell may carry a real one.
@@ -76,7 +79,9 @@ else
   "$NODE" tools/demo-seed.mjs "http://127.0.0.1:$PORT"
   echo "$SEED" > "$DB.seed"
 fi
+if [ "$DISPATCH" = "1" ]; then "$NODE" tools/dispatch-seed.mjs "http://127.0.0.1:$PORT"; fi
 
 echo
 echo "  → http://127.0.0.1:$PORT   (ctrl-c to stop; the DB above is disposable)"
+if [ "$DISPATCH" = "1" ]; then echo "  → http://127.0.0.1:$PORT/dispatch"; fi
 wait $SRV

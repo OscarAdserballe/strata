@@ -6,7 +6,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const squash = (s) => String(s ?? "").replace(/\s+/g, " ").trim();
 
 // the fake model streams slowly here, so chat-switch's reply outlasts the trip away and back
-export const ROOM_ENV = { STRATA_FAKE_STREAM_MS: "70" };
+export const ROOM_ENV = { STRATA_FAKE_STREAM_MS: "70", STRATA_ROUTINE_STUB: "1" };
 
 // where the fix is a retry, a check waits up to this long for it rather than judging after a fixed beat
 const GRACE_MS = 10_000;
@@ -2167,6 +2167,57 @@ const dashboardAdd = {
   },
 };
 
+const dispatchPress = {
+  name: "dispatch-press",
+  what: "in Dispatch you press Send back on one thread's page and Go on another's, on a lossy wire with the first press's answer lost; each press is stored once and both threads wait in Implementing",
+  checks: {
+    once: "each press is on the server exactly once",
+    moved: "both threads are in implementing on the server",
+    shown: "the pane no longer lists either thread under Decide",
+  },
+  async run(t) {
+    const tag = `${t.seed}-${Date.now().toString(36)}`;
+    const { token } = await t.api("/api/agent/tokens", "POST", { name: `race dispatch ${t.seed}`, write: true });
+    let n = 0;
+    const post = async (id, html) => {
+      const r = await fetch(`${t.base}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "tools/call", params: { name: "dashboard_post", arguments: { key: `race-post-${tag}-${n}`, id, page: html } } }) });
+      const body = await r.json();
+      if (!body.result || body.result.isError) throw new Error(`dashboard_post: ${JSON.stringify(body).slice(0, 200)}`);
+    };
+    const ids = [0, 1].map((i) => `t_dsp${i}${t.seed}${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_]/g, ""));
+    const titles = [`Race back ${tag}`, `Race go ${tag}`];
+    for (const [i, id] of ids.entries()) {
+      await t.api("/api/dashboard/tasks", "POST", { id, title: titles[i], body: "Under loss.", area: "work" });
+      await t.api(`/api/dashboard/tasks/${id}/send`, "POST", {});
+      await post(id, `<!doctype html><html><body><h1>${titles[i]}</h1><p>A page to decide on.</p></body></html>`);
+    }
+    const presses = (e) => e.write && /\/api\/dashboard\/tasks\/[^/]+\/press$/.test(e.path);
+    const page = await t.open({ latency: true, lostAck: { match: presses, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    await page.goto(`${t.base}/dispatch`);
+    for (const [i, button] of [[0, "Send back"], [1, "Go →"]]) {
+      const card = page.locator(".dp-card", { hasText: titles[i] });
+      await card.first().waitFor();
+      if (!(await card.first().evaluate((el) => el.classList.contains("open")))) await card.first().click();
+      await page.locator(".dp-card.open", { hasText: titles[i] }).getByRole("button", { name: button, exact: true }).click();
+    }
+    const until = performance.now() + GRACE_MS * 2;
+    let rows = [];
+    for (;;) {
+      rows = ids.map((id) => t.sql("SELECT kind FROM dashboard_presses WHERE task_id = ? AND kind != 'send'", id));
+      if (rows.every((r) => r.length >= 1) || performance.now() > until) break;
+      await sleep(250);
+    }
+    await t.net.idle(500);
+    rows = ids.map((id) => t.sql("SELECT kind FROM dashboard_presses WHERE task_id = ? AND kind != 'send'", id));
+    const stages = ids.map((id) => t.sql("SELECT stage FROM dashboard_tasks WHERE id = ?", id)[0]?.stage);
+    t.check("once", rows[0].length === 1 && rows[0][0].kind === "back" && rows[1].length === 1 && rows[1][0].kind === "go", rows.map((r, i) => `${titles[i]}: ${r.map((x) => x.kind).join(",") || "none"}`).join("; "));
+    t.check("moved", stages.every((s) => s === "implementing"), stages.join(", "));
+    const listed = await page.locator(".dp-list").textContent();
+    t.check("shown", !titles.some((x) => listed.includes(x)), `the Decide list reads ${JSON.stringify(listed.slice(0, 160))}`);
+  },
+};
+
 // two replies under a note, the first one's answer lost: each lands once, in the order written
 const noteReplies = {
   name: "note-replies",
@@ -2253,4 +2304,4 @@ const selectionCard = {
 };
 
 export const scenarios = [notesRoundtrip, highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, launcherDeleteSource, launcherDeleteLastSource, chatSwitch, notesLostSave, sourceRename503, keepsToggle,
-  notesTabClose, notesTwoTabs, planThreeMoves, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, notesRefreshTyping, planPurposeLate409, imageUploadLate, agentResend, agentRevise, selectSeveral, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd];
+  notesTabClose, notesTwoTabs, planThreeMoves, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, notesRefreshTyping, planPurposeLate409, imageUploadLate, agentResend, agentRevise, selectSeveral, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dispatchPress];
