@@ -2,12 +2,14 @@ export interface SelectionMenuProps {
   at: { x: number; y: number };
   /** a note on the words; left empty, it stays a highlight */
   onNote(): void;
-  onAsk(): void;
-  onCard(): void;
+  /** left out where a page is read for its notes alone */
+  onAsk?(): void;
+  onCard?(): void;
 }
 
 export default function SelectionMenu({ at, onNote, onAsk, onCard }: SelectionMenuProps) {
-  const acts: [string, () => void][] = [["Note", () => onNote()], ["Card", () => onCard()], ["Ask", () => onAsk()]];
+  const acts = ([["Note", onNote], ["Card", onCard], ["Ask", onAsk]] as [string, (() => void) | undefined][])
+    .filter((a): a is [string, () => void] => !!a[1]);
   return (
     <div className="selmenu" style={{ left: at.x, top: at.y }}
       onMouseDown={(e) => { e.preventDefault(); e.stopPropagation(); }}>

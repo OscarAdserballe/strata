@@ -3,10 +3,10 @@ import type { MutableRefObject } from "react";
 import { StrataAPI, StrataSourceText } from "../../data/api.ts";
 import { store as roomStore } from "../../data/store.ts";
 import { marksKey } from "../../data/entities/boards.ts";
-import { pageState } from "../../data/entities/pagestate.ts";
 import { marksOn, useMarks } from "../../capabilities/annotate/useMarks.ts";
 import { PdfEngine } from "../../engines/pdf/PdfEngine.ts";
-import { HtmlEngine } from "../../engines/html/HtmlEngine.ts";
+import type { HtmlEngine } from "../../engines/html/HtmlEngine.ts";
+import { liveEngine, liveUrlOf, noteFolds, paintLiveMarks, type LiveAt } from "../../capabilities/live/live.ts";
 import { drawnAs } from "../../engines/html/drawn.ts";
 import { mdRender } from "../../engines/prose/render.ts";
 import { paintProseMarks, reconcileProseMarks } from "../../engines/prose/paint.ts";
@@ -148,21 +148,8 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
   // a live HTML source: the page draws itself in a sandbox; the bridge carries selections, marks and jumps
   const liveRef = useRef<HtmlEngine | null>(null);
   const liveMarks = useRef<ReturnType<typeof useMarks> | null>(null);
-  if (!liveRef.current) liveRef.current = new HtmlEngine({
-    onSelect: (sel, at) => liveMarks.current?.offerLive(sel, at),
-    onMark: (id) => {
-      const m = marksOn(room.live().activeId, room.live().src).find((x) => x.id === id);
-      liveMarks.current?.setOpenMark({ id, draft: (m && m.note) || "" });
-    },
-    onPress: () => liveMarks.current?.offerLive(null, null),
-    onLoad: (url) => { const at = livePage(url); return at ? pageState.load(at.bid, at.rid) : Promise.reject(new Error("the page was closed")); },
-    onSave: (url, value) => { const at = livePage(url); return at ? pageState.save(at.bid, at.rid, value) : Promise.reject(new Error("the page was closed")); },
-  });
-  // the source whose frame asked, only while it is still the one open: a frame left over from the last source gets nothing
-  function livePage(url: string): { bid: string; rid: string } | null {
-    const { activeId: bid, src: s } = room.live();
-    return bid && s && drawnAs(s.kind) === "html" && url === StrataAPI.resourceLiveUrl(bid, s.id, s.generation) ? { bid, rid: s.id } : null;
-  }
+  const liveAt = (): LiveAt => ({ bid: room.live().activeId, src: room.live().src });
+  if (!liveRef.current) liveRef.current = liveEngine(liveAt, () => liveMarks.current);
   const live = liveRef.current;
   useEffect(() => () => live.dispose(), []);
   const adapterRef = useRef<ReturnType<typeof sourceAdapters> | null>(null);
@@ -175,34 +162,17 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
   });
   const adapterOf = adapterRef.current;
   const shownKind = useRef<string | null>(null);
-  const liveUrl = src && drawnAs(src.kind) === "html" && activeId ? StrataAPI.resourceLiveUrl(activeId, src.id, src.generation) : null;
+  const liveUrl = liveUrlOf({ bid: activeId, src });
 
   const pageIndex = (page: number) => engine().text?.get(page);
   const marks = useMarks({ ...room, pageRef, proseRef, pdfHostRef, docRef, pageIndex, clearLive: () => live.clearSelection() }, { pairIdx, loading });
   liveMarks.current = marks;
-  function paintLive() {
-    const { activeId: bid, src: s } = room.live();
-    if (!s || drawnAs(s.kind) !== "html") return;
-    const om = marks.openMarkRef.current;
-    live.paint(marksOn(bid, s).map((m) => ({ id: m.id, start: m.start, end: m.end, quote: m.quote, note: !!m.note, box: m.box ?? null })), om && om.id);
-  }
+  function paintLive() { paintLiveMarks(live, liveAt(), marks.openMarkRef.current?.id); }
   const { openMark, paintPdfMarks } = marks;
   // where a kind opens its layers in folds, notes no longer hang in the margin
   const foldHost = {
     adapter: () => { const s = room.live().src; return s ? adapterOf(drawnAs(s.kind)) : null; },
-    marks: () => marksOn(room.live().activeId, room.live().src),
-    writing: () => marks.openMarkRef.current?.id ?? null,
-    write: (id: string | null) => {
-      const m = id ? marksOn(room.live().activeId, room.live().src).find((x) => x.id === id) : null;
-      marks.setOpenMark(id ? { id, draft: (m && m.note) || "" } : null);
-    },
-    save: (id: string, text: string) => {
-      const m = marksOn(room.live().activeId, room.live().src).find((x) => x.id === id);
-      if (m && text !== (m.note || "")) void marks.saveNote(id, text);
-      marks.setOpenMark(null);
-    },
-    remove: (id: string) => void marks.dropMark(id),
-    reply: (id: string, text: string) => void marks.replyNote(id, text),
+    ...noteFolds(liveAt, () => marks),
     // the deck, card by card: each sheet is turned and graded on its own; the card in hand is also the keys'
     cards: () => {
       const v = room.live(), s = v.src;
