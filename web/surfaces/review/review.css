@@ -86,3 +86,4 @@ button.smclabel{width:100%;border:0;padding:0;background:none;text-align:left;co
 .rtree-src{font:500 9px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--ink-faint);}
 .rtree-no{font:italic 12px/1.5 var(--serif);color:var(--ink-faint);margin-top:14px;}
 .smnode.here > .smclabel{background:var(--accent-soft);border-radius:7px;padding:4px 8px;margin-left:-8px;}
+.reviewv{flex-direction:column;}

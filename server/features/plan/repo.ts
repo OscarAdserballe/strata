@@ -3,13 +3,16 @@ import type { PlanGroupRow, PlanMilestoneRow, PlanPlaceRow } from "../../platfor
 
 export const planRepo = {
   // The purpose is read separately rather than widening q.board, which is sent to the client as `board`.
-  boardPurpose: stmt<{ purpose: string | null; plan_rev: number }>("SELECT purpose,plan_rev FROM boards WHERE id = ?"),
+  boardPurpose: stmt<{ purpose: string | null; ends_at: string | null; archived_at: number | null; plan_rev: number }>(
+    "SELECT purpose,ends_at,archived_at,plan_rev FROM boards WHERE id = ?"),
   setBoardPurpose: stmt("UPDATE boards SET purpose = ? WHERE id = ?"),
-  groupsOf: stmt<PlanGroupRow>("SELECT id,name,ord FROM board_groups WHERE board_id = ? ORDER BY ord ASC, created_at ASC"),
-  group: stmt<PlanGroupRow>("SELECT id,name,ord FROM board_groups WHERE board_id = ? AND id = ?"),
+  setBoardProject: stmt("UPDATE boards SET purpose = ?, ends_at = ?, archived_at = ? WHERE id = ?"),
+  groupsOf: stmt<PlanGroupRow>("SELECT id,name,ord,by_date FROM board_groups WHERE board_id = ? ORDER BY ord ASC, created_at ASC"),
+  group: stmt<PlanGroupRow>("SELECT id,name,ord,by_date FROM board_groups WHERE board_id = ? AND id = ?"),
   nextGroupOrd: stmt<{ n: number }>("SELECT COALESCE(MAX(ord), -1) + 1 n FROM board_groups WHERE board_id = ?"),
   insGroup: stmt("INSERT INTO board_groups (id,board_id,name,ord,created_at) VALUES (?,?,?,?,?)"),
-  renGroup: stmt("UPDATE board_groups SET name = ? WHERE board_id = ? AND id = ?"),
+  renGroup: stmt("UPDATE board_groups SET name = ?, by_date = ? WHERE board_id = ? AND id = ?"),
+  setGroupOrd: stmt("UPDATE board_groups SET ord = ? WHERE board_id = ? AND id = ?"),
   delGroup: stmt("DELETE FROM board_groups WHERE board_id = ? AND id = ?"),
   delBoardGroups: stmt("DELETE FROM board_groups WHERE board_id = ?"),
   milestonesOf: stmt<PlanMilestoneRow>("SELECT id,name,due,note,done_at,ord FROM board_milestones WHERE board_id = ? ORDER BY ord ASC, created_at ASC"),
@@ -32,4 +35,10 @@ export const planRepo = {
   delPlace: stmt("DELETE FROM board_places WHERE board_id = ? AND item = ?"),
   delPlacesOfResourcePairs: stmt("DELETE FROM board_places WHERE board_id = ? AND item IN (SELECT id FROM pairs WHERE board_id = ? AND resource_id = ?)"),
   delBoardPlaces: stmt("DELETE FROM board_places WHERE board_id = ?"),
+  // What a draft of units is made from: names and outlines, never a source's text.
+  draftSources: stmt<{ id: string; filename: string | null; created_at: number }>(
+    "SELECT id,filename,created_at FROM resources INDEXED BY resources_metadata WHERE board_id = ? ORDER BY created_at ASC, id ASC"),
+  draftSections: stmt<{ resource_id: string; label: string | null; title: string | null }>(
+    `SELECT s.resource_id, s.label, t.title FROM sections s LEFT JOIN trees t ON t.section_id = s.id
+     WHERE s.board_id = ? ORDER BY s.resource_id, s.ord`),
 };

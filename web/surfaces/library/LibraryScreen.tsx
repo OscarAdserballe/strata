@@ -2,9 +2,10 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import LibraryHome from "./LibraryHome.tsx";
 import { room, useHeldId, useRoomHost } from "../../shell/room.ts";
-import { CRAM, REVIEW, screensNow, setLibrary, setLibraryQuery, setReviewing, useScreens, useScreensUp } from "../../shell/screens.ts";
+import { CRAM, REVIEW, openTab, screensNow, setLibrary, setLibraryQuery, setReviewing, useScreens, useScreensUp } from "../../shell/screens.ts";
+import { addSourceFrom } from "../../capabilities/sources/BoardPicker.tsx";
 import { readRoute, routeBoard } from "../../shell/routes.ts";
-import { signOut } from "../../shell/StatusBar.tsx";
+import { signOut } from "../../shell/signOut.ts";
 import { useAdminPath } from "../../shell/session.ts";
 import { reviewStrip, useReviewStrip } from "../../data/entities/review.ts";
 import { refreshBoards } from "../../data/entities/register.ts";
@@ -18,7 +19,7 @@ const close = () => setLibrary(false);
 export default function LibraryScreen() {
   const host = useRoomHost("library");
   const up = useScreensUp();
-  const q = useScreens().libraryQuery;
+  const { libraryQuery: q, libraryTab: tab } = useScreens();
   const held = useHeldId();
   const review = useReviewStrip();
   const adminPath = useAdminPath();
@@ -36,11 +37,13 @@ export default function LibraryScreen() {
   return host && createPortal(
     <LibraryHome covered={!!(up & (REVIEW | CRAM))} q={q} setQ={setLibraryQuery}
       onOpen={room.openBoard} onNew={() => room.newBoard(q)}
-      onResume={(id: string) => { journey("continue"); void room.openBoard(id, undefined, { resume: true }); }}
+      onResume={(id: string, rid?: string) => { journey("continue"); void room.openBoard(id, rid, rid ? undefined : { resume: true }); }}
       onWarm={room.warmBoard} onCardsChanged={reviewStrip.refresh}
       review={review} onReview={() => { journey("review.open"); setReviewing(true); }}
       onSourceMutation={room.sourceMutated}
       onLogout={() => signOut((e) => room.toastWhy(e, "couldn't sign out"))}
-      adminPath={adminPath} onClose={held ? close : null} boardActions={room.boardActions} />,
+      adminPath={adminPath} onClose={held ? close : null} boardActions={room.boardActions}
+      tab={tab} onTab={openTab}
+      onAdd={(kind, study) => addSourceFrom(kind, { activeId: room.activeId(), libraryUp: true, newBoard: room.newBoard }, study)} />,
     host);
 }

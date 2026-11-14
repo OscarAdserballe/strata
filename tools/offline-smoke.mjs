@@ -12,6 +12,8 @@ try {
   const page = await context.newPage();
   await page.goto(`${app}/?board=${board.id}`);
   await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+  // the download sits in the project page's ··· menu
+  await page.getByRole("button", { name: "Project menu", exact: true }).click();
   await page.waitForSelector('button[title*="keep this board readable offline"]');
   const cached = () => page.evaluate(async () => {
     const cache = await caches.open("strata-off-v2-api");
@@ -33,7 +35,7 @@ try {
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.locator(".connection-banner").getByText(/saved copies from/).waitFor();
   assert.match(await page.locator(".connection-banner").innerText(), /changes can’t be saved/);
-  await page.getByRole("button", { name: "boards", exact: true }).click();
+  await page.getByRole("navigation", { name: "Strata" }).getByRole("button", { name: "Today", exact: true }).click();
   assert.ok(await page.locator(".connection-banner").isVisible(), "library must retain the offline notice");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload({ waitUntil: "domcontentloaded" });

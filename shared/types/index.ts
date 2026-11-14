@@ -97,12 +97,14 @@ export type Touched = Record<string, { seen: number; done: number; last?: string
 export interface CardsSeen { seen: string[]; done: string[] }
 
 /* `places` is sparse: a missing key means ungrouped and unpinned, never an error. */
-export interface PlanGroup { id: string; name: string; ord: number }
+/** `byDate` is the reader's YYYY-MM-DD, or "" for none. */
+export interface PlanGroup { id: string; name: string; ord: number; byDate: string }
 /** `due` is free text ("before the exam"), not a date; `doneAt` null = not reached. */
 export interface PlanMilestone { id: string; name: string; due: string; note: string; doneAt: number | null; ord: number }
 /** `ord` is the item's position inside its group; null = never placed (sorts last). */
 export interface PlanPlace { group: string | null; milestone: string | null; pinned: boolean; ord: number | null }
-export interface BoardPlan { purpose: string; groups: PlanGroup[]; milestones: PlanMilestone[]; places: Record<string, PlanPlace>; rev?: number }
+/** `endsAt` is the reader's YYYY-MM-DD, or "" for no end; `archivedAt` null = active. */
+export interface BoardPlan { purpose: string; endsAt: string; archivedAt: number | null; groups: PlanGroup[]; milestones: PlanMilestone[]; places: Record<string, PlanPlace>; rev?: number }
 
 /* Revs are stamps from one room counter: of two answers about one scope, the higher rev is newer. */
 export interface NotesSaved { rev: number; notesRev: number }
@@ -166,6 +168,11 @@ export interface ReviewCard extends Card {
   courseTitle: string;
   rung: number;
   dueAt: number;
+  /** where the card sits: its board, its source, and its claim's depth and words in that source's tree */
+  project?: string;
+  source?: string;
+  level?: string;
+  claim?: string;
 }
 
 /** Only kept cards enrol; unkeptDue counts due cards outside the kept set. */
@@ -174,6 +181,11 @@ export interface ReviewState {
   total: number;
   nextDueAt: number | null;
   unkeptDue: number;
+  /** due times of kept cards arriving in the next eight days */
+  ahead?: number[];
+  /** kept cards per rung, bottom first, and each rung's interval in days */
+  rungs?: number[];
+  ladder?: number[];
 }
 
 export interface CardHistory {
@@ -356,6 +368,8 @@ export interface RegisterEntry {
   kept: number;
   cards: number;
   waiting: boolean;
+  /** last read or opened; 0 = never */
+  lastAt: number;
 }
 
 export type RegisterStatus =
@@ -377,4 +391,19 @@ export interface RegisterResponse {
   entries: RegisterEntry[];
   overview: RegisterOverview;
   keptRecent: KeptAt[];
+  projects: ProjectEntry[];
+  /** the last six months' hours with reading or reviewing in them, oldest first: only the client knows the reader's midnight */
+  hours: ActivityHours;
+  /** active days before those hours, counted in UTC days */
+  daysBefore: number;
 }
+
+/** A board as a project: its plan without milestones, for Today and the projects list. */
+export interface ProjectEntry {
+  id: string; title: string; purpose: string; endsAt: string; archivedAt: number | null;
+  touchedAt: number | null;
+  groups: PlanGroup[];
+  places: Record<string, { group: string | null; ord: number | null; pinned: boolean }>;
+}
+/** Flat triples, since there can be thousands: hours since the last one (the first since the epoch), minutes read, cards graded. */
+export type ActivityHours = number[];

@@ -8,8 +8,10 @@ export function planOf(boardId: string): BoardPlan {
   const purpose = q.boardPurpose.get(boardId);
   return {
     purpose: purpose?.purpose ?? "",
+    endsAt: purpose?.ends_at ?? "",
+    archivedAt: purpose?.archived_at ?? null,
     rev: purpose?.plan_rev ?? 0,
-    groups: q.groupsOf.all(boardId).map((g) => ({ id: g.id, name: g.name, ord: g.ord })),
+    groups: q.groupsOf.all(boardId).map((g) => ({ id: g.id, name: g.name, ord: g.ord, byDate: g.by_date ?? "" })),
     milestones: q.milestonesOf.all(boardId).map((m) => ({ id: m.id, name: m.name, due: m.due, note: m.note, doneAt: m.done_at ?? null, ord: m.ord })),
     places,
   };

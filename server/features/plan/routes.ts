@@ -14,6 +14,9 @@ const ITEM = /^[a-zA-Z0-9_-]{1,80}$/;
 const MAX_ITEMS = 500;
 
 const clip = (v: unknown, max: number): string => String(v ?? "").trim().slice(0, max);
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+/** undefined = not sent; "" clears; anything but a YYYY-MM-DD day is refused */
+const dayOf = (v: unknown): string | undefined | null => v === undefined ? undefined : v === null || v === "" ? "" : typeof v === "string" && DAY.test(v) ? v : null;
 const answer = (boardId: string) => ({ plan: planOf(boardId), rev: boardRev(boardId) });
 
 const planMatches = ({ params, ifMatch }: Ctx): void =>
@@ -38,13 +41,34 @@ export const planRoutes: Route[] = [
     });
   }, { receipt: "atomic" }),
 
+  // A project's end and its archive: each field is set on its own, so this is not a whole-document write.
+  route("PATCH", new RegExp(`^${B}\\/project$`), async (ctx) => {
+    if (!boardOr404(ctx)) return;
+    const { res, ssn, params, body, commit } = ctx; const boardId = params[0];
+    const b = await body<{ endsAt?: string | null; archived?: boolean }>();
+    const ends = dayOf(b.endsAt);
+    if (ends === null) { sendJson(res, 400, { error: "endsAt is a YYYY-MM-DD day, or empty" }); return; }
+    if (b.archived !== undefined && typeof b.archived !== "boolean") { sendJson(res, 400, { error: "archived is true or false" }); return; }
+    commit(() => {
+      const cur = q.boardPurpose.get(boardId)!;
+      const archivedAt = b.archived === undefined ? cur.archived_at : b.archived ? (cur.archived_at ?? now()) : null;
+      q.setBoardProject.run(cur.purpose ?? "", ends ?? cur.ends_at ?? "", archivedAt, boardId);
+      logEvent(db, APP, "plan_project", { board: boardId, ...(ends !== undefined ? { ends: !!ends } : {}), ...(b.archived !== undefined ? { archived: b.archived } : {}) }, ssn);
+      return { status: 200, body: answer(boardId) };
+    });
+  }, { receipt: "atomic" }),
+
   route("POST", new RegExp(`^${B}\\/groups$`), async (ctx) => {
     if (!boardOr404(ctx)) return;
-    const { ssn, params, body, commit } = ctx; const boardId = params[0];
-    const name = clip((await body<{ name?: string }>()).name, 80) || "New group";
+    const { res, ssn, params, body, commit } = ctx; const boardId = params[0];
+    const b = await body<{ name?: string; byDate?: string }>();
+    const name = clip(b.name, 80) || "New group";
+    const byDate = dayOf(b.byDate);
+    if (byDate === null) { sendJson(res, 400, { error: "byDate is a YYYY-MM-DD day, or empty" }); return; }
     const id = genId("g-");
     commit(() => {
       q.insGroup.run(id, boardId, name, q.nextGroupOrd.get(boardId)!.n, now());
+      if (byDate) q.renGroup.run(name, byDate, boardId, id);
       logEvent(db, APP, "plan_group_add", { board: boardId, len: name.length }, ssn);
       return { status: 201, body: { id, ...answer(boardId) } };
     });
@@ -55,11 +79,22 @@ export const planRoutes: Route[] = [
     const { res, ssn, params, body, commit } = ctx; const [boardId, gid] = params;
     const cur = q.group.get(boardId, gid);
     if (!cur) { sendJson(res, 404, { error: "no such group" }); return; }
-    const b = await body<{ name?: string }>();
+    const b = await body<{ name?: string; byDate?: string | null; move?: number }>();
     const name = b.name !== undefined ? clip(b.name, 80) || cur.name : cur.name;
+    const sent = dayOf(b.byDate);
+    if (sent === null) { sendJson(res, 400, { error: "byDate is a YYYY-MM-DD day, or empty" }); return; }
+    const byDate = sent ?? cur.by_date ?? "";
+    const move = b.move === -1 || b.move === 1 ? b.move : 0;
     commit(() => {
-      q.renGroup.run(name, boardId, gid);
-      logEvent(db, APP, "plan_group_edit", { board: boardId, renamed: name !== cur.name, len: name.length }, ssn);
+      q.renGroup.run(name, byDate, boardId, gid);
+      if (move) {
+        // Renumber after the swap: ords drift (holes, ties), and swapping equal ords moves nothing.
+        const ids = q.groupsOf.all(boardId).map((g) => g.id);
+        const i = ids.indexOf(gid), j = i + move;
+        if (j >= 0 && j < ids.length) [ids[i], ids[j]] = [ids[j], ids[i]];
+        ids.forEach((id, ord) => q.setGroupOrd.run(ord, boardId, id));
+      }
+      logEvent(db, APP, "plan_group_edit", { board: boardId, renamed: name !== cur.name, len: name.length, dated: sent !== undefined, ...(move ? { move } : {}) }, ssn);
       return { status: 200, body: answer(boardId) };
     });
   }, { receipt: "atomic" }),

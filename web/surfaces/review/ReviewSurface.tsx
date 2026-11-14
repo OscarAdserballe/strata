@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import type { ReviewCard, ReviewState, ReviewTreeResponse } from "../../../shared/types/index.ts";
 import type { CardFaces } from "../../../shared/cards/card-tidy.ts";
 import { registerKeys } from "../../capabilities/keys/registry.ts";
@@ -23,6 +23,7 @@ import { cardThreadKey } from "../../capabilities/ask/threads.ts";
 import { useProvideHere } from "../../shell/here.ts";
 import CardHistory from "../../capabilities/card/CardHistory.tsx";
 import ClaimTree, { Line } from "../../engines/tree/ClaimTree.tsx";
+import ReviewOverview, { projectOf } from "./ReviewOverview.tsx";
 
 export type ReviewItem = ReviewCard & FaceCard;
 export type OpenAt = { board: string; resource?: string | null };
@@ -97,19 +98,28 @@ export interface ReviewProps {
   onComposerCancel: () => void;
   onEditSave: (card: ReviewItem, patch: CardFaces) => Promise<ReviewItem>;
   onDeleteCard?: ((card: ReviewItem) => unknown) | null;
+  /** the room's bar, over the overview and the cards */
+  nav?: ReactNode;
 }
 
 interface Live {
   card: ReviewItem | null; answered: boolean; revealed: boolean; picked: number | null; ending: boolean;
-  judged: number; editing: boolean; composing: boolean; left: number;
+  judged: number; editing: boolean; composing: boolean; left: number; overview: boolean;
 }
 
-function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onComposerSave, onComposerCancel, onEditSave, onDeleteCard }: ReviewProps) {
+// A phone goes straight to the cards: the overview is for a desk.
+const OVERVIEW = !PHONE;
+
+function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onComposerSave, onComposerCancel, onEditSave, onDeleteCard, nav }: ReviewProps) {
+  const [overview, setOverview] = useState(OVERVIEW);
+  const [state, setState] = useState<ReviewState | null>(initial);
+  const [skip, setSkip] = useState<string[]>([]);
+  const skipRef = useRef(skip); skipRef.current = skip;
   // `initial` is home's fresh queue, so the first card draws with no round trip
   const [queue, setQueue] = useState<ReviewItem[] | null>(() => (initial ? (initial.cards.length ? shuffled(initial.cards) : []) : null));
   const [doneN, setDoneN] = useState(0);
   const [ending, setEnding] = useState(false);
-  const [endsAt, setEndsAt] = useState<number | null>(() => (initial && initial.cards.length ? Date.now() + SESSION_MS : null));
+  const [endsAt, setEndsAt] = useState<number | null>(() => (!OVERVIEW && initial && initial.cards.length ? Date.now() + SESSION_MS : null));
   const [remaining, setRemaining] = useState(SESSION_MS);
   const [judged, setJudged] = useState(0);
   const [revealed, setRevealed] = useState(false);
@@ -127,6 +137,7 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
 
   const card = queue && queue.length ? queue[0] : null;
   useEffect(() => { if (card || finished) arrived("review.open"); }, [!!(card || finished)]);
+  const inOverview = overview && !!card && !finished;
   useEffect(() => { const t = setTimeout(() => loadSessionMap().catch(() => {}), 1000); return () => clearTimeout(t); }, []);
   const answered = revealed || picked !== null;
   const isEditing = !!(card && editing === card.id);
@@ -134,7 +145,7 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
   // bound once, so it reads the present through a ref
   const ref = useRef({} as Live);
   ref.current = { card, answered, revealed, picked, ending, judged,
-    editing: isEditing, composing: !!composer, left: queue ? queue.length : 0 };
+    editing: isEditing, composing: !!composer, left: queue ? queue.length : 0, overview: inOverview };
   useProvideHere(() => {
     const c = ref.current.card;
     return { surface: "review", card: c ? { id: c.id, deck: c.course, course: c.course, role: "subject",
@@ -151,12 +162,22 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
   }
 
   const started = (r: ReviewState) => StrataAPI.log("review_start", { review: true, due: r.total, cards: r.cards.length, minutes: SESSION_MS / 6e4 });
+  function begin() {
+    const left = (queue || []).filter((c) => !skipRef.current.includes(projectOf(c)));
+    if (!left.length) { onClose(); return; }
+    setQueue(left); setOverview(false);
+    setEndsAt(Date.now() + SESSION_MS);
+    if (state) started(state);
+  }
   function load(first: boolean) {
     StrataAPI.review().then((r) => {
       if (!live.current) return;
-      if (r.cards.length) {
-        setQueue(shuffled(r.cards));
-        if (first) { setEndsAt(Date.now() + SESSION_MS); started(r); }
+      setState(r);
+      // a project left for tomorrow stays out of this sitting's refetches too
+      const cards = r.cards.filter((c) => !skipRef.current.includes(projectOf(c)));
+      if (cards.length) {
+        setQueue(shuffled(cards));
+        if (first && !OVERVIEW) { setEndsAt(Date.now() + SESSION_MS); started(r); }
       } else { setQueue([]); setFinished({ nextDueAt: r.nextDueAt }); if (!first) StrataAPI.log("review_done", { review: true }); }
     }).catch(() => setError(true));
   }
@@ -164,7 +185,7 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
     // release focus: an input behind the veil (the library's paste line) would swallow the keys
     try { const a = document.activeElement as HTMLElement | null; if (a && a !== document.body && a.blur) a.blur(); } catch (e) { /* no DOM */ }
     if (!initial) load(true);
-    else if (initial.cards.length) started(initial);
+    else if (initial.cards.length && !OVERVIEW) started(initial);
   }, []);
 
   // Date.now rather than decrementing state, so the clock survives a sleeping tab
@@ -271,6 +292,7 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
     if (!ref.current.answered && c.type !== "mcq") reveal();
   }
 
+  const beginRef = useRef(begin); beginRef.current = begin;
   // capture phase, so the room's bubble-phase handler never hears these keys
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -288,6 +310,10 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
       if (k === "escape" && ref.current.editing) { e.preventDefault(); setEditing(null); return; }
       if (k === "escape" && closeAsk()) { e.preventDefault(); return; }
       if (k === "escape") { e.preventDefault(); endSession(); return; }
+      if (ref.current.overview) {
+        if ((k === " " || k === "enter") && !e.repeat) { e.preventDefault(); beginRef.current(); }
+        return;
+      }
       if (ref.current.ending || !c) return;
       if (k === "e" && !ref.current.editing && !grades.hasCard(c.id)) { e.preventDefault(); setEditing(c.id); return; }
       if (ref.current.editing) return;
@@ -307,7 +333,9 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
 
   return (
     <div className="veil reviewv">
-      <div className="rwrap">
+      {nav}
+      {inOverview ? <div className="rwrap"><ReviewOverview state={state} cards={queue || []} skip={skip} onStart={begin}
+        onSkip={(k, off) => setSkip((s) => (off ? s.concat(k) : s.filter((x) => x !== k)))} /></div> : <div className="rwrap">
         <div className="rhead">
           <span className="ltitle">{ending ? "Today" : "Review"}</span>
           <span className="lsub">{ending ? "where the reviewing went" : "today’s cards, every board"}</span>
@@ -333,7 +361,8 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
         : card ? (
           <div className="rcard" onClick={TOUCH ? advance : undefined}>
             {/* the meta row eats its taps: on touch a tap anywhere on the card reveals */}
-            <CardMeta card={card} from={PHONE ? courseOf(card.courseTitle) : card.courseTitle} where={card.courseTitle}
+            <CardMeta card={card} from={PHONE ? courseOf(card.courseTitle) : card.project ? [card.project, card.source].filter(Boolean).join(" / ") : card.courseTitle}
+              anchor={!PHONE && card.claim ? `${card.level} · ${card.claim}` : null} where={card.courseTitle}
               editing={isEditing} canEdit={!grades.hasCard(card.id)} onEdit={(c) => setEditing(c.id)}
               revealed={answered} extra={{ review: true, rung: card.rung }} />
             {isEditing ? (
@@ -367,9 +396,9 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
             <button className="lask-go" onClick={onClose}>{PHONE ? "done" : "back to the boards"}</button>
           </div>
         ) : null}
-      </div>
+      </div>}
       {/* one Ask per card (key), so a thread left open doesn't open over the next card */}
-      {card && !finished ? <Ask key={card.id} thread={cardThreadKey(card.course, card.id)} name="this card’s thread"
+      {card && !finished && !inOverview ? <Ask key={card.id} thread={cardThreadKey(card.course, card.id)} name="this card’s thread"
         placeholder="ask about this card…" locked={answered ? null : "turn the card over to ask about it"}
         onCompose={onNewCard ? (q, a) => onNewCard(card, q, a) : null}
         feedback={{ board: null, card: card.id, deck: card.deck, context: { review: true, card } }} /> : null}

@@ -117,9 +117,10 @@
 
   const q = (s) => document.querySelector(s);
   const PROBES = {
-    homeDoors: () => !!q(".home-primary") && !!q(".home-all-boards"),
-    homeLibrary: () => !!q(".home-library .rg-title"),
-    boardReady: () => { const h = q(".bp-hname"); return !!h && !!h.textContent.trim() && !!q(".bp-rail .bp-it") && !!q(".bp-big"); },
+    // Today: the bar and its heading, then what the register fills (its projects, or the clear day)
+    homeDoors: () => !!q(".topnav .tn-tab") && !!q(".today h1"),
+    homeLibrary: () => !!q(".td-proj") || !!q(".today.clear .td-big"),
+    boardReady: () => { const h = q(".pp-title"); return !!h && !!h.textContent.trim() && !!q(".pp-sname"); },
     readerShell: () => !!q(".page .pdf-col .slide, .page .page-col.prose > *"),
     pdfSlides: () => !!q(".pdf-col .slide"),
     firstCanvas: () => !!q(".slide canvas"),
@@ -131,13 +132,13 @@
     chatThread: () => !!q(".turns .turn"),
     askLine: () => !!q(".fold .fi.asked .fi-q"),
     launcher: () => !!q(".veil.launcher"),
-    boardShown: () => { const h = q(".bp-hname"); return !q(".veil.launcher") && !!h && !!h.textContent.trim() && !!q(".bp-rail .bp-it") && !!q(".bp-big"); },
+    boardShown: () => { const h = q(".pp-title"); return !q(".veil.launcher") && !!h && !!h.textContent.trim() && !!q(".pp-sname"); },
     newCanvas: () => [...document.querySelectorAll(".slide canvas")].some((c) => !c.__perfOld),
     newTlayer: () => [...document.querySelectorAll(".slide .tlayer")].some((c) => !c.__perfOld),
     // a card of the deck: washed on its words, open in its sheet, or in the column when cards are alone
     newRoomCard: () => [...document.querySelectorAll(".fi-face .q, .deck .q-meta")].some((c) => !c.__perfOld)
       || (() => { const h = window.CSS?.highlights?.get("strata-card"); return !!h && h !== P._oldWash && h.size > 0; })(),
-    reviewCard: () => !!q(".rcard .q-meta") || !!q(".rdone"),
+    reviewCard: () => !!q(".rv .rv-go") || !!q(".rcard .q-meta") || !!q(".rdone"),
   };
   P.probeNames = Object.keys(PROBES);
   const pending = new Set();

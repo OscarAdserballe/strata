@@ -1,0 +1,27 @@
+.topnav{display:flex;align-items:center;gap:6px;height:56px;flex:0 0 auto;padding:0 40px;border-bottom:1px solid var(--line);background:var(--paper);box-sizing:border-box;}
+.topnav button{cursor:pointer;white-space:nowrap;}
+.tn-mark{border:none;background:none;padding:0 28px 0 0;font:600 22px/1 var(--serif);letter-spacing:-.01em;color:var(--ink);}
+.tn-tabs{display:flex;gap:6px;}
+.tn-tab{border:none;background:none;border-radius:8px;padding:9px 12px;font:400 14px/1 var(--sans);color:var(--ink-soft);display:inline-flex;align-items:center;gap:8px;}
+.tn-tab:hover{background:var(--paper-2);color:var(--ink);}
+.tn-tab.on{background:var(--paper-3);color:var(--ink);font-weight:500;}
+.tn-badge{display:inline-block;min-width:12px;padding:2px 6px;border-radius:9px;background:var(--accent-deep);color:var(--card-bg);font:500 11px/1.1 var(--sans);text-align:center;}
+.tn-grow{flex:1;}
+.tn-days{font:400 11px/1 var(--mono);color:var(--ink-soft);margin-right:12px;white-space:nowrap;}
+.tn-days b{font-weight:600;color:var(--ink);}
+.tn-jump{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;background:var(--card-bg);padding:7px 10px;font:400 13px/1 var(--sans);color:var(--ink-faint);}
+.tn-jump kbd{border:1px solid var(--line);border-radius:4px;padding:2px 4px;font:400 9px/1 var(--mono);color:var(--ink-faint);}
+.tn-pop{position:relative;display:inline-flex;}
+.tn-add{border:1px solid var(--line);border-radius:8px;background:var(--card-bg);padding:8px 12px;font:500 13px/1 var(--sans);color:var(--ink);margin-left:10px;}
+.tn-add:hover,.tn-jump:hover{border-color:var(--accent-line);color:var(--accent-deep);}
+.tn-more{border:none;background:none;padding:8px 6px;font:500 13px/1 var(--sans);color:var(--ink-faint);margin-left:4px;}
+.tn-more:hover{color:var(--ink);}
+.addmenu.tn-menu{right:0;left:auto;}
+.topnav .suggest-button{border:none;background:none;padding:8px 4px;font:400 12px/1 var(--sans);color:var(--ink-faint);}
+@media (max-width: 760px){
+  .topnav{padding:0 14px;gap:2px;}
+  .tn-mark{padding-right:10px;font-size:19px;}
+  .tn-tab{padding:8px;}
+  .tn-days,.tn-jump{display:none;}
+}
+.tn-solo{font:400 11px/1 var(--mono);color:var(--ink-faint);margin-right:8px;max-width:22vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}

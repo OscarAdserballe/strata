@@ -14,7 +14,7 @@ export interface MintedRow {
   board_id?: string; board_title?: string;
   rev?: number;
 }
-export interface PlanGroupRow { id: string; name: string; ord: number }
+export interface PlanGroupRow { id: string; name: string; ord: number; by_date: string | null }
 export interface PlanMilestoneRow { id: string; name: string; due: string; note: string; done_at: number | null; ord: number }
 export interface PlanPlaceRow { item: string; group_id: string | null; milestone_id: string | null; pinned: number; ord: number | null }
 export interface BoardRow { id: string; title: string; type: string; touched_at?: number | null }

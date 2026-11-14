@@ -18,6 +18,8 @@ import type {
   CardHistory, ReviewCard, ReviewState, SessionMapResponse, SessionTopic, SessionClaim, SessionMet, TreeNode,
 } from "../../../shared/types/index.ts";
 
+// A claim's depth in its source's tree, named for the card's context line.
+const LEVELS = ["pillar", "support", "detail"];
 // The cap only defers: `total` still reports the true backlog.
 const SESSION_CAP = 60;
 
@@ -128,7 +130,21 @@ export const reviewRoutes: Route[] = [
     // Only kept cards are owed; unkept due cards are only counted.
     const kept = new Map(q.keptAll.all().map((r) => [r.id, r.created_at] as const));
     const sched = reviewSchedules(db, replayGrades);
-    const { due: owed, unkeptDue, nextDueAt } = keptQueue(sched, kept, t);
+    const { due: owed, unkeptDue, nextDueAt, ahead, rungs } = keptQueue(sched, kept, t);
+    const pairs = pairIndex();
+    // Per deck, once: the project, the source and the claims, so each card can say where it sits.
+    const places = new Map<string, { project: string; source: string; claims: Map<string, SessionClaim> }>();
+    const placeOf = (course: string) => {
+      let p = places.get(course);
+      if (!p) {
+        const pair = pairs.get(course);
+        const tree = pair ? treeOf(pair.section_id) : null;
+        p = { project: pair ? q.board.get(pair.board_id)?.title ?? "" : "", source: pair?.label || tree?.title || "",
+          claims: new Map((tree?.claims ?? []).map((c) => [c.id, c])) };
+        places.set(course, p);
+      }
+      return p;
+    };
     const titles = new Map((q.courses.all() as { slug: string; title: string }[]).map((c) => [c.slug, c.title]));
     const ids = new Set(q.cardIds.all().map((c) => c.id));
     const selected = owed.filter(([id]) => ids.has(id)).sort((a,b) => a[1].dueAt-b[1].dueAt);
@@ -136,8 +152,12 @@ export const reviewRoutes: Route[] = [
     for (const [id, s] of selected.slice(0, SESSION_CAP)) {
       const c = q.cardAny.get(id);
       if (!c) continue; // card dropped since
+      const payload = parseJson<Record<string, unknown>>(c.payload, {});
+      const at = placeOf(c.course), claim = typeof payload.node === "string" ? at.claims.get(payload.node) : undefined;
       due.push({
-        ...parseJson<Record<string, unknown>>(c.payload, {}),
+        ...payload,
+        project: at.project, source: at.source,
+        ...(claim ? { level: LEVELS[Math.min(claim.depth, LEVELS.length - 1)], claim: claim.label } : {}),
         id: c.id, deck: c.deck, type: c.type, ord: c.ord,
         // Sent back as If-Match, so a rewrite on another device is refused, not overwritten.
         rev: c.rev ?? 0,
@@ -146,7 +166,7 @@ export const reviewRoutes: Route[] = [
       });
     }
     due.sort((a, b) => a.dueAt - b.dueAt);
-    const body: ReviewState = { cards: due, total: selected.length, nextDueAt, unkeptDue };
+    const body: ReviewState = { cards: due, total: selected.length, nextDueAt, unkeptDue, ahead, rungs, ladder: LADDER_DAYS };
     sendJson(res, 200, body);
   }),
 

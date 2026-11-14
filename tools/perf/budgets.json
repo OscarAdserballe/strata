@@ -6,7 +6,7 @@
   },
   "payloadsKB": {
     "boards": 24,
-    "register": 85,
+    "register": 100,
     "biggest-board": 75,
     "marked-board": 260
   },
@@ -38,7 +38,6 @@
     "reload-reader/pair": { "extra.deckInRender": 0, "extra.deckFetches": 1, "extra.seenFetches": ["eq", 1], "t.card": 1000 },
     "board-page/drag-files": { "extra.roomRenders": 0, "extra.shown": ["min", 1], "w.commits": 2 },
     "board-page/key-h": { "extra.roomRenders": 0, "extra.countsLanded": ["min", 1], "extra.commitsPerKey": 2, "w.longtasks.ms": 100, "t.ms": 150 },
-    "board-page/log-typing": { "extra.roomRenders": 0, "extra.typed": ["min", 1], "extra.commitsPerKey": 1.2, "w.longtasks.ms": 100, "t.ms": 60 },
     "agent/outline": { "t.ms": 50 },
     "agent/overview": { "t.ms": 50 },
     "agent/kept": { "t.ms": 50, "extra.tokens": ["min", 500] },

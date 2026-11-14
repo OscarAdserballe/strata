@@ -22,6 +22,7 @@ const bool = (v: unknown, field: string): boolean | undefined =>
   v === undefined ? undefined : typeof v === "boolean" ? v : fail(`${field} is true or false.`);
 
 type Op = Record<string, unknown> & { op: string };
+const dayOf = (v: unknown): string => v === null || v === undefined || v === "" ? "" : typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : fail("A date is YYYY-MM-DD.");
 
 const text = (max: number, about: string) => ({ type: "string", maxLength: max, description: about });
 const flag = (about: string) => ({ type: "boolean", description: about });
@@ -82,6 +83,30 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
       const id = genId("g-");
       q.insGroup.run(id, b.id, name, q.nextGroupOrd.get(b.id)!.n, now());
       return `added ${idOf("group", id)}`;
+    },
+  },
+  set_project: {
+    fields: { "ends?": orNull("The project's end, YYYY-MM-DD; null or empty clears it."), "archived?": flag("true archives the project, false brings it back.") },
+    does: "Sets or clears the board's end date, or archives it (its kept cards still come back on Review) or brings it back.",
+    check: (o) => { dayOf(o.ends); bool(o.archived, "archived"); },
+    run(b, o) {
+      const cur = q.boardPurpose.get(b.id)!;
+      const ends = o.ends === undefined ? cur.ends_at ?? "" : dayOf(o.ends)!;
+      const archived = bool(o.archived, "archived");
+      q.setBoardProject.run(cur.purpose ?? "", ends, archived === undefined ? cur.archived_at : archived ? (cur.archived_at ?? now()) : null, b.id);
+      return archived === true ? "archived" : archived === false ? "brought back" : ends ? `ends ${ends}` : "no end";
+    },
+  },
+  set_group: {
+    fields: { id: { type: "string", description: "The group's grp_ id or name." }, "name?": text(80, "A new name."),
+      "by?": orNull("The date the group is meant to be done by, YYYY-MM-DD; null or empty clears it.") },
+    does: "Renames a group (a unit of the project) or sets the date it is meant to be done by.",
+    check: (o) => { str(o.id, "id", 120); str(o.name, "name", 80, false); dayOf(o.by); },
+    run(b, o) {
+      const gid = groupOf(b, String(o.id));
+      const cur = q.group.get(b.id, gid)!;
+      q.renGroup.run(str(o.name, "name", 80, false) || cur.name, o.by === undefined ? cur.by_date ?? "" : dayOf(o.by)!, b.id, gid);
+      return `updated ${idOf("group", gid)}`;
     },
   },
   add_milestone: {

@@ -36,8 +36,7 @@ try {
   assert.ok(book, "seeded book exists");
   await page.goto(`${base}/?board=${book.id}`, { waitUntil: "networkidle" });
   if (!await page.locator(".slide canvas").count()) {
-    await page.locator('.bp-rail [title*="step inside"]').first().click();
-    await page.getByRole("button", { name: /^Open the book/ }).click();
+    await page.locator(".pp-sname").first().click();
     await page.locator('button[title^="One:"], button:has-text("One:")').first().click();
   }
   await page.waitForSelector(".slide canvas");

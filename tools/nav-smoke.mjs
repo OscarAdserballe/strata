@@ -38,7 +38,7 @@ try {
   await gone(".keys-sheet");
 
   await page.goto(`${APP}/?board=${book.id}`, { waitUntil: "networkidle" });
-  await page.waitForSelector(".status, .rbar", { timeout: 10000 });
+  await page.waitForSelector(".topnav, .rbar", { timeout: 10000 });
   await page.keyboard.press("x");
   check("x opens the cram, and the address bar says so", await shown(".cramv") && view() === "cram", page.url());
   await page.keyboard.press("?");
@@ -89,7 +89,7 @@ try {
 
   if (chapter) {
     await page.goto(`${APP}/?board=${book.id}&resource=${chapter.resourceId}&pair=${chapter.id}`, { waitUntil: "networkidle" });
-    await page.waitForSelector(".status, .rbar", { timeout: 10000 });
+    await page.waitForSelector(".topnav, .rbar", { timeout: 10000 });
     await page.keyboard.press("x");
     await shown(".cramv");
     await page.reload({ waitUntil: "networkidle" });
@@ -101,7 +101,7 @@ try {
   const fresh = await context.newPage();
   fresh.on("pageerror", (e) => errors.push(String(e)));
   await fresh.goto(`${APP}/?board=${book.id}`, { waitUntil: "networkidle" });
-  await fresh.waitForSelector(".status, .rbar", { timeout: 10000 });
+  await fresh.waitForSelector(".topnav, .rbar", { timeout: 10000 });
   const before = await fresh.evaluate(() => history.length);
   await fresh.goto(`${APP}/?view=keeps`, { waitUntil: "networkidle" });
   check("the library's keeps have an address", await fresh.waitForSelector(".bench-lib", { timeout: 8000 }).then(() => true, () => false));
@@ -122,7 +122,7 @@ try {
 
   if (other) {
     await page.goto(`${APP}/?board=${other.id}`, { waitUntil: "networkidle" });
-    await page.waitForSelector(".status, .rbar", { timeout: 10000 });
+    await page.waitForSelector(".topnav, .rbar", { timeout: 10000 });
     await page.keyboard.press("b");
     await shown(".launcher");
     await page.keyboard.press("r");

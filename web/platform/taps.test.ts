@@ -21,8 +21,8 @@ const el = (...classes: string[]) => {
 };
 
 test("a tap is named by the part of the room it landed in", () => {
-  assert.equal(regionOf(el("bp-btn primary", "bp-row", "bp-front", "desk-at")), "board.front");
-  assert.equal(regionOf(el("home-primary", "home-continue", "home-doors", "veil launcher calm-home")), "home.continue");
+  assert.equal(regionOf(el("pp-sname", "pp-src", "pp-srcs", "pp-unit open", "pp-wrap", "desk pp", "desk-at")), "project.unit");
+  assert.equal(regionOf(el("td-primary small", "td-row", "td-main", "today", "home2-scroll", "veil launcher home2")), "today.reading");
   assert.equal(regionOf(el("", "q-meta", "rcard", "rwrap", "veil reviewv")), "review.card");
   assert.equal(regionOf(el("", "tlayer", "slide", "pdf-col", "page")), "reader.pdf");
 });

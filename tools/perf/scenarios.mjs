@@ -79,8 +79,8 @@ export async function board(env) {
     await netIdle(s);
     await s.page.waitForTimeout(300);
     for (const pass of ["first", "again"]) {
-      await s.page.locator(".home-all-boards").click();
-      const btn = s.page.locator("#home-boards").getByRole("button", { name: title, exact: true });
+      await s.page.locator(".topnav .tn-tab", { hasText: "Projects" }).click();
+      const btn = s.page.locator(".pj-card").filter({ has: s.page.locator(".pj-title", { hasText: title }) }).first();
       await btn.waitFor();
       const a = await snapshot(s);
       const clickTs = await nextEventTs(s, "click");
@@ -98,7 +98,7 @@ export async function board(env) {
           clickEvent: r1((d.events.find((e) => e.name === "click") || {}).d) },
         w: windowOf(d), net: summarizeNet(d), pageErrors: s.errors.splice(0), console: takeConsole(s) });
       if (pass === "first") {
-        await s.page.locator(".bp-crumb", { hasText: "All boards" }).click();
+        await s.page.locator(".pp-crumb button", { hasText: "Projects" }).click();
         await s.page.locator(".veil.launcher").waitFor();
         await netIdle(s);
         await s.page.waitForTimeout(300);
@@ -627,7 +627,7 @@ export async function cardsOnly(env, t) {
     // read every frame, so the first time it holds is the frame that drew it
     const POOLED = /^cards only · (\d+) cards/;
     const line = (want, what) => s.page.waitForFunction(([w, re, n]) => {
-      const seg = [...document.querySelectorAll(".seg")].map((e) => new RegExp(re).exec(e.textContent || "")).find(Boolean);
+      const seg = [...document.querySelectorAll(".tn-solo, .seg")].map((e) => new RegExp(re).exec(e.textContent || "")).find(Boolean);
       if (w ? !seg : seg) return false;
       return n ? Number(seg[1]) : performance.now();
     }, [want, POOLED.source, what === "cards"], { polling: "raf", timeout: 30_000 }).then((h) => h.jsonValue());
@@ -699,15 +699,19 @@ async function toCardAndPage(env, s, name, locator) {
 
 export async function continueBoard(env, t) {
   env = onTailnet(env);
-  // this board is the one last worked (the log's board prop is what "last worked" reads)…
+  // this source is the one last read, half way, so Today's Reading lists it first with a Resume…
   await fetch(`${env.base}/api/log`, { method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ event: "perf_touch", props: { board: t.board } }) });
+    body: JSON.stringify({ event: "read_progress", props: { board: t.board, resource: t.id, deepest: 40, ms: 60_000 } }) });
   const s = await session(env, ["homeDoors", "homeLibrary"]);
   await s.context.addInitScript(([k, v]) => { try { if (!localStorage.getItem(k)) localStorage.setItem(k, v); } catch (e) { /* no storage */ } },
     [`strata.at.${t.board}`, JSON.stringify({ pairId: t.pair, scroll: 12_000 })]);
   try {
     await homeReady(s, env);
-    const btn = s.page.locator(".home-doors").getByRole("button", { name: /Continue board/ });
+    if (await s.page.locator(".today.clear").count()) {
+      await s.page.getByRole("button", { name: "Keep reading anyway", exact: true }).click();
+      await s.page.waitForTimeout(LOOK_MS);
+    }
+    const btn = s.page.locator(".td-row").first().getByRole("button", { name: "Resume", exact: true });
     const r = await toCardAndPage(env, s, "continue", btn);
     // the keeps and cram chunks must not start before the page inks: they compete for the board's connections
     const warmsBeforePage = r.extra.timeline.filter(([p, at]) => /\/chunks\/(Keeps|Cram)Surface-/.test(p) && at < r.t.page).length;
@@ -724,7 +728,8 @@ export async function deckOpen(env, board) {
     await waitMarks(s, ["boardReady"]);
     await netIdle(s);
     await s.page.waitForTimeout(LOOK_MS);
-    const btn = s.page.locator(".bp-front .bp-btn.primary");
+    // the project page's first source still to read: the open unit's, or the first loose one
+    const btn = s.page.locator(".pp-unit.open .pp-sname, .pp-loose .pp-sname").first();
     const r = await toCardAndPage(env, s, "deck-open", btn);
     return { scenario: "deck-open", variant: "board-page", t: r.t, extra: r.extra,
       w: windowOf(r.d), net: summarizeNet(r.d), pageErrors: s.errors.splice(0), console: takeConsole(s) };
@@ -736,7 +741,9 @@ export async function reviewOpen(env) {
   const s = await session(env, ["homeDoors", "homeLibrary"]);
   try {
     await homeReady(s, env);
-    const btn = s.page.locator(".home-review button.home-primary:not([disabled])");
+    // Today's Start review, or the bar's Review when the day is clear
+    const start = s.page.locator(".td-review .td-primary");
+    const btn = (await start.count()) ? start : s.page.locator(".topnav .tn-tab", { hasText: "Review" });
     await btn.waitFor();
     const a = await snapshot(s);
     const clickTs = await nextEventTs(s, "click");
@@ -787,7 +794,7 @@ const latStats = (lat) => {
   const sorted = [...lat].sort((x, y) => x - y);
   return { ms: r1(sorted[Math.floor(sorted.length / 2)]), p90: r1(sorted[Math.min(sorted.length - 1, Math.ceil(0.9 * sorted.length) - 1)]), max: r1(sorted[sorted.length - 1]) };
 };
-export async function boardPage(env, t, text = "the variance shrinks") {
+export async function boardPage(env, t) {
   const s = await session(env, ["view", "firstCanvas"]);
   try {
     await s.page.goto(pdfUrl(env.base, t), { waitUntil: "domcontentloaded" });
@@ -851,34 +858,17 @@ export async function boardPage(env, t, text = "the variance shrinks") {
     await boardUp.waitFor();
     await netIdle(s);
     await s.page.waitForTimeout(400);
-    // near its top: the ask line floats over the foot of the page, and a long log runs under it
-    await boardUp.locator(".note-read, textarea.note-edit").first().click({ position: { x: 60, y: 16 } });
-    await s.page.waitForFunction(() => document.activeElement && document.activeElement.matches("textarea.note-edit"));
-    await s.page.waitForTimeout(400);
-    await lats();
-    const a2 = await snapshot(s), ra2 = await rooms();
-    await profiled(env, s, "board-page-log", async () => {
-      await s.page.keyboard.type(text, { delay: 90 });
-      await s.page.waitForTimeout(400);
-    });
-    const b2 = await snapshot(s), rb2 = await rooms();
-    const d2 = await delta(s, a2, b2);
-    const typeLat = await lats();
-    // `typed`: the log's box holds what was typed, so roomRenders 0 is over keys that reached it
-    const typed = await s.page.evaluate((x) => { const el = document.activeElement; return el && el.matches("textarea.note-edit") && el.value.includes(x) ? 1 : 0; }, text);
-    await s.page.keyboard.press("Escape");
-    const logTyping = { scenario: "board-page", variant: "log-typing", t: latStats(typeLat),
-      extra: { keys: text.length, typed, commitsPerKey: r1(d2.commits / text.length), roomRenders: rb2 - ra2, keyLat: typeLat.map(r1) },
-      w: windowOf(d2), pageErrors: s.errors.splice(0), console: takeConsole(s) };
 
     // the plan is the store's plan:<board>, read by the board page and not the route
     await s.page.waitForTimeout(600);
-    await boardUp.locator(".bp-btn.quiet", { hasText: "Details" }).first().dispatchEvent("click");
-    const pin = boardUp.locator(".bp-acts .bp-btn.quiet", { hasText: "Pin" });
-    await pin.waitFor();
+    // a star already on is turned off and on again, so five stars elsewhere never stop the write
+    const starred = await boardUp.locator(".pp-star.on").count();
+    const pin = boardUp.locator(starred ? ".pp-star.on" : ".pp-star").first();
+    await pin.waitFor({ state: "attached" });
     await s.page.waitForTimeout(400);
     const a4 = await snapshot(s), ra4 = await rooms();
     const was = await pin.getAttribute("aria-pressed");
+    const label = (await pin.getAttribute("aria-label")).replace(/^(Unstar|Star) /, "");
     const planned = await profiled(env, s, "board-page-plan", async () => {
       const said = [];
       for (const want of was === "true" ? ["false", "true"] : ["true", "false"]) {
@@ -887,7 +877,7 @@ export async function boardPage(env, t, text = "the variance shrinks") {
           // the click itself: the open thread floats over the foot of the page, where the cover's buttons can sit
           pin.dispatchEvent("click"),
         ]);
-        await s.page.waitForFunction((w) => { const b = document.querySelector(".desk-at .bp-acts .bp-btn[aria-pressed]"); return !!b && b.getAttribute("aria-pressed") === w; }, want);
+        await s.page.waitForFunction(([w, id]) => { const b = [...document.querySelectorAll(".desk-at .pp-star")].find((x) => x.getAttribute("aria-label")?.endsWith(id)); return !!b && b.getAttribute("aria-pressed") === w; }, [want, label]);
         said.push(answer.ok() ? 1 : 0);
         await s.page.waitForTimeout(400);
       }
@@ -898,7 +888,7 @@ export async function boardPage(env, t, text = "the variance shrinks") {
     const planWrite = { scenario: "board-page", variant: "plan-write", t: { ms: 0 },
       extra: { saved: planned.reduce((p, v) => p + v, 0), planWrites: d4.resources.filter((x) => /\/plan\//.test(pathOf(x.name))).length, roomRenders: rb4 - ra4 },
       w: windowOf(d4), pageErrors: s.errors.splice(0), console: takeConsole(s) };
-    return [keyH, dragFiles, logTyping, planWrite];
+    return [keyH, dragFiles, planWrite];
   } finally { await s.close(); }
 }
 

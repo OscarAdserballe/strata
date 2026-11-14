@@ -18,6 +18,7 @@ const GRADES = "'card_grade','card_answer'";
 
 /** Events stay authoritative: edits invalidate the activity fold, while an append folds only new rows. */
 export function ensureProjections(db: DatabaseSync): void {
+  const hoursNew = !db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='activity_hours'").get();
   db.exec(`
     CREATE TABLE IF NOT EXISTS activity_meta (id INTEGER PRIMARY KEY, watermark INTEGER NOT NULL, latest INTEGER NOT NULL, reset INTEGER NOT NULL);
     INSERT OR IGNORE INTO activity_meta VALUES (1,0,0,1);
@@ -25,6 +26,7 @@ export function ensureProjections(db: DatabaseSync): void {
     CREATE TABLE IF NOT EXISTS activity_views (board TEXT, resource TEXT, at INTEGER, PRIMARY KEY(board,resource));
     CREATE TABLE IF NOT EXISTS activity_cards (board TEXT, card TEXT, seen INTEGER, done INTEGER, PRIMARY KEY(board,card));
     CREATE TABLE IF NOT EXISTS activity_bench (deck TEXT PRIMARY KEY);
+    CREATE TABLE IF NOT EXISTS activity_hours (hour INTEGER PRIMARY KEY, ms REAL NOT NULL, cards INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS review_dirty (card TEXT PRIMARY KEY);
     CREATE TABLE IF NOT EXISTS review_schedule (card TEXT PRIMARY KEY, rung INTEGER, at INTEGER, due_at INTEGER);
     CREATE INDEX IF NOT EXISTS events_board_activity ON events(event,json_extract(props,'$.board'),id);
@@ -55,6 +57,8 @@ export function ensureProjections(db: DatabaseSync): void {
       INSERT OR IGNORE INTO review_dirty VALUES (${row}.id);
     END;`);
   }
+  // Hours, not days: only the client knows the reader's midnight. A new table is filled by one refold.
+  if (hoursNew) db.exec("UPDATE activity_meta SET reset=1 WHERE id=1");
   if (!db.prepare("SELECT value FROM settings WHERE key='review-projection-v1'").get()) {
     db.exec("INSERT OR IGNORE INTO review_dirty SELECT id FROM cards; INSERT INTO settings VALUES ('review-projection-v1','1');");
   }
@@ -67,7 +71,7 @@ export function syncActivity(db: DatabaseSync): void {
   try {
     let from = Number(meta.watermark), to = Number(meta.latest);
     if (meta.reset) {
-      db.exec("DELETE FROM activity_read; DELETE FROM activity_views; DELETE FROM activity_cards; DELETE FROM activity_bench;");
+      db.exec("DELETE FROM activity_read; DELETE FROM activity_views; DELETE FROM activity_cards; DELETE FROM activity_bench; DELETE FROM activity_hours;");
       from = 0; to = Number(prep(db, "SELECT COALESCE(MAX(id),0) n FROM events").get()!.n);
     }
     const board = "COALESCE(json_extract(props,'$.board'),'')";
@@ -89,6 +93,11 @@ export function syncActivity(db: DatabaseSync): void {
       ON CONFLICT(board,card) DO UPDATE SET seen=MAX(seen,excluded.seen),done=MAX(done,excluded.done)`).run(from,to);
     prep(db, `INSERT OR IGNORE INTO activity_bench SELECT DISTINCT json_extract(props,'$.deck') FROM events
       WHERE id>? AND id<=? AND event IN ('card_keep','card_unkeep','bench_open') AND json_extract(props,'$.deck') IS NOT NULL`).run(from,to);
+    prep(db, `INSERT INTO activity_hours SELECT ts/3600000,
+      SUM(CASE WHEN event='read_progress' THEN COALESCE(json_extract(props,'$.ms'),0) ELSE 0 END),
+      SUM(CASE WHEN event IN (${GRADES}) THEN 1 ELSE 0 END) FROM events
+      WHERE id>? AND id<=? AND event IN ('read_progress',${GRADES}) GROUP BY 1
+      ON CONFLICT(hour) DO UPDATE SET ms=ms+excluded.ms,cards=cards+excluded.cards`).run(from,to);
     prep(db, "UPDATE activity_meta SET watermark=?,latest=?,reset=0 WHERE id=1").run(to,to);
     db.exec("RELEASE activity_sync");
   } catch (e) { db.exec("ROLLBACK TO activity_sync; RELEASE activity_sync"); throw e; }

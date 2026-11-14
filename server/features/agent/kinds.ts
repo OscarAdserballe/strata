@@ -282,11 +282,12 @@ function planContext(b: Board, srcs: Map<string, SourceRow>): string {
     return s ? `${idOf("source", s.id)} "${titleOf(s)}"${s.done_at ? " (finished)" : ""}` : `pair ${item}`;
   };
   const placed = new Set<string>();
-  const lines = [`# Plan · ${b.title}`, `purpose: ${b.purpose || "(none set)"}`, "", "## Groups"];
+  const proj = q.boardPurpose.get(b.id);
+  const lines = [`# Plan · ${b.title}`, `purpose: ${b.purpose || "(none set)"}`, `ends: ${proj?.ends_at || "(no end)"}${proj?.archived_at ? ` · archived ${new Date(proj.archived_at).toISOString().slice(0, 10)}` : ""}`, "", "## Groups"];
   for (const g of groups) {
     const items = places.filter((p) => p.group_id === g.id).sort((x, y) => (x.ord ?? 0) - (y.ord ?? 0));
     items.forEach((p) => placed.add(p.item));
-    lines.push(`- ${idOf("group", g.id)} **${g.name}**`, ...items.map((p) => `  - ${itemName(p.item)}${p.pinned ? " · pinned" : ""}`));
+    lines.push(`- ${idOf("group", g.id)} **${g.name}**${g.by_date ? ` · by ${g.by_date}` : ""}`, ...items.map((p) => `  - ${itemName(p.item)}${p.pinned ? " · pinned" : ""}`));
   }
   if (!groups.length) lines.push("None yet.");
   const loose = [...srcs.keys()].filter((rid) => !placed.has(rid) && !pairs.some((p) => p.resource_id === rid && placed.has(p.id)));

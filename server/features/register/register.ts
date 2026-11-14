@@ -4,10 +4,12 @@ import { q } from "../repo.ts";
 import { kindOf } from "../sources/blobs.ts";
 import { deckTotals } from "../decks/decks.ts";
 import { INBOX_TYPE } from "../boards/unfiled.ts";
-import type { KeptAt, RegisterEntry, RegisterOverview, RegisterResponse, RegisterStatus } from "../../../shared/types/index.ts";
+import type { KeptAt, ProjectEntry, RegisterEntry, RegisterOverview, RegisterResponse, RegisterStatus } from "../../../shared/types/index.ts";
 
 const WEEK = 7 * 864e5;
 export const KEPT_WINDOW_DAYS = 14;
+const HOURS_DAYS = 190;
+const ACTIVE_READ_MS = 5 * 60_000;
 
 export function registerOf(): RegisterResponse {
   const rows = q.allResources.all();
@@ -81,6 +83,7 @@ export function registerOf(): RegisterResponse {
       kept: keptN,
       cards,
       waiting: !r.done_at && keptN === 0,
+      lastAt: Math.max(p?.at ?? 0, viewed.get(r.id) ?? 0),
     };
   });
 
@@ -104,7 +107,30 @@ export function registerOf(): RegisterResponse {
   const keptRecent: KeptAt[] = recentKeeps
     .map((k) => ({ boardId: boardOfDeck.get(k.course) ?? null, at: k.created_at }));
 
-  return { entries, overview, keptRecent };
+  const projects = new Map<string, ProjectEntry>();
+  for (const b of q.projectsAll.all()) projects.set(b.id, {
+    id: b.id, title: b.title, purpose: b.purpose ?? "", endsAt: b.ends_at ?? "", archivedAt: b.archived_at ?? null,
+    touchedAt: b.touched_at ?? null, groups: [], places: {},
+  });
+  for (const g of q.groupsAll.all()) projects.get(g.board_id)?.groups.push({ id: g.id, name: g.name, ord: g.ord, byDate: g.by_date ?? "" });
+  for (const p of q.placesAll.all()) {
+    const pr = projects.get(p.board_id);
+    if (pr) pr.places[p.item] = { group: p.group_id, ord: p.ord, pinned: p.pinned !== 0 };
+  }
+  // Hour by hour for the grid's six months; before that, only how many days were active.
+  const cut = (Math.floor(Date.now() / 864e5) - HOURS_DAYS) * 24;
+  const hours: RegisterResponse["hours"] = [];
+  const older = new Map<number, { ms: number; cards: number }>();
+  let last = 0;
+  for (const h of q.hoursAll.all()) {
+    if (h.hour >= cut) { hours.push(h.hour - last, Math.round(h.ms / 60_000), h.cards); last = h.hour; continue; }
+    const d = older.get(Math.floor(h.hour / 24)) ?? { ms: 0, cards: 0 };
+    d.ms += h.ms; d.cards += h.cards;
+    older.set(Math.floor(h.hour / 24), d);
+  }
+  const daysBefore = [...older.values()].filter((d) => d.cards > 0 || d.ms >= ACTIVE_READ_MS).length;
+
+  return { entries, overview, keptRecent, projects: [...projects.values()], hours, daysBefore };
 }
 
 function lastTouch(

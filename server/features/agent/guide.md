@@ -53,9 +53,12 @@ Example:
 { "board": "thesis", "key": "plan-2026-10-17-a", "ops": [
   { "op": "add_group", "name": "RQ2 retrieval vs long context" },
   { "op": "place", "id": "src_7f3a", "group": "RQ2 retrieval vs long context" },
+  { "op": "set_group", "id": "RQ2 retrieval vs long context", "by": "2026-12-01" },
   { "op": "append_log", "text": "Grouped the long-context papers under RQ2." }
 ] }
 ```
+
+A board is the reader's project: its groups are its units, read in order, and a source in no group is a loose end. `set_project` gives the project an end date or archives it; `set_group` dates a unit. Dates are YYYY-MM-DD.
 
 ## uploads
 

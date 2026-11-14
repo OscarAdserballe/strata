@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ComponentProps, type ReactNode, type RefObject } from "react";
+import { useEffect, useState, type ReactNode, type RefObject } from "react";
 import { StrataAPI, StrataWhy, StrataWireDown } from "../../data/api.ts";
 import { store as roomStore, useEntity } from "../../data/store.ts";
 import { boardKey, marksKey, planKey } from "../../data/entities/boards.ts";
@@ -7,19 +7,19 @@ import { decks as wholeDecks } from "../../data/entities/decks.ts";
 import { pageCount } from "../../engines/pdf/thumbnails.ts";
 import DistilProgress from "../../capabilities/progress/DistilProgress.tsx";
 import type { DistilWork } from "../../capabilities/progress/distil.ts";
-import BoardVerbs from "../../capabilities/sources/BoardVerbs.tsx";
+import type { BoardActions } from "../../capabilities/sources/useBoardActions.ts";
 import ResplitDialog, { warmResplit } from "../../capabilities/sources/Resplit.tsx";
 import type { useSourceActions } from "../../capabilities/sources/useSourceActions.ts";
-import BoardPage from "./BoardPage.jsx";
+import ProjectPage from "./ProjectPage.tsx";
 import BookRoom from "./BookRoom.tsx";
-import BoardNotes from "./BoardNotes.tsx";
 import { useBoardNotes } from "./boardNotes.ts";
 import { boardTiles, type BoardState, type DeckRow, type Pair, type QGroup, type Tile, type Touch } from "./boardTiles.ts";
 import { useBoardPageUp } from "./summon.ts";
 
 export type { DistilWork };
+import type { BoardPlan, ResourceMeta } from "../../../shared/types/index.ts";
 const asTouch = (t: unknown) => t as Record<string, Touch>;
-type Board = BoardState & { board: { id: string; title?: string }; plan?: unknown; pairs?: Pair[] };
+type Board = BoardState & { board: { id: string; title?: string }; plan?: BoardPlan; pairs?: Pair[]; resources?: ResourceMeta[] };
 
 export interface BoardSurfaceProps {
   boardId: string | null;
@@ -35,9 +35,8 @@ export interface BoardSurfaceProps {
   deskHome: boolean;
   distilWork: DistilWork;
   sourceActions: ReturnType<typeof useSourceActions>;
-  boardActions: ComponentProps<typeof BoardVerbs>["actions"];
+  boardActions: BoardActions;
   tools: ReactNode;
-  logExtra?: ReactNode;
   pageRef: RefObject<HTMLElement | null>;
   current(): string | null;
   onBoardState(st: unknown): void;
@@ -79,8 +78,7 @@ export default function BoardSurface(p: BoardSurfaceProps) {
   const { text: notes } = useBoardNotes();
   const [resplit, setResplit] = useState<Tile | null>(null);
   useEffect(() => { setResplit(null); }, [boardId]);
-  const leftRef = useRef<HTMLElement | null>(null);
-  const livePlan = useEntity<unknown>(planKey(boardId || ""));
+  const livePlan = useEntity<BoardPlan>(planKey(boardId || ""));
   if (!up || !board || !boardId) return null;
   const activeId = boardId;
 
@@ -166,10 +164,6 @@ export default function BoardSurface(p: BoardSurfaceProps) {
   }
   const planApi = planCalls(planWrite);
 
-  const log = (
-    <BoardNotes current={p.current} leftRef={leftRef} pageRef={p.pageRef}
-      toast={toast} toastWhy={toastWhy} onBoardState={p.onBoardState}>{p.logExtra}</BoardNotes>
-  );
   const verbs = { onOpen: openTile, onDel: deleteTile, onAside: asideTile, onDistil: redistilTile, onKeep: p.onKeep, onKeepWarm: p.onKeepWarm, onRenamed: renameTile, onDone: doneTile };
   const resplitting = resplit && resplit.rid ? (
     <ResplitDialog board={activeId} rid={resplit.rid} onClose={() => setResplit(null)} onError={toastWhy}
@@ -183,12 +177,12 @@ export default function BoardSurface(p: BoardSurfaceProps) {
 
   if (!tiles.some((t) => t.gap)) return (
     <div className="desk-at">
-      <BoardPage boardId={activeId} tiles={tiles} plan={livePlan ?? board.plan} planApi={planApi}
-        head={p.title} over={over} onBack={p.onBack} onBoards={p.onBoards} onWarm={p.onWarm}
+      <ProjectPage boardId={activeId} tiles={tiles} plan={livePlan ?? board.plan ?? null} planApi={planApi}
+        resources={roomStore.get<Board>(boardKey(activeId))?.resources ?? board.resources ?? []}
+        head={p.title} over={over} onBack={p.onBack} onWarm={p.onWarm}
         {...verbs} onDistilWarm={(t: Tile) => { if (t.rid) warmResplit(activeId, t.rid); }}
-        onAdd={p.onAdd} issues={issues} onCram={p.onCram} onCramWarm={p.onCramWarm}
-        boardVerbs={<BoardVerbs board={{ id: activeId, title: p.title }} actions={p.boardActions} className="bp-link" />}
-        log={log} work={workLines} tools={p.tools} leftRef={leftRef} />
+        issues={issues} onCram={p.onCram} onCramWarm={p.onCramWarm}
+        boardActions={p.boardActions} work={workLines} tools={p.tools} />
       {resplitting}
     </div>
   );

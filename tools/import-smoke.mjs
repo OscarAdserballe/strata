@@ -35,7 +35,7 @@ try {
   await page.reload();
   // extraction is a server-side job, slow on a loaded machine: wait on the job, then on the dashboard
   await until(async()=>(await request(`/api/imports/${job.id}`)).import.stage==='awaiting_groups',{what:'the book to be extracted and waiting for groups',timeout:120_000});
-  await page.getByRole('button',{name:'boards',exact:true}).click();
+  await page.getByRole('navigation',{name:'Strata'}).getByRole('button',{name:'Today',exact:true}).click();
   const row=page.getByRole('region',{name:'Imports'}).locator('li').filter({hasText:file.name});
   await row.getByRole('button',{name:'Choose study groups',exact:true}).click();
   const modal=page.getByRole('dialog',{name:'Group import smoke'});
@@ -52,7 +52,7 @@ try {
   const corrupt={name:'Broken source.pdf',mimeType:'application/pdf',buffer:Buffer.from('not a PDF')};
   await page.goto(`${base}/?board=${board.id}`);
   await page.getByLabel('Add source files',{exact:true}).setInputFiles([second,corrupt]);
-  await page.getByRole('button',{name:'boards',exact:true}).click();
+  await page.getByRole('navigation',{name:'Strata'}).getByRole('button',{name:'Today',exact:true}).click();
   // the broken PDF waits on a server-side job, so its ceiling is the job's, not a UI step's
   const secondRow=page.getByRole('region',{name:'Imports'}).locator('li').filter({hasText:second.name});
   await secondRow.getByRole('button',{name:'Open book',exact:true}).waitFor({timeout:15_000});

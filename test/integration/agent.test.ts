@@ -309,7 +309,7 @@ test("apply's schema names every op's fields, so no guide read is needed first",
   const shapes = tools.find((t) => t.name === "apply")!.inputSchema.properties.ops.items.anyOf;
   const of = (op: string) => shapes.find((s) => (s.properties.op as { enum: string[] }).enum[0] === op)!;
   assert.deepEqual(shapes.map((s) => (s.properties.op as { enum: string[] }).enum[0]),
-    ["add_question", "append_log", "set_purpose", "set_handle", "add_group", "add_milestone", "set_milestone", "reply_note", "add_deck", "edit_cards", "delete_deck", "place"]);
+    ["add_question", "append_log", "set_purpose", "set_handle", "add_group", "set_project", "set_group", "add_milestone", "set_milestone", "reply_note", "add_deck", "edit_cards", "delete_deck", "place"]);
   assert.deepEqual(Object.keys(of("place").properties), ["op", "id", "group", "milestone", "pinned"]);
   assert.deepEqual(of("place").required, ["op", "id"]);
   assert.deepEqual(of("add_question").required, ["op", "front"]);

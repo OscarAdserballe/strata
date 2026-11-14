@@ -4,7 +4,7 @@ import { begin as journey } from "../platform/rum.ts";
 import { boardNow } from "../surfaces/board/handle.ts";
 import { boardPage } from "../surfaces/board/summon.ts";
 import { readerNow } from "../surfaces/reader/handle.ts";
-import { type KeepsFrame, type RoomRoute, keepsRoute, navigate, navigation, routeSearch } from "./routes.ts";
+import { type KeepsFrame, type LibraryTab, type RoomRoute, keepsRoute, navigate, navigation, readRoute, routeSearch } from "./routes.ts";
 import { room } from "./room.ts";
 export interface KeepsEditing { id: string; side: string }
 export interface Screens {
@@ -14,9 +14,14 @@ export interface Screens {
   keeps: readonly KeepsFrame[];
   keepsEditing: KeepsEditing | null;
   libraryQuery: string;
+  libraryTab: LibraryTab;
 }
 const NONE: readonly KeepsFrame[] = Object.freeze([]);
-let now: Screens = { library: false, review: false, cram: false, keeps: NONE, keepsEditing: null, libraryQuery: "" };
+const bootTab = (): LibraryTab => {
+  const r = typeof location === "undefined" ? null : readRoute(location.search);
+  return r && r.kind === "library" && r.tab ? r.tab : "today";
+};
+let now: Screens = { library: false, review: false, cram: false, keeps: NONE, keepsEditing: null, libraryQuery: "", libraryTab: bootTab() };
 const heard = new Set<() => void>();
 function put(patch: Partial<Screens>): void {
   now = { ...now, ...patch };
@@ -56,14 +61,20 @@ export const closeKeeps = (): void => setKeeps((frames) => frames.slice(0, -1));
 export const descendKeeps = (frame: KeepsFrame & { title?: string }): void => setKeeps((frames) => frames.concat([frame]));
 export const putKeepsAway = (): void => setKeeps(NONE);
 
+export function showLibraryTab(tab: LibraryTab = "today"): void { if (now.libraryTab !== tab) put({ libraryTab: tab }); }
+/** Today, Projects or a new project: over whatever is open, and out of a review. */
+export function openTab(tab: LibraryTab): void {
+  navigate({ kind: "library", ...(tab === "today" ? {} : { tab }) });
+  put({ libraryTab: tab, library: true, review: false });
+}
 export function setLibrary(on: boolean | ((was: boolean) => boolean)): void {
   const show = typeof on === "function" ? on(now.library) : on;
-  if (show) navigate({ kind: "library" });
+  if (show) navigate({ kind: "library", ...(now.libraryTab === "today" ? {} : { tab: now.libraryTab }) });
   else if (room.activeId()) navigate(roomRoute());
   showLibrary(show);
 }
 export function setReviewing(on: boolean): void {
-  navigate({ kind: on ? "review" : "library" });
+  navigate(on ? { kind: "review" } : { kind: "library", ...(now.libraryTab === "today" ? {} : { tab: now.libraryTab }) });
   showReview(on);
   showLibrary(true);
 }
