@@ -1,4 +1,5 @@
-export type RoomRoute = { kind: "library" } | { kind: "review" }
+export type LibraryTab = "today" | "projects" | "new";
+export type RoomRoute = { kind: "library"; tab?: LibraryTab } | { kind: "review" }
   | { kind: "board"; board: string; resource?: string; pair?: string }
   | { kind: "cram"; board: string }
   | { kind: "keeps"; board?: string; deck?: string; from?: "library" };
@@ -8,6 +9,7 @@ export function readRoute(search: string): RoomRoute {
   const p = new URLSearchParams(search);
   const view = p.get("view");
   if (view === "review") return { kind: "review" };
+  if (view === "projects" || view === "new") return { kind: "library", tab: view };
   const board = validId(p.get("board"));
   if (view === "keeps") {
     const deck = board ? validId(p.get("deck")) : undefined;
@@ -21,6 +23,7 @@ export function readRoute(search: string): RoomRoute {
 export function routeSearch(route: RoomRoute): string {
   const p = new URLSearchParams();
   if (route.kind === "review") p.set("view", "review");
+  if (route.kind === "library" && route.tab && route.tab !== "today") p.set("view", route.tab);
   if (route.kind === "board") {
     p.set("board", route.board);
     if (route.resource) p.set("resource", route.resource);

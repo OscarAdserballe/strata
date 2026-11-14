@@ -434,6 +434,9 @@ export const StrataAPI = {
   deckIgnored: (slug: string) => api<DeckIgnored>(`/api/decks/${slug}/ignored`),
   tidyCard: (b: { type?: string; faces: Record<string, unknown> }) =>
     call<{ faces: Record<string, unknown> }>("POST", "/api/cards/tidy", b),
+  /** Claude's first draft of a project's units; it writes nothing. */
+  planDraft: (board: string) =>
+    call<{ units: { name: string; items: string[] }[]; loose: string[]; drafted?: boolean }>("POST", `/api/boards/${board}/plan/draft`, {}),
   deckKeeps: (slug: string) => api<DeckKeepsResponse>(`/api/decks/${slug}/keeps`),
   boardCollection: (id: string) => api<BoardCollectionResponse>(`/api/boards/${id}/collection`),
   libraryCollection: () => api<LibraryCollectionResponse>("/api/collection"),

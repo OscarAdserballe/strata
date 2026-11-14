@@ -21,6 +21,7 @@ import { registerRoutes } from "./register/routes.ts";
 import { tidyRoutes } from "./author/tidy.ts";
 import { libraryRoutes } from "./library/routes.ts";
 import { planRoutes } from "./plan/routes.ts";
+import { draftRoutes } from "./plan/draft.ts";
 import { imageRoutes } from "./images/routes.ts";
 import { dashboardRoutes } from "./dashboard/routes.ts";
 
@@ -47,6 +48,7 @@ export const apiRoutes: Route[] = [
   ...reviewRoutes,
   ...tidyRoutes,
   ...planRoutes,
+  ...draftRoutes,
   ...imageRoutes,
   ...dashboardRoutes,
   ...agentRoutes,

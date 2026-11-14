@@ -58,11 +58,12 @@ export const plan = {
 type Place = BoardPlan["places"][string];
 const NO_PLACE: Place = { group: null, milestone: null, pinned: false, ord: null };
 type PlacePatch = Partial<Place>;
-type GroupPatch = Partial<BoardPlan["groups"][number]>;
+type GroupPatch = Partial<Omit<BoardPlan["groups"][number], "id" | "ord">> & { move?: number };
+type ProjectPatch = { endsAt?: string; archived?: boolean };
 type MilestonePatch = Partial<Omit<BoardPlan["milestones"][number], "doneAt">> & { move?: number; done?: boolean };
 
 /** A group's whole order; after a 409: your order first, then what the other device added since. */
-export function planOrder(gid: string, items: string[]): PlanWrite {
+export function planOrder(gid: string | null, items: string[]): PlanWrite {
   return {
     method: "PUT", path: "/order", body: { group: gid, items }, whole: true,
     guess: (p) => {
@@ -86,10 +87,21 @@ const unplace = (p: BoardPlan, field: "group" | "milestone", id: string): BoardP
 
 export const planGestures = {
   purpose: (v: string): PlanWrite => ({ method: "PUT", path: "/purpose", body: { purpose: v }, whole: true, guess: (p) => ({ ...p, purpose: v.trim() }) }),
-  addGroup: (): PlanWrite => ({ method: "POST", path: "/groups", body: { name: "New group" } }),
+  project: (patch: ProjectPatch): PlanWrite => ({
+    method: "PATCH", path: "/project", body: patch,
+    guess: (p) => ({ ...p, ...(patch.endsAt !== undefined ? { endsAt: patch.endsAt } : {}),
+      ...(patch.archived !== undefined ? { archivedAt: patch.archived ? p.archivedAt ?? Date.now() : null } : {}) }),
+  }),
+  addGroup: (name = "New unit", byDate = ""): PlanWrite => ({ method: "POST", path: "/groups", body: { name, ...(byDate ? { byDate } : {}) } }),
   group: (gid: string, patch: GroupPatch = {}): PlanWrite => ({
     method: "PATCH", path: `/groups/${gid}`, body: patch,
-    guess: (p) => ({ ...p, groups: p.groups.map((g) => (g.id === gid ? { ...g, ...patch } : g)) }),
+    guess: (p) => {
+      const { move, ...rest } = patch;
+      const gs = p.groups.slice().sort((a, b) => a.ord - b.ord).map((g) => (g.id === gid ? { ...g, ...rest } : g));
+      const i = gs.findIndex((g) => g.id === gid), j = i + (move || 0);
+      if (move && i >= 0 && j >= 0 && j < gs.length) [gs[i], gs[j]] = [gs[j], gs[i]];
+      return { ...p, groups: gs.map((g, ord) => ({ ...g, ord })) };
+    },
   }),
   delGroup: (gid: string): PlanWrite => ({
     method: "DELETE", path: `/groups/${gid}`,
@@ -125,13 +137,14 @@ export function planCalls(write: (w: PlanWrite) => Promise<PlanAnswer | null>) {
   const idOf = (r: PlanAnswer | null) => (r ? r.id ?? null : null);
   return {
     purpose: (v: string) => write(g.purpose(v)),
-    addGroup: () => write(g.addGroup()).then(idOf),
+    project: (patch: ProjectPatch) => write(g.project(patch)),
+    addGroup: (name?: string, byDate?: string) => write(g.addGroup(name, byDate)).then(idOf),
     group: (gid: string, patch?: GroupPatch) => write(g.group(gid, patch)),
     delGroup: (gid: string) => write(g.delGroup(gid)),
     addMilestone: () => write(g.addMilestone()).then(idOf),
     milestone: (mid: string, patch?: MilestonePatch) => write(g.milestone(mid, patch)),
     delMilestone: (mid: string) => write(g.delMilestone(mid)),
-    order: (gid: string, items: string[]) => write(g.order(gid, items)),
+    order: (gid: string | null, items: string[]) => write(g.order(gid, items)),
     place: (item: string, patch?: PlacePatch) => write(g.place(item, patch)),
   };
 }

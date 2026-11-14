@@ -1,29 +1,27 @@
 import { useEffect, useRef, useState } from "react";
 import type { DragEvent } from "react";
-import type { RegisterEntry } from "../../../shared/types/index.ts";
 import { StrataWhy } from "../../data/api.ts";
 import { PHONE } from "../../platform/device.js";
-import { courseOf, ago } from "../../shell/format.js";
-import Timeline from "../../capabilities/progress/Timeline.tsx";
-import KeptChart from "../../capabilities/progress/KeptChart.tsx";
+import { courseOf } from "../../shell/format.js";
 import Suggest from "../../capabilities/feedback/Suggest.tsx";
-import CardIcon from "../../shell/CardIcon.tsx";
 import HomeTools, { type Compose } from "./HomeTools.tsx";
 import Ask from "../../capabilities/ask/Ask.tsx";
 import { useProvideHere } from "../../shell/here.ts";
 import { sinceLoad } from "../../platform/rum.ts";
-import { refreshRegister, useBoardList, useRegister } from "../../data/entities/register.ts";
+import { useBoardList, useRegister } from "../../data/entities/register.ts";
 import type { ReviewStrip } from "../../data/entities/review.ts";
-import { useSourceActions } from "../../capabilities/sources/useSourceActions.ts";
 import type { BoardActions } from "../../capabilities/sources/useBoardActions.ts";
 import BoardVerbs from "../../capabilities/sources/BoardVerbs.tsx";
 import { ImportActivity } from "../../capabilities/sources/ImportsPanel.tsx";
 import { AddSourceForm, UNFILED, addSource } from "../../capabilities/sources/AddSource.tsx";
+import TopNav from "../../shell/TopNav.tsx";
+import type { LibraryTab } from "../../shell/routes.ts";
+import Today from "./Today.tsx";
+import ProjectsIndex from "./ProjectsIndex.tsx";
+import NewProject from "./NewProject.tsx";
 
 const BOOTED_HOME = typeof location !== "undefined" && !new URLSearchParams(location.search).get("board");
 let homeTimed = false;
-
-type Cut = "all" | "waiting" | "unfiled" | "to-review";
 
 function until(ts: number | null | undefined) {
   if (!ts) return "";
@@ -72,9 +70,12 @@ export interface LibraryHomeProps {
   onLogout: () => void;
   adminPath?: string | null;
   onCardsChanged?: () => void;
+  tab: LibraryTab;
+  onTab(tab: LibraryTab): void;
+  onAdd(kind: "file" | "link", study?: boolean): void;
 }
 
-function LibraryHome({ covered = false, q, setQ, onOpen, onResume, onWarm, onNew, onClose, boardActions, onSourceMutation, review, onReview, onLogout, adminPath, onCardsChanged }: LibraryHomeProps) {
+function LibraryHome({ covered = false, q, setQ, onOpen, onWarm, onNew, onClose, boardActions, review, onReview, onLogout, adminPath, onCardsChanged, tab, onTab, onAdd }: LibraryHomeProps) {
   useProvideHere(() => ({ surface: "library" }));
   const composeRef = useRef<Compose | null>(null);
   const libraryAsk = covered ? null : <Ask thread="library" lazy name="the library’s thread" placeholder="ask anything, or paste a passage to talk about…"
@@ -84,14 +85,7 @@ function LibraryHome({ covered = false, q, setQ, onOpen, onResume, onWarm, onNew
   const boards = useBoardList();
   useEffect(() => { if (reg && BOOTED_HOME && !homeTimed) { homeTimed = true; sinceLoad("home"); } }, [reg]);
   useEffect(() => { if (regError) setErr(StrataWhy(regError, "couldn't read the register")); }, [regError]);
-  const sourceActions = useSourceActions({
-    onState: (id, state, verb) => { if (onSourceMutation) onSourceMutation(id, state, verb); },
-    onError: (x, said) => setErr(StrataWhy(x, said)),
-  });
-  const [cut, setCut] = useState<Cut>("all");
-  const [filing, setFiling] = useState<string | null>(null);
   const [boardsOpen, setBoardsOpen] = useState(false);
-  const askEl = useRef<HTMLInputElement>(null);
   const dragDepth = useRef(0);
   const [dragHover, setDragHover] = useState(false);
   const fileDrop = {
@@ -117,23 +111,10 @@ function LibraryHome({ covered = false, q, setQ, onOpen, onResume, onWarm, onNew
   };
   const dropHint = dragHover ? <div className="dropzone">drop to add — files land unfiled</div> : null;
 
-  const reload = () => refreshRegister();
-
   const threads = (boards || []).filter((b) => b.type !== "inbox");
-  const keptBy = new Map<string, number>();
-  for (const e of (reg ? reg.entries : [])) if (e.kept) keptBy.set(e.boardId, (keptBy.get(e.boardId) || 0) + e.kept);
   const hero = threads[0] || null;
   // warm only after home's own reads, so warming never queues ahead of them on the server
   useEffect(() => { if (hero && onWarm && reg && review) onWarm(hero.id, true); }, [hero && hero.id, !!reg, !!review]);
-  const warmOn = (id: string, resume: boolean) => (onWarm ? { onPointerEnter: () => onWarm(id, resume), onPointerDown: () => onWarm(id, resume) } : {});
-
-  function file(e: RegisterEntry, to: string | null) {
-    setFiling(null); setErr("");
-    const dest = to ? boards.find((b) => b.id === to) : null;
-    void sourceActions.file(e, to ? { id: to, title: dest ? dest.title : "" } : null);
-  }
-  function renameSource(e: RegisterEntry, name: string) { setErr(""); void sourceActions.rename(e.boardId, e.resourceId, name); }
-  function deleteSource(e: RegisterEntry) { setErr(""); void sourceActions.remove(e.boardId, e.resourceId); }
 
   const downloaded = boards.filter((b) => {
     try { return !!localStorage.getItem(`strata.offline.${b.id}`); } catch { return false; }
@@ -170,104 +151,19 @@ function LibraryHome({ covered = false, q, setQ, onOpen, onResume, onWarm, onNew
     </div>
   );
 
-  const ov = reg ? reg.overview : null;
-  const all = reg ? reg.entries : [];
-  const waiting = all.filter((e) => e.waiting);
-
-  const cutOf = (e: RegisterEntry) => cut === "all" ? true
-    : cut === "unfiled" ? e.waiting && e.unfiled
-    : cut === "to-review" ? e.status === "to-review"
-    : e.waiting;
-  const shown = all.filter(cutOf);
-
-  const counts: Record<Cut, number> = {
-    all: all.length,
-    waiting: waiting.length,
-    unfiled: waiting.filter((e) => e.unfiled).length,
-    "to-review": all.filter((e) => e.status === "to-review").length,
-  };
-  const CUTS: [Cut, string][] = [
-    ["all", "everything"],
-    ["waiting", "not gone through"],
-    ["unfiled", "unfiled"],
-    ["to-review", "to review"],
-  ];
-
-
+  const tabBody = tab === "projects" ? <ProjectsIndex reg={reg} onOpen={(id) => onOpen(id)} onWarm={onWarm ? (id) => onWarm(id, false) : undefined} onNew={() => onTab("new")} />
+    : tab === "new" ? <NewProject onCancel={() => onTab("projects")} onCreated={(id) => onOpen(id)} />
+    : <Today reg={reg} review={review} onReview={onReview} onOpen={(id, rid) => (rid ? onOpen(id, rid) : onOpen(id))}
+        onWarm={onWarm ? (id) => onWarm(id, false) : undefined} onProjects={() => onTab("projects")} error={err} />;
 
   return (
-    <div className="veil launcher calm-home" {...fileDrop}>
+    <div className="veil launcher home2" {...fileDrop}>
       {dropHint}
-      <div className="lwrap">
-        <header className="lhead">
-          <span className="ltitle">Strata</span>
-          <span className="lsub">the reading room</span>
-          <span className="grow" />
-          <Suggest />
-          {adminPath ? <button className="home-quiet" onClick={() => location.assign(adminPath)}>Admin</button> : null}
-          <button className="home-quiet" onClick={onLogout}>Log out</button>
-          {onClose ? <button className="home-quiet" aria-label="Close library" onClick={onClose}>✕</button> : null}
-        </header>
-
-        <main className="home-content">
-          <HomeTools onCardsChanged={onCardsChanged} composeRef={composeRef} />
-          {libraryAsk}
-          <section className="home-doors" aria-label="Continue and review">
-            <div className="home-continue">
-              <div className="home-eyebrow">Pick up where you left off</div>
-              <h1>{hero ? hero.title : "Your reading room"}</h1>
-              <p>{hero?.lastRead
-                ? <>{hero.lastRead.filename}{hero.lastRead.deepest > 0 && hero.lastRead.deepest < 100 ? ` · ${hero.lastRead.deepest}% in` : ""}</>
-                : hero ? `${(hero.resources || []).length} sources${keptBy.get(hero.id) ? ` · ${keptBy.get(hero.id)} cards kept` : ""}` : "A place for what you want to understand."}</p>
-              {hero ? <button className="home-primary" {...warmOn(hero.id, true)} onClick={() => (onResume || onOpen)(hero.id)}>Continue board <span aria-hidden="true">→</span></button>
-                : <button className="home-primary" onClick={() => setBoardsOpen(true)}>Create your first board <span aria-hidden="true">→</span></button>}
-              <button className="home-quiet home-all-boards" aria-expanded={boardsOpen} aria-controls="home-boards" onClick={() => setBoardsOpen(!boardsOpen)}>All boards <span>{threads.length}</span></button>
-            </div>
-            <div className="home-review">
-              <div className="home-eyebrow">A little, every day</div>
-              <h2>Review</h2>
-              <p>{!review ? "Checking your cards…" : review.total ? `Kept card${review.total === 1 ? "" : "s"} ready to revisit.` : review.nextDueAt ? `All caught up. Next cards ${until(review.nextDueAt)}.` : "Cards you keep return here."}</p>
-              <button className="home-primary home-secondary" disabled={!review} onClick={onReview}><CardIcon />{review?.total ? `Review ${review.total} card${review.total === 1 ? "" : "s"}` : "Open review"}<span aria-hidden="true">→</span></button>
-              {reg ? <div className="home-review-chart"><KeptChart times={(reg.keptRecent || []).map((k) => k.at)} days={7} compact label="Cards kept" /></div> : null}
-            </div>
-          </section>
-
-          <section id="home-boards" className="home-boards" aria-label="All boards" hidden={!boardsOpen}>
-            <div className="home-section-head"><h2>Your boards</h2><button className="home-quiet" onClick={() => setBoardsOpen(false)}>Close</button></div>
-            {threads.map((b) => <div className="home-board-row" key={b.id}>
-              <BoardVerbs board={b} actions={boardActions}
-                name={<button className="home-board-name" {...warmOn(b.id, false)} onClick={() => onOpen(b.id)}>{b.title}</button>}
-                between={<span className="home-board-age">{ago(b.touchedAt)}</span>} />
-            </div>)}
-            <form className="home-new-board" onSubmit={(e) => { e.preventDefault(); if (q.trim()) onNew(); }}>
-              <input ref={askEl} aria-label="New board name" value={q} placeholder="Name a new board…" onChange={(e) => setQ(e.target.value)} />
-              <button className="rg-take-b" disabled={!q.trim()}>Create board</button>
-            </form>
-          </section>
-
-          <ImportActivity onOpen={onOpen} />
-          <section className="reg home-library" aria-label="Your library">
-            <div className="home-section-head"><h2>Library</h2><span className="home-note">Everything you’ve brought into the room</span></div>
-            <AddSourceForm />
-            {err ? <div className="rg-err" role="alert">{err}</div> : null}
-            <div className="rg-cuts" aria-label="Library filters">
-              {CUTS.map(([k, label]) => <button key={k} className={"rg-cut" + (cut === k ? " on" : "")} aria-pressed={cut === k} onClick={() => setCut(k)}>{label}<b>{counts[k]}</b></button>)}
-            </div>
-            {reg === null ? <div className="rg-wait">Reading the library…</div>
-              : <Timeline entries={shown} boards={threads} onOpen={onOpen} onFile={file}
-                  onRename={renameSource} onDelete={deleteSource} filing={filing} setFiling={setFiling}
-                  empty={!all.length ? "Save a link or add a file. You can choose a board later."
-                    : cut === "unfiled" ? "Nothing unfiled — everything has a board."
-                    : cut === "to-review" ? "Every deck you’ve been through has been curated."
-                    : "Nothing waiting. Everything has been gone through."} />}
-          </section>
-
-          <section className="home-history" aria-label="Reading timeline">
-            <div className="home-section-head"><h2>Your reading, lately</h2>
-              {ov ? <span className="rg-week">{ov.landed} landed<i>·</i>{ov.through} gone through<i>·</i><b><CardIcon /> {ov.kept} cards kept</b><span className="home-week-label"> this week</span></span> : null}
-            </div>
-          </section>
-        </main>
+      <TopNav here={tab === "today" ? "today" : "projects"} onAdd={onAdd} adminPath={adminPath} onSignOut={onLogout}
+        tools={onClose ? <button className="tn-more" aria-label="Close library" onClick={onClose}>✕</button> : null} />
+      <div className="home2-scroll">
+        {tabBody}
+        <ImportActivity onOpen={onOpen} />
       </div>
     </div>
   );

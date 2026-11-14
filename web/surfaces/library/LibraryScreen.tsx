@@ -2,7 +2,8 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import LibraryHome from "./LibraryHome.tsx";
 import { room, useHeldId, useRoomHost } from "../../shell/room.ts";
-import { CRAM, REVIEW, screensNow, setLibrary, setLibraryQuery, setReviewing, useScreens, useScreensUp } from "../../shell/screens.ts";
+import { CRAM, REVIEW, openTab, screensNow, setLibrary, setLibraryQuery, setReviewing, useScreens, useScreensUp } from "../../shell/screens.ts";
+import { addSourceFrom } from "../../capabilities/sources/BoardPicker.tsx";
 import { readRoute, routeBoard } from "../../shell/routes.ts";
 import { signOut } from "../../shell/StatusBar.tsx";
 import { useAdminPath } from "../../shell/session.ts";
@@ -18,7 +19,7 @@ const close = () => setLibrary(false);
 export default function LibraryScreen() {
   const host = useRoomHost("library");
   const up = useScreensUp();
-  const q = useScreens().libraryQuery;
+  const { libraryQuery: q, libraryTab: tab } = useScreens();
   const held = useHeldId();
   const review = useReviewStrip();
   const adminPath = useAdminPath();
@@ -41,6 +42,8 @@ export default function LibraryScreen() {
       review={review} onReview={() => { journey("review.open"); setReviewing(true); }}
       onSourceMutation={room.sourceMutated}
       onLogout={() => signOut((e) => room.toastWhy(e, "couldn't sign out"))}
-      adminPath={adminPath} onClose={held ? close : null} boardActions={room.boardActions} />,
+      adminPath={adminPath} onClose={held ? close : null} boardActions={room.boardActions}
+      tab={tab} onTab={openTab}
+      onAdd={(kind, study) => addSourceFrom(kind, { activeId: room.activeId(), libraryUp: true, newBoard: room.newBoard }, study)} />,
     host);
 }

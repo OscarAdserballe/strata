@@ -35,4 +35,10 @@ export const planRepo = {
   delPlace: stmt("DELETE FROM board_places WHERE board_id = ? AND item = ?"),
   delPlacesOfResourcePairs: stmt("DELETE FROM board_places WHERE board_id = ? AND item IN (SELECT id FROM pairs WHERE board_id = ? AND resource_id = ?)"),
   delBoardPlaces: stmt("DELETE FROM board_places WHERE board_id = ?"),
+  // What a draft of units is made from: names and outlines, never a source's text.
+  draftSources: stmt<{ id: string; filename: string | null; created_at: number }>(
+    "SELECT id,filename,created_at FROM resources INDEXED BY resources_metadata WHERE board_id = ? ORDER BY created_at ASC, id ASC"),
+  draftSections: stmt<{ resource_id: string; label: string | null; title: string | null }>(
+    `SELECT s.resource_id, s.label, t.title FROM sections s LEFT JOIN trees t ON t.section_id = s.id
+     WHERE s.board_id = ? ORDER BY s.resource_id, s.ord`),
 };

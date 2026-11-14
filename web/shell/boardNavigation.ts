@@ -13,7 +13,7 @@ import { warmPdf } from "../engines/pdf/runtime.ts";
 import { PHONE } from "../platform/device.js";
 import { begin as journey, end as arrived } from "../platform/rum.ts";
 import { keepsFrames, navigate, readRoute, routeBoard, routeSearch, type Navigation } from "./routes.ts";
-import { putKeepsAway, screensNow, setKeeps, setLibraryQuery, showCram, showLibrary, showReview } from "./screens.ts";
+import { putKeepsAway, screensNow, setKeeps, setLibraryQuery, showCram, showLibrary, showLibraryTab, showReview } from "./screens.ts";
 import { holdPair } from "./pair.ts";
 
 type Wire = any;
@@ -59,6 +59,7 @@ export function useBoardNavigation(room: BoardNavigationRoom) {
     const over = route.kind === "cram" ? { cram: true } : route.kind === "keeps" ? { bench: keepsFrames(route) } : {};
     if (!on) {
       navigate(route, "none"); showLibrary(true);
+      if (route.kind === "library") showLibraryTab(route.tab);
       if (route.kind === "keeps") land(over);
       else if (stack.length && stack[0].library) putKeepsAway();
       return;
