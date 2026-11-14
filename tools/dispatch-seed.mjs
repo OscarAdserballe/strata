@@ -20,59 +20,70 @@ async function tool(name, args) {
 
 // ---------- pages: plain synthetic HTML, the way Claude would post them ----------
 const STYLE = `<style>
-body{margin:0;background:#fbfaf7;color:#22211f;font:16px/1.6 Georgia,"Times New Roman",serif}
-main{max-width:760px;margin:44px auto 80px;padding:0 24px}
-h1{font-size:31px;line-height:1.15;margin:0 0 16px} h3{font-size:19px;margin:0 0 10px}
-p.lede{font-size:17px;color:#45433f;margin:0 0 20px}
-.box{border:1px solid #e3e0da;border-radius:10px;background:#fff;padding:16px 19px;margin:0 0 18px}
-.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.col{border:1px solid #e3e0da;border-radius:8px;padding:10px 11px}
-.col small{display:block;font:11px/1.2 ui-monospace,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase;color:#77736b;margin-bottom:6px}
-.step{font:13px/1.2 system-ui,sans-serif;border:1px solid #e9e6df;border-radius:5px;padding:5px 8px;margin:5px 0;background:#fdfcfa}
-.step.bad{border:1px dashed #d9826b;color:#b4533b;text-align:center;background:#fdf3ef}
-.step.new{border-color:#e6b69f}
-.code{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:0 0 18px}
-pre{margin:0;background:#2a2622;color:#e8e2d8;border-radius:8px;padding:12px 13px;font:13px/1.5 ui-monospace,Menlo,monospace;white-space:pre-wrap}
-pre .c{color:#9a9184} pre mark{background:#f6e6a8;color:#2a2622}
-.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;border-top:1px solid #e3e0da;padding-top:13px;font:14px/1.4 system-ui,sans-serif}
-.facts small{display:block;font:10px ui-monospace,Menlo,monospace;letter-spacing:.08em;text-transform:uppercase;color:#77736b}
-.res{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin:0 0 18px}
-.res .box{margin:0} .red{color:#b4533b} .green{color:#3d7a52}
+body{margin:0;background:#fff;color:#141414;font:16px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{padding:44px 52px 40px;display:flex;flex-direction:column;gap:22px}
+.ref{font-size:12px;color:#777} .ref::before{content:"■ ";font-size:10px}
+h1{font-size:30px;line-height:1.18;letter-spacing:-.015em;margin:0} h3{font-size:13.5px;margin:0}
+p{margin:0} p.lede{font-size:16px;line-height:24px;color:#333}
+.cap{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#9a9a9a}
+.box{border:1px solid #e3e0e7;border-radius:10px;background:#fff;padding:12px 14px;display:flex;flex-direction:column;gap:5px;font-size:13px;line-height:19px;color:#333}
+.box h3{font-size:14.5px}
+.today{background:#fbfbfc;border:1px solid #ebe9ee;border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
+.col{background:#fff;border:1px solid #dedbe3;border-radius:9px;padding:10px;display:flex;flex-direction:column;gap:6px}
+.col small{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#9a9a9a}
+.step{font-size:11.5px;background:#fdfcf9;border:1px solid #e3e0e7;border-radius:7px;padding:5px 7px;color:#555}
+.step.dim{opacity:.5} .step.new{border-color:#e3a99b}
+.step.bad{border:1px dashed #e3a99b;color:#b8563f;text-align:center;background:#fdf3f0;padding:9px}
+.code{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+pre{margin:0;background:#1c1c1e;color:#e8e6e1;border-radius:9px;padding:11px 13px;font:11.5px/18.4px ui-monospace,Menlo,monospace;white-space:pre-wrap}
+pre .c{color:#8a8a84} pre .r{color:#f0a090} pre .g{color:#a8d0a8} pre mark{background:#fdecb0;color:#1c1c1e;border-radius:3px;padding:0 2px}
+.opts{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:10px}
+.opt{border:1px solid #e3e0e7;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:5px;font-size:12.5px;line-height:18px;color:#555}
+.opt.pick{background:#fffbee;border:2px solid #1a1a1a;color:#222}
+.opt small{font:600 10.5px ui-monospace,Menlo,monospace;color:#9a9a9a} .opt b{font-size:13.5px;color:#141414}
+.opt .no{color:#a8432a;font-weight:600}
+.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;border-top:1px solid #e3e0e7;padding-top:14px;font-size:12.5px;color:#333}
+.facts small{display:block;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#9a9a9a;padding-bottom:3px}
+.res{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+.red{color:#a8432a} .green{color:#2d6a3e}
+ol{margin:0;padding-left:18px}
 </style>`;
 const page = (title, body) => `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${STYLE}</head><body><main>${body}</main></body></html>`;
 
-const decideV1 = page("v1", `<h1>Recipe steps added by the assistant never get a photo</h1>
+const decideV1 = page("v1", `<div class="ref">RCP-128</div><h1>Steps the assistant adds never get a photo</h1>
 <p class="lede">The assistant copies the photo from the step before. I would rather it asked you which photo to use.</p>
-<div class="box"><h3>Option A · Copy the previous photo</h3><p>Quick, and often wrong when two steps look nothing alike.</p></div>
+<div class="opts"><div class="opt pick"><small>A · WHAT I'D DO</small><b>Copy the previous photo</b>Quick, and often wrong when two steps look nothing alike.</div>
+<div class="opt"><small>B</small><b>Ask which photo</b>One question per new step.</div><div class="opt"><small>C</small><b>Leave it blank</b>The page shows a gap.</div></div>
 <div class="facts"><div><small>Size</small>1 PR · about 120 lines</div><div><small>Touches</small>Step editor</div><div><small>Proof</small>One new test</div><div><small>Unsure about</small>Whether anyone notices</div></div>`);
 
-const decideV2 = page("v2", `<h1>Recipe steps added by the assistant never get a photo</h1>
+const decideV2 = page("v2", `<div class="ref">RCP-128</div><h1>Steps the assistant adds never get a photo</h1>
 <p class="lede">I'd make the assistant name a photo for every step it saves, and refuse an edit that leaves one out.</p>
-<div class="box"><h3>What happens today</h3><div class="cols">
- <div class="col"><small>1 · Recorded</small><div class="step">whisk the eggs 📷</div><div class="step">rest 10 minutes (timer only)</div><div class="step">fold in flour 📷</div></div>
+<div class="today"><div class="cap">What happens today</div><div class="cols">
+ <div class="col"><small>1 · Recorded</small><div class="step">whisk the eggs 📷</div><div class="step dim">rest 10 minutes (timer only)</div><div class="step">fold in flour 📷</div></div>
  <div class="col"><small>2 · Assistant's draft</small><div class="step">step_1 📷</div><div class="step new">step_2 · new step</div><div class="step">step_3 📷</div></div>
  <div class="col"><small>3 · Recipe page</small><div class="step">Step 1 📷</div><div class="step bad">Step 2 · no photo</div><div class="step">Step 3 📷</div></div>
 </div></div>
 <div class="code"><pre><span class="c">// today</span>
 save_recipe({ recipe })
-photos = filter(old, ids)</pre><pre><span class="c">// proposed</span>
-steps: [{ id, action, photo: 12 }]
+<span class="r">photos = filter(old, ids)</span></pre><pre><span class="c">// proposed</span>
+save_recipe({ steps: [{ id, <span class="g">photo: 12</span> }] })
 no photo → <mark>E_STEP_PHOTO_MISSING</mark></pre></div>
-<div class="cols" style="margin:0 0 18px">
- <div class="box" style="margin:0"><h3>A · Assistant picks a photo</h3><p>The photo lives in the recipe page, not in the saved steps. What I'd do.</p></div>
- <div class="box" style="margin:0"><h3>B · Copy the previous</h3><p>You turned this down in v1.</p></div>
- <div class="box" style="margin:0"><h3>C · Server matches it</h3><p>A guess by timestamp.</p></div>
+<div class="opts">
+ <div class="opt pick"><small>A · WHAT I'D DO</small><b>Assistant picks a photo per step</b>The photo lives in the recipe page, not in the saved steps.</div>
+ <div class="opt"><small>B</small><b>Copy the previous photo</b><span class="no">You turned this down in v1.</span></div>
+ <div class="opt"><small>C</small><b>Server matches it</b>A guess by timestamp.</div>
 </div>
 <div class="facts"><div><small>Size</small>1 PR · about 370 lines</div><div><small>Touches</small>Recipe tool input, prompt</div><div><small>Proof</small>Test red first · eval grader</div><div><small>Unsure about</small>The sample recipe is made up</div></div>`);
 
 const shortDecide = (h, lede, a, b) => page("v1", `<h1>${h}</h1><p class="lede">${lede}</p>
-<div class="cols" style="grid-template-columns:1fr 1fr;margin:0 0 18px"><div class="box" style="margin:0"><h3>A</h3><p>${a}</p></div><div class="box" style="margin:0"><h3>B</h3><p>${b}</p></div></div>
+<div class="opts" style="grid-template-columns:1fr 1fr"><div class="opt pick"><small>A · WHAT I'D DO</small><b>${a}</b>The smaller change.</div><div class="opt"><small>B</small><b>${b}</b>More to build.</div></div>
 <div class="facts"><div><small>Size</small>1 PR</div><div><small>Touches</small>One screen</div><div><small>Proof</small>A browser check</div><div><small>Unsure about</small>Nothing yet</div></div>`);
 
 const reviewPage = (h, added, left) => page("built", `<h1>${h}</h1>
-<div class="res"><div class="box"><h3 class="red">✗ Red on main</h3><p>The new test fails: no refusal for a step without a photo.</p></div>
-<div class="box"><h3 class="green">✓ Green on the PR</h3><p>Same test, and 74 around it. The new eval grader passes.</p></div>
-<div class="box"><h3 class="green">✓ Live eval</h3><p>Pass rate unchanged. About 0.3 more model calls a recipe.</p></div></div>
+<div class="res"><div class="box"><h3 class="red">✗ Red on main</h3>The new test fails: no refusal for a step without a photo.</div>
+<div class="box"><h3 class="green">✓ Green on the PR</h3>Same test, and 74 around it. The new eval grader passes.</div>
+<div class="box"><h3 class="green">✓ Live eval</h3>Pass rate unchanged. About 0.3 more model calls a recipe.</div></div>
 <div class="box"><h3>Added beyond the plan</h3><ol>${added.map((x) => `<li>${x}</li>`).join("")}</ol></div>
 <div class="box"><h3>Left out</h3><p>${left}</p></div>
 <div class="facts"><div><small>Size</small>+709 −45 · 17 files</div><div><small>PR</small>#3724 (made up)</div><div><small>CI</small>green</div><div><small>Merge</small>squash</div></div>`);

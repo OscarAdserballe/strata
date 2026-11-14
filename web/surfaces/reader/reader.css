@@ -48,7 +48,6 @@
 .rbar-file{color:var(--ink-soft);max-width:30vw;overflow:hidden;text-overflow:ellipsis;}
 .rbar-kind{background:var(--accent-soft);color:var(--accent-deep);border-radius:2px;padding:1.5px 4px;text-transform:uppercase;letter-spacing:.04em;}
 .rbar-grow{flex:1;}
-.rbar-ver{color:var(--ink-soft);}
 .rbar-imports{font:inherit;}
 .rbar-lbl{color:var(--ink-faint);}
 .rbar-chip{display:inline-flex;align-items:center;gap:4.3px;border-radius:7px;padding:2px 6.5px 2px 5.7px !important;background:var(--paper-3) !important;color:var(--ink) !important;border:1px solid transparent !important;}

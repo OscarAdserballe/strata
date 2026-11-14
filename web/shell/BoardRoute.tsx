@@ -272,7 +272,7 @@ export default function BoardRoute() {
   </>;
   return (
     <div className={"app" + (DISPATCH ? " dispatch" : "")} style={{ zoom: String(ui * ROOM), "--room": String(ROOM) } as React.CSSProperties}>
-      {DISPATCH ? <><DispatchPane /><div className="dispatch-room">{roomColumn}</div></> : roomColumn}
+      {DISPATCH ? <DispatchPane>{roomColumn}</DispatchPane> : roomColumn}
 
       <Layers slots={{
         veil: <>

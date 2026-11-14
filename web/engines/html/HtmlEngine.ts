@@ -21,6 +21,8 @@ export class HtmlEngine {
   private n = 0;
   private hooks: HtmlHooks;
   private layerOn: LayerIntents | null = null;
+  /** the last paint of each kind, which a frame that replaces this one must also get */
+  private drawn: { marks?: ToPage; layers?: ToPage } = {};
 
   constructor(hooks: HtmlHooks) {
     this.hooks = hooks;
@@ -29,10 +31,12 @@ export class HtmlEngine {
 
   open(host: HTMLElement, url: string): void {
     if (this.frame && this.frame.isConnected && this.frame.parentElement === host && this.url === url) return;
-    // what was asked before the frame existed still goes to it once it is ready
+    // what was asked before the frame existed still goes to it once it is ready; so does a paint the reader
+    // sent for this page while the frame it replaces was still up, since that one is about to go
     const asked = this.queued;
+    const drawn = Object.values(this.drawn).filter((m) => !asked.some((a) => a.t === m.t));
     this.close();
-    this.queued = asked;
+    this.queued = [...asked, ...drawn];
     const f = document.createElement("iframe");
     // no allow-same-origin: with it, the page could lift its own sandbox
     f.setAttribute("sandbox", "allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals allow-forms");
@@ -56,14 +60,14 @@ export class HtmlEngine {
   paint(marks: LiveMark[], open: string | null): void {
     // only the latest paint matters, so a queue before ready keeps one
     this.queued = this.queued.filter((m) => m.t !== "marks");
-    this.post({ t: "marks", marks, open });
+    this.post(this.drawn.marks = { t: "marks", marks, open });
   }
 
   /** the page draws these layers itself; what the reader does in them comes back through `on` */
   layers(items: readonly LayerItem[], on: LayerIntents, scale: number, fresh = false): void {
     this.layerOn = on;
     this.queued = this.queued.filter((m) => m.t !== "layers");
-    this.post({ t: "layers", items: [...items], scale, fresh });
+    this.post(this.drawn.layers = { t: "layers", items: [...items], scale, fresh });
   }
 
   reveal(quote: string | null, slug: string | null, box: string | null = null): Promise<boolean> {
