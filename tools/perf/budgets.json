@@ -6,7 +6,7 @@
   },
   "payloadsKB": {
     "boards": 24,
-    "register": 85,
+    "register": 100,
     "biggest-board": 75,
     "marked-board": 260
   },

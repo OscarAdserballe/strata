@@ -24,8 +24,8 @@ export const registerRepo = {
     `SELECT board_id,id,resource_id FROM pairs WHERE resource_id IS NOT NULL`),
   deckSeenAll: activity<{ slug: string; n: number }>(
     "SELECT c.course slug,COUNT(DISTINCT c.id) n FROM activity_cards a JOIN cards c ON c.id=a.card WHERE a.seen>0 GROUP BY c.course"),
-  projectsAll: stmt<{ id: string; title: string; purpose: string | null; ends_at: string | null; archived_at: number | null; created_at: number; touched_at: number | null }>(
-    "SELECT id,title,purpose,ends_at,archived_at,created_at,touched_at FROM boards WHERE (type IS NULL OR type NOT IN ('eval','inbox'))"),
+  projectsAll: stmt<{ id: string; title: string; purpose: string | null; ends_at: string | null; archived_at: number | null; touched_at: number | null }>(
+    "SELECT id,title,purpose,ends_at,archived_at,touched_at FROM boards WHERE (type IS NULL OR type NOT IN ('eval','inbox'))"),
   groupsAll: stmt<{ board_id: string; id: string; name: string; ord: number; by_date: string | null }>(
     "SELECT board_id,id,name,ord,by_date FROM board_groups ORDER BY board_id, ord ASC, created_at ASC"),
   placesAll: stmt<{ board_id: string; item: string; group_id: string | null; ord: number | null; pinned: number }>(

@@ -401,7 +401,7 @@ export interface RegisterResponse {
 /** A board as a project: its plan without milestones, for Today and the projects list. */
 export interface ProjectEntry {
   id: string; title: string; purpose: string; endsAt: string; archivedAt: number | null;
-  createdAt: number; touchedAt: number | null;
+  touchedAt: number | null;
   groups: PlanGroup[];
   places: Record<string, { group: string | null; ord: number | null; pinned: boolean }>;
 }

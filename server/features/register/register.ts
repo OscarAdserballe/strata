@@ -110,7 +110,7 @@ export function registerOf(): RegisterResponse {
   const projects = new Map<string, ProjectEntry>();
   for (const b of q.projectsAll.all()) projects.set(b.id, {
     id: b.id, title: b.title, purpose: b.purpose ?? "", endsAt: b.ends_at ?? "", archivedAt: b.archived_at ?? null,
-    createdAt: b.created_at, touchedAt: b.touched_at ?? null, groups: [], places: {},
+    touchedAt: b.touched_at ?? null, groups: [], places: {},
   });
   for (const g of q.groupsAll.all()) projects.get(g.board_id)?.groups.push({ id: g.id, name: g.name, ord: g.ord, byDate: g.by_date ?? "" });
   for (const p of q.placesAll.all()) {
