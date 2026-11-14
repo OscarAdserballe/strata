@@ -392,8 +392,10 @@ export interface RegisterResponse {
   overview: RegisterOverview;
   keptRecent: KeptAt[];
   projects: ProjectEntry[];
-  /** hours with reading or reviewing in them, oldest first; only the client knows the reader's midnight */
-  hours: ActivityHour[];
+  /** the last six months' hours with reading or reviewing in them, oldest first: only the client knows the reader's midnight */
+  hours: ActivityHours;
+  /** active days before those hours, counted in UTC days */
+  daysBefore: number;
 }
 
 /** A board as a project: its plan without milestones, for Today and the projects list. */
@@ -403,5 +405,5 @@ export interface ProjectEntry {
   groups: PlanGroup[];
   places: Record<string, { group: string | null; ord: number | null; pinned: boolean }>;
 }
-/** `hour` is ms since the epoch / 3,600,000. */
-export interface ActivityHour { hour: number; ms: number; cards: number }
+/** Flat triples, since there can be thousands: hours since the last one (the first since the epoch), minutes read, cards graded. */
+export type ActivityHours = number[];

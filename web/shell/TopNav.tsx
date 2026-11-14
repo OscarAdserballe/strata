@@ -52,7 +52,7 @@ export default function TopNav(p: TopNavProps) {
   const reg = useEntity<RegisterResponse>(REGISTER);
   held = reg;
   const review = useReviewStrip();
-  const days = useMemo(() => (reg && reg.hours ? foldDays(reg.hours) : null), [reg && reg.hours]);
+  const days = useMemo(() => (reg && reg.hours ? foldDays(reg.hours, reg.daysBefore ?? 0) : null), [reg && reg.hours]);
   const [menu, setMenu] = useState<"add" | "more" | null>(null);
   const [study, setStudy] = useState(true);
   useEffect(() => {

@@ -21,7 +21,7 @@ export interface ReviewOverviewProps {
 /** The tab before the cards: one start, which projects are in it, the coming week and where the kept cards stand. */
 export default function ReviewOverview({ state, cards, skip, onSkip, onStart }: ReviewOverviewProps) {
   const reg = useEntity<RegisterResponse>(REGISTER);
-  const days = useMemo(() => (reg && reg.hours ? foldDays(reg.hours) : null), [reg && reg.hours]);
+  const days = useMemo(() => (reg && reg.hours ? foldDays(reg.hours, reg.daysBefore ?? 0) : null), [reg && reg.hours]);
   const by = new Map<string, ReviewCard[]>();
   for (const c of cards) { const k = projectOf(c); by.set(k, (by.get(k) ?? []).concat(c)); }
   const rows = [...by].sort((a, b) => b[1].length - a[1].length);

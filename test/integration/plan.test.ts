@@ -319,6 +319,6 @@ test("the register lists each board as a project with its units and places, and 
   assert.deepEqual([p.title, p.endsAt, p.archivedAt, p.groups.map((g: { name: string; byDate: string }) => [g.name, g.byDate]), p.places[rid]],
     ["Listed project", "2026-12-14", null, [["Unit", "2026-12-01"]], { group: gid, ord: 0, pinned: true }]);
   assert.ok(!reg.projects.some((x: { title: string }) => /unfiled|inbox/i.test(x.title)), "the inbox is not a project");
-  assert.ok(Array.isArray(reg.hours), "the register carries the activity hours");
+  assert.ok(Array.isArray(reg.hours) && typeof reg.daysBefore === "number", "the register carries the activity hours");
   assert.equal(reg.entries.find((e: { resourceId: string }) => e.resourceId === rid).lastAt, 0, "a source never opened has no lastAt");
 });

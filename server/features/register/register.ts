@@ -8,6 +8,8 @@ import type { KeptAt, ProjectEntry, RegisterEntry, RegisterOverview, RegisterRes
 
 const WEEK = 7 * 864e5;
 export const KEPT_WINDOW_DAYS = 14;
+const HOURS_DAYS = 190;
+const ACTIVE_READ_MS = 5 * 60_000;
 
 export function registerOf(): RegisterResponse {
   const rows = q.allResources.all();
@@ -115,9 +117,20 @@ export function registerOf(): RegisterResponse {
     const pr = projects.get(p.board_id);
     if (pr) pr.places[p.item] = { group: p.group_id, ord: p.ord, pinned: p.pinned !== 0 };
   }
-  const hours = q.hoursAll.all().map((h) => ({ hour: h.hour, ms: Math.round(h.ms), cards: h.cards }));
+  // Hour by hour for the grid's six months; before that, only how many days were active.
+  const cut = (Math.floor(Date.now() / 864e5) - HOURS_DAYS) * 24;
+  const hours: RegisterResponse["hours"] = [];
+  const older = new Map<number, { ms: number; cards: number }>();
+  let last = 0;
+  for (const h of q.hoursAll.all()) {
+    if (h.hour >= cut) { hours.push(h.hour - last, Math.round(h.ms / 60_000), h.cards); last = h.hour; continue; }
+    const d = older.get(Math.floor(h.hour / 24)) ?? { ms: 0, cards: 0 };
+    d.ms += h.ms; d.cards += h.cards;
+    older.set(Math.floor(h.hour / 24), d);
+  }
+  const daysBefore = [...older.values()].filter((d) => d.cards > 0 || d.ms >= ACTIVE_READ_MS).length;
 
-  return { entries, overview, keptRecent, projects: [...projects.values()], hours };
+  return { entries, overview, keptRecent, projects: [...projects.values()], hours, daysBefore };
 }
 
 function lastTouch(

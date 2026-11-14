@@ -34,7 +34,7 @@ export default function Today({ reg, review, onReview, onOpen, onResume, onWarm,
   const [why, setWhy] = useState("");
   const [, setKept] = useState(0);
   const views = useMemo<ProjectView[]>(() => (reg ? reg.projects.map((p) => projectView(p, reg.entries)) : []), [reg]);
-  const days = useMemo(() => (reg ? foldDays(reg.hours ?? []) : null), [reg]);
+  const days = useMemo(() => (reg ? foldDays(reg.hours ?? [], reg.daysBefore ?? 0) : null), [reg]);
   useEffect(() => { setUnstarred([]); }, [reg]);
   const reading = readingList(views, keptAt).filter((r) => !unstarred.includes(r.source.id));
   const active = views.filter((v) => !v.project.archivedAt)

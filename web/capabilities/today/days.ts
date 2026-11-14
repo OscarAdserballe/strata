@@ -1,5 +1,5 @@
 // The day counter: which of the reader's own days had reading or reviewing in them, folded from hourly totals.
-import type { ActivityHour } from "../../../shared/types/index.ts";
+import type { ActivityHours } from "../../../shared/types/index.ts";
 
 /** A day counts once it has a review in it or five minutes of reading. */
 export const ACTIVE_READ_MS = 5 * 60_000;
@@ -21,15 +21,16 @@ export interface Days {
 export const dayKey = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 const active = (d: Day | undefined): boolean => !!d && (d.cards > 0 || d.ms >= ACTIVE_READ_MS);
 
-export function foldDays(hours: readonly ActivityHour[], now: Date = new Date()): Days {
+export function foldDays(hours: ActivityHours, daysBefore = 0, now: Date = new Date()): Days {
   const byDay = new Map<string, Day>();
-  for (const h of hours) {
-    const key = dayKey(new Date(h.hour * 3_600_000));
+  for (let i = 0, hour = 0; i + 2 < hours.length; i += 3) {
+    hour += hours[i];
+    const key = dayKey(new Date(hour * 3_600_000));
     const d = byDay.get(key) ?? { key, ms: 0, cards: 0 };
-    d.ms += h.ms; d.cards += h.cards;
+    d.ms += hours[i + 1] * 60_000; d.cards += hours[i + 2];
     byDay.set(key, d);
   }
-  let total = 0;
+  let total = daysBefore;
   for (const d of byDay.values()) if (active(d)) total++;
   const back = (n: number): Date => new Date(now.getFullYear(), now.getMonth(), now.getDate() - n);
   let streak = 0;

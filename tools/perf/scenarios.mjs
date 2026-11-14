@@ -627,7 +627,7 @@ export async function cardsOnly(env, t) {
     // read every frame, so the first time it holds is the frame that drew it
     const POOLED = /^cards only · (\d+) cards/;
     const line = (want, what) => s.page.waitForFunction(([w, re, n]) => {
-      const seg = [...document.querySelectorAll(".seg")].map((e) => new RegExp(re).exec(e.textContent || "")).find(Boolean);
+      const seg = [...document.querySelectorAll(".tn-solo, .seg")].map((e) => new RegExp(re).exec(e.textContent || "")).find(Boolean);
       if (w ? !seg : seg) return false;
       return n ? Number(seg[1]) : performance.now();
     }, [want, POOLED.source, what === "cards"], { polling: "raf", timeout: 30_000 }).then((h) => h.jsonValue());
