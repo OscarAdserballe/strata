@@ -106,84 +106,6 @@ async function pressUntilGone(form, button, error, tries = 3) {
   return { presses, outcome };
 }
 
-const notesRoundtrip = {
-  name: "notes-roundtrip",
-  what: "type the board's log in bursts while saves answer late and out of order; leave and reopen — the server has the last text, and \"saved\" was never shown for text it did not have",
-  checks: {
-    last: "the server holds the last text typed",
-    reopened: "the reopened board shows it",
-    saved: "\"saved\" was never shown for text the server did not have",
-  },
-  async run(t) {
-    const b = await board(t, "Race notes");
-    const page = await t.open({ latency: true, reorder: { writes: true } });
-    const isSave = (e) => e.method === "PUT" && e.path === `/api/boards/${b.id}/notes`;
-    // each time the log says "saved", compare its box with what the server holds
-    const claims = [];
-    await page.exposeBinding("__raceSaved", (_src, shown) => {
-      const held = t.sql("SELECT text FROM board_notes WHERE board_id = ?", b.id)[0]?.text ?? "";
-      claims.push({ shown, held });
-    });
-    await page.goto(`${t.base}/?board=${b.id}`);
-    const log = page.locator("textarea.note-edit");
-    await log.waitFor();
-    await page.evaluate(() => {
-      let was = document.querySelector(".note-head .saved")?.textContent ?? null;
-      new MutationObserver(() => {
-        const said = document.querySelector(".note-head .saved")?.textContent ?? null;
-        const box = document.querySelector("textarea.note-edit");
-        if (said === "saved" && was !== "saved" && box) window.__raceSaved(box.value);
-        was = said;
-      }).observe(document.body, { subtree: true, childList: true, characterData: true });
-    });
-    const words = ["ledger", "margin", "quorum", "lattice", "harbor", "cipher", "meadow", "anvil", "tundra", "prism"];
-    const dice = t.rng("words");
-    const burst = (n) => Array.from({ length: n }, () => words[Math.floor(dice() * words.length)]).join(" ") + ". ";
-    // the save's answer is pinned to land in a pause shorter than the debounce, not left to the dice
-    const holdNextSave = () => {
-      const from = t.net.seq;
-      return t.net.hold((e) => isSave(e) && e === t.net.entries.find((x) => x.id > from && isSave(x)));
-    };
-    await log.click();
-    let typed = "", out = null;
-    for (let i = 0; i < 3; i++) {
-      const text = burst(5 + Math.floor(dice() * 4));
-      const cut = text.indexOf(" ", Math.floor(text.length / 2)) + 1;
-      const hold = i < 2 ? holdNextSave() : null;
-      const leaves = i < 2 ? t.net.when(isSave) : null;
-      let rest = text.slice(cut);
-      await log.pressSequentially(text.slice(0, cut), { delay: 40 });
-      if (out) {
-        let parked = false;
-        out.hold.arrived(1).then(() => { parked = true; }, () => {});
-        while (!parked && rest.length > 1) { await log.pressSequentially(rest[0]); rest = rest.slice(1); await sleep(40); }
-        await out.hold.arrived(1);
-        out.hold.release();
-        await out.save.done;
-        await sleep(400);
-      }
-      await log.pressSequentially(rest, { delay: 40 });
-      typed += text;
-      out = hold ? { hold, save: await leaves } : null;
-    }
-    await page.getByRole("button", { name: "‹ All boards" }).click();
-    const boards = page.getByRole("button", { name: /^All boards(?:\s|$)/ });
-    await boards.waitFor();
-    await t.net.idle(500);
-    if (await boards.getAttribute("aria-expanded") !== "true") await boards.click();
-    await page.getByRole("region", { name: "All boards", exact: true }).getByRole("button", { name: b.title, exact: true }).click();
-    await page.locator(".note-head").waitFor();
-    await t.net.idle(500);
-    const held = t.sql("SELECT text FROM board_notes WHERE board_id = ?", b.id)[0]?.text ?? "";
-    const shownNow = await page.evaluate(() => (document.querySelector("textarea.note-edit")?.value
-      ?? document.querySelector(".note-read")?.innerText ?? ""));
-    t.check("last", squash(held) === squash(typed), `server has ${JSON.stringify(squash(held).slice(-60))}`);
-    t.check("reopened", squash(shownNow) === squash(typed), `page shows ${JSON.stringify(squash(shownNow).slice(-60))}`);
-    const lies = claims.filter((c) => c.shown !== c.held);
-    t.check("saved", !lies.length,
-      lies.length ? `${lies.length} of ${claims.length} — box ${JSON.stringify(lies[0].shown.slice(-40))}, server ${JSON.stringify(lies[0].held.slice(-40))}` : "");
-  },
-};
 
 // hold the board reads that left before the highlight, highlight, then let the stale answers land
 const highlightDuringRefresh = {
@@ -262,31 +184,32 @@ const highlightDuringRefresh = {
 
 const planDoubleMove = {
   name: "plan-double-move",
-  what: "move one milestone down twice, quickly, while plan answers come back out of order; the order on screen is the server's",
+  what: "move one unit down twice, quickly, while plan answers come back out of order; the order on screen is the server's",
   checks: {
     applied: "the server applied both moves",
     order: "the page shows the server's order",
   },
   async run(t) {
     const b = await board(t, "Race plan");
-    const names = ["Alpha milestone", "Bravo milestone", "Charlie milestone"];
-    for (const name of names) await t.api(`/api/boards/${b.id}/plan/milestones`, "POST", { name });
+    const names = ["Alpha unit", "Bravo unit", "Charlie unit"];
+    for (const name of names) await t.api(`/api/boards/${b.id}/plan/groups`, "POST", { name });
     const page = await t.open({ latency: true, reorder: { writes: true } });
     await page.goto(`${t.base}/?board=${b.id}`);
-    const rows = page.locator("ol.bp-check > li");
+    const rows = page.locator(".pp-unit");
     await rows.nth(2).waitFor();
     await t.net.idle(400);
-    const order = () => page.evaluate(() => [...document.querySelectorAll("ol.bp-check > li input.bp-mname")].map((i) => i.value));
+    const order = () => page.evaluate(() => [...document.querySelectorAll(".pp-unit .pp-uname")].map((i) => i.textContent));
     const moveLater = async (name) => {
       const i = (await order()).indexOf(name);
       if (i < 0) throw new Error(`${name} is not on the page`);
-      await rows.nth(i).getByRole("button", { name: "Move later", exact: true }).click();
+      await rows.nth(i).locator(".pp-urow").hover();
+      await rows.nth(i).getByRole("button", { name: "Move unit down", exact: true }).click();
     };
     // hold the first move's answer across the second gesture, so the interleaving does not depend on load
-    const isMove = (e) => e.method === "PATCH" && e.path.startsWith(`/api/boards/${b.id}/plan/milestones/`);
+    const isMove = (e) => e.method === "PATCH" && e.path.startsWith(`/api/boards/${b.id}/plan/groups/`);
     const firstAnswer = t.net.hold((e) => isMove(e) && e === t.net.entries.find(isMove));
     const second = t.net.when((e) => isMove(e) && e.body?.move === 1 && t.net.entries.filter(isMove).length === 2);
-    const shownAt = (want, i) => page.waitForFunction(({ want, i }) => [...document.querySelectorAll("ol.bp-check > li input.bp-mname")].map((el) => el.value)[i] === want, { want, i });
+    const shownAt = (want, i) => page.waitForFunction(({ want, i }) => [...document.querySelectorAll(".pp-unit .pp-uname")].map((el) => el.textContent)[i] === want, { want, i });
     await moveLater(names[0]);
     await shownAt(names[0], 1);
     await moveLater(names[0]);
@@ -299,7 +222,7 @@ const planDoubleMove = {
     await t.net.idle(600);
     await sleep(800);
     const shown = await order();
-    const byOrd = (plan) => plan.milestones.slice().sort((x, y) => x.ord - y.ord).map((m) => m.name);
+    const byOrd = (plan) => plan.groups.slice().sort((x, y) => x.ord - y.ord).map((m) => m.name);
     const held = byOrd((await t.api(`/api/boards/${b.id}`)).plan);
     // pinned only if the answer that landed last is the stale one (the plan after the first move alone)
     const firstMove = t.net.entries.find(isMove);
@@ -312,57 +235,6 @@ const planDoubleMove = {
   },
 };
 
-// several deletes leave at once and answer out of order: no older answer may bring a deleted source back
-const selectSeveral = {
-  name: "select-several",
-  what: "on the board page, select three of four sources and move them into a group, then select two and delete them at once while their answers come back out of order",
-  checks: {
-    grouped: "the server holds the three in the group, in the order they stand in the list",
-    deleted: "the server holds neither deleted source and both kept ones",
-    rail: "the rail lists the two kept sources and neither deleted one",
-  },
-  async run(t) {
-    const b = await board(t, "Race select");
-    const made = [];
-    for (const n of ["one", "two", "three", "four"]) {
-      made.push(await prose(t, b.id, `race-pick-${n}-${t.seed}.md`, essay(`Picked source ${n}`, `This is source ${n} of the selection.`)));
-    }
-    const { id: gid } = await t.api(`/api/boards/${b.id}/plan/groups`, "POST", { name: "Picked group" });
-    const page = await t.open({ latency: true, reorder: { writes: true } });
-    await page.goto(`${t.base}/?board=${b.id}`);
-    const rail = page.locator(".bp-rail");
-    const item = (s) => rail.locator(".bp-it", { hasText: s.label }).first();
-    for (const s of made) await item(s).waitFor();
-    await t.net.idle(400);
-
-    const [one, two, three, four] = made;
-    await rail.getByRole("button", { name: "Select several", exact: true }).click();
-    await item(one).click();
-    await item(three).click({ modifiers: ["Shift"] });
-    await page.getByLabel("Move to group").selectOption({ label: "Picked group" });
-    await t.net.idle(600);
-    const grouped = (plan) => Object.entries(plan.places || {}).filter(([, pl]) => pl.group === gid)
-      .sort((x, y) => x[1].ord - y[1].ord).map(([it]) => it);
-    const inGroup = grouped((await t.api(`/api/boards/${b.id}`)).plan);
-    const want = [one, two, three].map((s) => s.rid);
-    t.check("grouped", inGroup.join() === want.join(), `group holds ${inGroup.join(", ") || "nothing"}; wanted ${want.join(", ")}`);
-
-    await item(one).click({ modifiers: ["ControlOrMeta"] });
-    await item(three).click({ modifiers: ["ControlOrMeta"] });
-    await page.getByRole("button", { name: "Delete 2", exact: true }).click();
-    await page.getByRole("button", { name: "Delete 2 and all their cards?", exact: true }).click();
-    await t.net.idle(800);
-    await sleep(800);
-
-    const state = await t.api(`/api/boards/${b.id}`);
-    const held = state.resources.map((r) => r.id);
-    t.check("deleted", !held.includes(one.rid) && !held.includes(three.rid) && held.includes(two.rid) && held.includes(four.rid),
-      `server holds ${made.filter((s) => held.includes(s.rid)).map((s) => s.label).join(" · ")}`);
-    const listed = (await rail.locator(".bp-it").allInnerTexts()).map(squash);
-    const has = (s) => listed.some((x) => x.includes(s.label));
-    t.check("rail", has(two) && has(four) && !has(one) && !has(three), `rail: ${listed.join(" · ")}`);
-  },
-};
 
 // a grade is recognised by what it says, not how it travels, so a fixed transport still passes
 const GRADES = 6;
@@ -511,10 +383,10 @@ const reviewGrades = {
 function deleteOpenSource({ name, last }) {
   return {
     name,
-    what: `open a source (the ${last ? "last" : "first"} of two, each with a deck), open the library over it, delete that source there, close the library; the room is back on the board's home and shows nothing of it`,
+    what: `open a source (the ${last ? "last" : "first"} of two, each with a deck), raise the project page over it, delete that source there; the room is back on the board's home and shows nothing of it`,
     checks: {
       reader: "the reader no longer shows the deleted source",
-      rail: "the board page no longer lists it",
+      rail: "the project page no longer lists it",
       home: "the room is back on the board's home, not on the source beside it",
       drill: "the card column holds none of the deleted deck's cards",
       memory: "the kept deck's place on this device is untouched",
@@ -543,15 +415,13 @@ function deleteOpenSource({ name, last }) {
       await handUp(page, "Doomed card");
       await page.locator(".q").filter({ hasText: "Doomed card" }).first().waitFor();
       await t.net.idle(400);
-      await page.getByRole("button", { name: "boards", exact: true }).click();
-      const library = page.getByRole("region", { name: "Your library" });
-      const row = library.locator(".rg-row").filter({ has: page.getByRole("link", { name: doomed.filename, exact: true }) });
-      await row.getByRole("button", { name: `Actions for ${doomed.filename}`, exact: true }).click();
-      await row.getByRole("menuitem", { name: "delete", exact: true }).click();
-      await row.getByRole("menuitem", { name: "delete this source?", exact: true }).click();
+      await page.keyboard.press("h");
+      const row = page.locator(".pp-src").filter({ has: page.locator(".pp-sname", { hasText: doomed.filename }) });
+      await row.hover();
+      await row.locator(".tl-more").click();
+      await row.getByRole("button", { name: "delete this source", exact: true }).click();
+      await row.getByRole("button", { name: "the source, its pages and its cards — all of it?", exact: true }).click();
       await row.waitFor({ state: "detached" });
-      await t.net.idle(500);
-      await page.getByRole("button", { name: "Close library", exact: true }).click();
       await t.net.idle(500);
       await sleep(500);
       const state = await t.api(`/api/boards/${b.id}`);
@@ -572,15 +442,15 @@ function deleteOpenSource({ name, last }) {
       t.check("drill", !left.length, `still drawn: ${left.join(" · ")}`);
       const remembered = seen.at?.cards?.[keptDeck] ?? null;
       t.check("memory", remembered === keptAt, `the kept deck now resumes on ${remembered}, not ${keptAt}`);
-      if (!await page.locator(".bp-rail").isVisible()) await page.keyboard.press("h");
-      await page.locator(".bp-rail").waitFor();
-      const rail = await page.locator(".bp-rail .bp-it").allInnerTexts();
-      t.check("rail", !rail.some((x) => x.includes(doomed.label)), `rail: ${rail.map(squash).join(" · ")}`);
+      if (!await page.locator(".pp-title").isVisible()) await page.keyboard.press("h");
+      await page.locator(".pp-title").waitFor();
+      const rail = await page.locator(".pp-sname").allInnerTexts();
+      t.check("rail", !rail.some((x) => x.includes(doomed.filename)), `listed: ${rail.map(squash).join(" · ")}`);
     },
   };
 }
-const launcherDeleteSource = deleteOpenSource({ name: "launcher-delete-source", last: false });
-const launcherDeleteLastSource = deleteOpenSource({ name: "launcher-delete-last-source", last: true });
+const pageDeleteSource = deleteOpenSource({ name: "page-delete-source", last: false });
+const pageDeleteLastSource = deleteOpenSource({ name: "page-delete-last-source", last: true });
 
 const chatSwitch = {
   name: "chat-switch",
@@ -625,8 +495,7 @@ const chatSwitch = {
     t.say(`the reply is streaming after ${Math.round(performance.now() - sentAt)} ms; going to the other source`);
     const open = async (s, line) => {
       await page.keyboard.press("h");
-      await page.locator(".bp-rail .bp-it", { hasText: s.label }).first().click();
-      await page.locator(".bp-cover button.bp-btn.primary").click();
+      await page.locator(".pp-sname", { hasText: s.filename }).first().click();
       await proseShown(page, line);
     };
     await page.evaluate(() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); });
@@ -670,65 +539,14 @@ const chatSwitch = {
   },
 };
 
-const notesLostSave = {
-  name: "notes-lost-save",
-  what: "type into the board's log and leave at once; the save made on leaving is dropped by the wire — the server still ends up with what was typed",
-  checks: {
-    held: "the server holds everything typed",
-  },
-  async run(t) {
-    const b = await board(t, "Race lost save");
-    const state = { leaving: false };
-    const isLeavingSave = (e) => e.method === "PUT" && e.path === `/api/boards/${b.id}/notes` && state.leaving;
-    const page = await t.open({ latency: true, drop: { match: isLeavingSave, pick: new Set([1]) } });
-    await page.goto(`${t.base}/?board=${b.id}`);
-    const log = page.locator("textarea.note-edit");
-    await log.waitFor();
-    await log.click();
-    const first = "The first line of the log reaches the server. ";
-    const saved = t.net.when((e) => e.method === "PUT" && e.path === `/api/boards/${b.id}/notes`);
-    await log.pressSequentially(first, { delay: 20 });
-    await (await saved).done;
-    await page.locator(".note-head .saved", { hasText: "saved" }).waitFor();
-    const second = "The second is typed and the board left straight after.";
-    // leave inside the 700 ms debounce with a raw click, so the blur's save is the only save of the last words
-    const away = await page.getByRole("button", { name: "‹ All boards" }).boundingBox();
-    await log.pressSequentially(second.slice(0, -1), { delay: 20 });
-    state.leaving = true;
-    const leavingSeq = t.net.seq;
-    const typedAt = performance.now();
-    await page.keyboard.type(second.slice(-1));
-    const clickSeq = t.net.seq;
-    await page.mouse.click(away.x + away.width / 2, away.y + away.height / 2);
-    const clickedAt = performance.now();
-    await page.getByRole("button", { name: /^All boards(?:\s|$)/ }).waitFor();
-    await t.net.idle(500);
-    // the text cannot tell the two saves apart; timing can: the click must land well inside the debounce
-    const saves = t.net.entries.filter((e) => e.method === "PUT" && e.path === `/api/boards/${b.id}/notes` && e.id > leavingSeq);
-    const lost = saves[0];
-    const why = clickedAt - typedAt >= 600 ? `the click landed ${Math.round(clickedAt - typedAt)} ms after the last key, inside reach of the 700 ms debounce`
-      : !lost || lost.outcome !== "dropped" ? "the wire dropped no save made on leaving"
-      : lost.id <= clickSeq ? "a save left before the click — the debounce's, not the blur's"
-      : squash(lost.body?.text) !== squash(first + second) ? "the dropped save did not carry everything typed" : null;
-    if (why) throw new Error(`the leave came too late: ${why}`);
-    const until = performance.now() + GRACE_MS;
-    let held = "";
-    for (;;) {
-      held = t.sql("SELECT text FROM board_notes WHERE board_id = ?", b.id)[0]?.text ?? "";
-      if (squash(held) === squash(first + second) || performance.now() > until) break;
-      await sleep(250);
-    }
-    t.check("held", squash(held) === squash(first + second), `server has ${JSON.stringify(squash(held).slice(-50))}`);
-  },
-};
 
 const sourceRename503 = {
   name: "source-rename-503",
-  what: "rename a source from the library while the server answers the first try 503; the source and its page are renamed together, exactly once",
+  what: "rename a source on its project page while the server answers the first try 503; the source and its page are renamed together, exactly once",
   checks: {
     together: "the source and its one page carry the new name on the server",
     once: "the server renamed it exactly once, in one request",
-    shown: "the library row shows the new name",
+    shown: "the project page shows the new name",
   },
   async run(t) {
     const b = await board(t, "Race rename");
@@ -745,14 +563,14 @@ const sourceRename503 = {
       }
       await route.fallback();
     });
-    await page.goto(`${t.base}/`);
-    const library = page.getByRole("region", { name: "Your library" });
-    const row = (name) => library.locator(".rg-row").filter({ has: page.getByRole("link", { name, exact: true }) });
-    await row(src.filename).getByRole("button", { name: `Actions for ${src.filename}`, exact: true }).click();
-    await row(src.filename).getByRole("menuitem", { name: "rename", exact: true }).click();
+    await page.goto(`${t.base}/?board=${b.id}`);
+    const row = page.locator(".pp-src").filter({ has: page.locator(".pp-sname", { hasText: src.filename }) });
+    await row.hover();
+    await row.locator(".tl-more").click();
+    await row.getByRole("button", { name: "rename", exact: true }).click();
     const name = `Renamed under load ${t.seed}`;
-    await library.locator(".rg-rename").fill(name);
-    await library.locator(".rg-rename").press("Enter");
+    await page.getByRole("textbox", { name: "Source name", exact: true }).fill(name);
+    await page.getByRole("textbox", { name: "Source name", exact: true }).press("Enter");
     const until = performance.now() + GRACE_MS;
     let state = null;
     for (;;) {
@@ -769,8 +587,8 @@ const sourceRename503 = {
     const renames = Number(t.sql(`SELECT COUNT(*) n FROM events WHERE event = 'resource_rename' AND json_extract(props,'$.board') = ?`, b.id)[0]?.n ?? 0);
     const sent = t.net.entries.filter((e) => e.write && (e.path.startsWith(renamePath) || e.path.startsWith(`/api/boards/${b.id}/pairs/`)));
     t.check("once", renames === 1 && sent.length === 1, `${renames} renames on the server; ${sent.length} requests reached it (${sent.map((e) => e.key).join(", ")})`);
-    const shown = await row(name).waitFor({ timeout: 5000 }).then(() => true, () => false);
-    t.check("shown", shown, "no library row carries the new name");
+    const shown = await page.locator(".pp-sname", { hasText: name }).first().waitFor({ timeout: 5000 }).then(() => true, () => false);
+    t.check("shown", shown, "the project page does not carry the new name");
   },
 };
 
@@ -823,192 +641,47 @@ const keepsToggle = {
   },
 };
 
-// the shim comes off before the close: Playwright's paused interception would make teardown decide the save
-const notesTabClose = {
-  name: "notes-tab-close",
-  what: "type into the board's log and close the tab inside the save's 700 ms debounce; the pagehide flush (keepalive) still saves everything typed",
-  checks: {
-    held: "the server holds everything typed after the tab closed",
-  },
-  async run(t) {
-    const b = await board(t, "Race tab close");
-    const isSave = (e) => e.method === "PUT" && e.path === `/api/boards/${b.id}/notes`;
-    const page = await t.open({ latency: true });
-    await page.goto(`${t.base}/?board=${b.id}`);
-    const log = page.locator("textarea.note-edit");
-    await log.waitFor();
-    await t.net.idle(400);
-    await log.click();
-    const first = "The log was saved once before the tab went. ";
-    const saved = t.net.when(isSave);
-    await log.pressSequentially(first, { delay: 20 });
-    await (await saved).done;
-    await page.locator(".note-head .saved", { hasText: "saved" }).waitFor();
-    const words = ["ledger", "margin", "quorum", "lattice", "harbor", "cipher"];
-    const dice = t.rng("words");
-    const second = `Then ${Array.from({ length: 3 }, () => words[Math.floor(dice() * words.length)]).join(" ")}, and the tab closed.`;
-    const before = t.net.seq;
-    const typingFrom = Date.now();
-    await page.keyboard.type(second);
-    const typedAt = performance.now();
-    const leftEarly = t.net.entries.some((e) => e.id > before && isSave(e));
-    await page.unrouteAll({ behavior: "ignoreErrors" });
-    await page.close({ runBeforeUnload: false });
-    const closedAt = performance.now();
-    // pinned only if no save of the last words left before the close
-    if (leftEarly || closedAt - typedAt >= 600) {
-      throw new Error(`the tab closed too late: ${leftEarly ? "a save left before the close" : `${Math.round(closedAt - typedAt)} ms after the last key`}`);
-    }
-    const until = performance.now() + GRACE_MS;
-    let held = "";
-    for (;;) {
-      held = t.sql("SELECT text FROM board_notes WHERE board_id = ?", b.id)[0]?.text ?? "";
-      if (squash(held) === squash(first + second) || performance.now() > until) break;
-      await sleep(200);
-    }
-    // what reached the server as the tab closed; a request is logged a beat after its commit
-    const logged = () => t.sql("SELECT status FROM request_log WHERE method = 'PUT' AND path = ? AND ts >= ?", `/api/boards/${b.id}/notes`, typingFrom).map((r) => r.status);
-    let flushes = logged();
-    if (!flushes.length) { await sleep(300); flushes = logged(); }
-    t.say(`closed ${Math.round(closedAt - typedAt)} ms after the last key; the server got ${flushes.length} save(s) of the log after it: ${flushes.join(", ") || "none"}`);
-    t.check("held", squash(held) === squash(first + second),
-      `server has ${JSON.stringify(squash(held).slice(-50))}; it got ${flushes.length ? `save(s) answered ${flushes.join(", ")}` : "no save"} after the close`);
-  },
-};
 
-// the second tab saves over a gone revision: it must be refused and keep its words, never overwrite
-const notesTwoTabs = {
-  name: "notes-two-tabs",
-  what: "edit the board's log in two tabs; the second to save gets the conflict and keeps its words; Use theirs and Keep mine each leave the server and the box agreeing",
-  checks: {
-    refused: "the second tab's save is refused and the server keeps the first tab's text",
-    kept: "the refused tab says so and still holds its own words",
-    theirs: "Use theirs puts the server's text in the box, and the next edit saves over it",
-    mine: "Keep mine saves the box over the newer text",
-  },
-  async run(t) {
-    const b = await board(t, "Race two tabs");
-    const base = "The log as both tabs opened it.";
-    await t.api(`/api/boards/${b.id}/notes`, "PUT", { text: base });
-    const held = () => t.sql("SELECT text FROM board_notes WHERE board_id = ?", b.id)[0]?.text ?? "";
-    const isSave = (e) => e.method === "PUT" && e.path === `/api/boards/${b.id}/notes`;
-    const isRead = (e) => e.method === "GET" && e.path.split("?")[0].startsWith(`/api/boards/${b.id}`);
-    const pageA = await t.open({ latency: true });
-    const netA = t.net;
-    const { page: pageB, net: netB } = await t.tab({ latency: true });
-    const boxOf = (page) => page.evaluate(() => document.querySelector("textarea.note-edit")?.value
-      ?? document.querySelector(".note-read")?.innerText ?? "");
-    const edit = async (page) => {
-      const box = page.locator("textarea.note-edit");
-      if (!(await box.isVisible())) await page.locator(".note-read").click();
-      await box.waitFor();
-      await box.press("Control+End");
-      return box;
-    };
-    for (const [page, net] of [[pageA, netA], [pageB, netB]]) {
-      await page.goto(`${t.base}/?board=${b.id}`);
-      await page.locator(".note-read, textarea.note-edit").filter({ hasText: base.slice(0, 20) }).or(page.locator("textarea.note-edit")).first().waitFor();
-      await page.waitForFunction((want) => (document.querySelector("textarea.note-edit")?.value ?? document.querySelector(".note-read")?.innerText ?? "").includes(want), base);
-      await net.idle(400);
-    }
-    const dice = t.rng("words");
-    const word = () => ["ledger", "margin", "quorum", "lattice", "harbor", "cipher"][Math.floor(dice() * 6)];
-    const savedOn = (page) => page.locator(".note-head .saved", { hasText: /^saved$/ }).waitFor();
-    // tab 2 hears nothing from the server about this board until its own save has been refused
-    const quiet = netB.hold(isRead);
-    const aText = ` First tab: ${word()} ${word()}.`;
-    const logA = await edit(pageA);
-    const aSave = netA.when(isSave);
-    await logA.pressSequentially(aText, { delay: 20 });
-    await (await aSave).done;
-    await savedOn(pageA);
-    const bText = ` Second tab: ${word()} ${word()}.`;
-    const logB = await edit(pageB);
-    const bSave = netB.when(isSave);
-    await logB.pressSequentially(bText, { delay: 20 });
-    const refusal = await bSave;
-    await refusal.done;
-    const alert = pageB.locator(".note-head [role=alert]");
-    const said = await alert.waitFor({ timeout: 10_000 }).then(() => true, () => false);
-    quiet.release();
-    await netB.idle(400);
-    t.check("refused", refusal.status === 409 && squash(held()) === squash(base + aText),
-      `the save answered ${refusal.status}; server has ${JSON.stringify(squash(held()).slice(-60))}`);
-    const boxB = await boxOf(pageB);
-    t.check("kept", said && squash(boxB) === squash(base + bText),
-      `${said ? "conflict shown" : "no conflict shown"}; box ${JSON.stringify(squash(boxB).slice(-60))}`);
-    if (!said) { t.check("theirs", false, "no conflict to choose in"); t.check("mine", false, "not reached"); return; }
-    await alert.getByRole("button", { name: "Use theirs", exact: true }).click();
-    const tookTheirs = squash(await boxOf(pageB)) === squash(base + aText);
-    const more = ` After theirs: ${word()}.`;
-    await edit(pageB);
-    const bAgain = netB.when(isSave);
-    await logB.pressSequentially(more, { delay: 20 });
-    const again = await bAgain;
-    await again.done;
-    await savedOn(pageB).catch(() => {});
-    t.check("theirs", tookTheirs && again.status === 200 && squash(held()) === squash(base + aText + more),
-      `box took theirs: ${tookTheirs}; next save ${again.status}; server has ${JSON.stringify(squash(held()).slice(-60))}`);
-    const mine = ` First tab again: ${word()}.`;
-    const quietA = netA.hold(isRead);
-    const aSave2 = netA.when(isSave);
-    await edit(pageA);
-    await logA.pressSequentially(mine, { delay: 20 });
-    await (await aSave2).done;
-    const alertA = pageA.locator(".note-head [role=alert]");
-    const saidA = await alertA.waitFor({ timeout: 10_000 }).then(() => true, () => false);
-    quietA.release();
-    if (saidA) {
-      const kept = netA.when(isSave);
-      await alertA.getByRole("button", { name: "Keep mine", exact: true }).click();
-      await (await kept).done;
-      await savedOn(pageA).catch(() => {});
-    }
-    await netA.idle(400);
-    const boxA = await boxOf(pageA);
-    t.check("mine", saidA && squash(held()) === squash(base + aText + mine) && squash(boxA) === squash(held()),
-      `${saidA ? "conflict shown" : "no conflict shown"}; server has ${JSON.stringify(squash(held()).slice(-60))}, box ${JSON.stringify(squash(boxA).slice(-60))}`);
-  },
-};
 
 // three moves faster than the wire: the server must end with the plan the last gesture showed
 const planThreeMoves = {
   name: "plan-three-moves",
-  what: "three quick moves in the plan (Alpha later, Alpha later, Delta earlier) with the first answer held; the final order is the last gesture's, on the server and on screen",
+  what: "three quick moves of the project's units (Alpha down, Alpha down, Delta up) with the first answer held; the final order is the last gesture's, on the server and on screen",
   checks: {
     last: "the server's order is the one the last gesture showed",
     shown: "the page shows the server's order",
   },
   async run(t) {
     const b = await board(t, "Race plan three");
-    const names = ["Alpha milestone", "Bravo milestone", "Charlie milestone", "Delta milestone"];
-    for (const name of names) await t.api(`/api/boards/${b.id}/plan/milestones`, "POST", { name });
+    const names = ["Alpha unit", "Bravo unit", "Charlie unit", "Delta unit"];
+    for (const name of names) await t.api(`/api/boards/${b.id}/plan/groups`, "POST", { name });
     const page = await t.open({ latency: true, reorder: { writes: true } });
     await page.goto(`${t.base}/?board=${b.id}`);
-    const rows = page.locator("ol.bp-check > li");
+    const rows = page.locator(".pp-unit");
     await rows.nth(3).waitFor();
     await t.net.idle(400);
-    const order = () => page.evaluate(() => [...document.querySelectorAll("ol.bp-check > li input.bp-mname")].map((i) => i.value));
-    const isMove = (e) => e.method === "PATCH" && e.path.startsWith(`/api/boards/${b.id}/plan/milestones/`);
+    const order = () => page.evaluate(() => [...document.querySelectorAll(".pp-unit .pp-uname")].map((i) => i.textContent));
+    const isMove = (e) => e.method === "PATCH" && e.path.startsWith(`/api/boards/${b.id}/plan/groups/`);
     const firstAnswer = t.net.hold((e) => isMove(e) && e === t.net.entries.find(isMove));
     const move = async (name, label, want) => {
       const i = (await order()).indexOf(name);
       if (i < 0) throw new Error(`${name} is not on the page`);
+      await rows.nth(i).locator(".pp-urow").hover();
       await rows.nth(i).getByRole("button", { name: label, exact: true }).click();
-      await page.waitForFunction((w) => [...document.querySelectorAll("ol.bp-check > li input.bp-mname")].map((el) => el.value).join("|") === w, want.join("|"));
+      await page.waitForFunction((w) => [...document.querySelectorAll(".pp-unit .pp-uname")].map((el) => el.textContent).join("|") === w, want.join("|"));
     };
     const [A, B, C, D] = names;
-    await move(A, "Move later", [B, A, C, D]);
-    await move(A, "Move later", [B, C, A, D]);
+    await move(A, "Move unit down", [B, A, C, D]);
+    await move(A, "Move unit down", [B, C, A, D]);
     const last = [B, C, D, A];
-    await move(D, "Move earlier", last);
+    await move(D, "Move unit up", last);
     await firstAnswer.arrived(1);
     firstAnswer.release();
     await page.evaluate(() => window.__strataSettled?.());
     await t.net.idle(600);
     await sleep(500);
     const shown = await order();
-    const held = (await t.api(`/api/boards/${b.id}`)).plan.milestones.slice().sort((x, y) => x.ord - y.ord).map((m) => m.name);
+    const held = (await t.api(`/api/boards/${b.id}`)).plan.groups.slice().sort((x, y) => x.ord - y.ord).map((m) => m.name);
     t.say(`${t.net.entries.filter(isMove).length} moves sent`);
     t.check("last", held.join() === last.join(), `server ${held.join(" · ")}`);
     t.check("shown", shown.join() === held.join(), `page ${shown.join(" · ")} — server ${held.join(" · ")}`);
@@ -1090,7 +763,8 @@ const captureLostAnswer = {
       kind: "youtube", url, title, author: "The race harness",
       ytDlpCommand: "yt-dlp --race", ytDlpCommands: { macos: "yt-dlp --race", windows: "yt-dlp --race" } } }));
     await page.goto(`${t.base}/?board=${b.id}`);
-    await page.getByRole("button", { name: "+ Add from a link", exact: true }).click();
+    await page.getByRole("navigation", { name: "Strata" }).getByRole("button", { name: "+ Add", exact: true }).click();
+    await page.locator(".addmenu").getByRole("button", { name: "from a link youtube / article", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await dialog.locator("input").fill(url);
     await dialog.locator("input").press("Enter");
@@ -1107,8 +781,8 @@ const captureLostAnswer = {
     t.say(`${presses} press(es), ${sent.length} request(s): ${sent.map((e) => e.outcome).join(", ")}`);
     const rows = t.sql("SELECT id, filename FROM resources WHERE board_id = ?", b.id);
     t.check("one", rows.length === 1, `${rows.length} source(s) on the server after ${presses} press(es) and ${sent.length} request(s)`);
-    const label = (await t.api(`/api/boards/${b.id}`)).pairs[0]?.label ?? "";
-    const listed = outcome === "closed" && !!label && await page.locator(".bp-it", { hasText: label }).first()
+    const label = (await t.api(`/api/boards/${b.id}`)).resources[0]?.filename ?? "";
+    const listed = outcome === "closed" && !!label && await page.locator(".pp-sname", { hasText: label }).first()
       .waitFor({ timeout: 5000 }).then(() => true, () => false);
     t.check("landed", listed, `the dialog ${outcome === "closed" ? "closed" : `is ${outcome}`}; ${label ? `the board ${listed ? "lists" : "does not list"} "${label}"` : "no page on the server"}`);
   },
@@ -1419,7 +1093,7 @@ const authoredTwice = {
     const isCreate = (e) => e.method === "POST" && e.path === `/api/boards/${b.id}/minted`;
     const page = await t.open({ latency: true, lostAck: { match: isCreate, pick: new Set([1]), status: 400, key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/?board=${b.id}`);
-    await page.locator(".note-head, .bp-rail").first().waitFor();
+    await page.locator(".pp-title").first().waitFor();
     await t.net.idle(400);
     await page.locator("button.newcard").click();
     const form = page.locator(".comp");
@@ -1446,95 +1120,6 @@ const authoredTwice = {
   },
 };
 
-// a newer board snapshot lands mid-typing: the draft's If-Match must not be taken from the store
-const notesRefreshTyping = {
-  name: "notes-refresh-typing",
-  what: "the first tab saves the log; a board snapshot carrying that save (another write's answer) lands in the second tab while it types over the log it read; its save is refused and it is asked, the first tab's text kept",
-  checks: {
-    kept: "the first tab's saved text is not written over without a choice (the log and its edit history)",
-    asked: "the typing tab is told the log changed elsewhere and still holds its own words",
-  },
-  async run(t) {
-    const b = await board(t, "Race refresh typing");
-    const src = await prose(t, b.id, `race-refresh-${t.seed}-${Date.now().toString(36)}.md`, essay("A source renamed mid-log", "This source is renamed while the log is written in."));
-    const base = "The log as both tabs opened it.";
-    await t.api(`/api/boards/${b.id}/notes`, "PUT", { text: base });
-    const held = () => t.sql("SELECT text FROM board_notes WHERE board_id = ?", b.id)[0]?.text ?? "";
-    const writes = () => Number(t.sql("SELECT COUNT(*) n FROM events WHERE event = 'notes_write' AND json_extract(props,'$.board') = ?", b.id)[0]?.n ?? 0);
-    const isSave = (e) => e.method === "PUT" && e.path === `/api/boards/${b.id}/notes`;
-    const renamePath = `/api/boards/${b.id}/resources/${src.rid}`;
-    const isRename = (e) => e.method === "PATCH" && e.path === renamePath;
-    const pageA = await t.open({ latency: true });
-    const netA = t.net;
-    const { page: pageB, net: netB } = await t.tab({ latency: true });
-    const boxOf = (page) => page.evaluate(() => document.querySelector("textarea.note-edit")?.value
-      ?? document.querySelector(".note-read")?.innerText ?? "");
-    const edit = async (page) => {
-      const box = page.locator("textarea.note-edit");
-      if (!(await box.isVisible())) await page.locator(".note-read").click();
-      await box.waitFor();
-      await box.press("Control+End");
-      return box;
-    };
-    for (const [page, net] of [[pageA, netA], [pageB, netB]]) {
-      await page.goto(`${t.base}/?board=${b.id}`);
-      await page.waitForFunction((want) => (document.querySelector("textarea.note-edit")?.value ?? document.querySelector(".note-read")?.innerText ?? "").includes(want), base);
-      await net.idle(400);
-    }
-    const dice = t.rng("words");
-    const word = () => ["ledger", "margin", "quorum", "lattice", "harbor", "cipher"][Math.floor(dice() * 6)];
-    const aText = ` First tab: ${word()} ${word()}.`;
-    const logA = await edit(pageA);
-    const aSave = netA.when(isSave);
-    await logA.pressSequentially(aText, { delay: 20 });
-    await (await aSave).done;
-    await pageA.locator(".note-head .saved", { hasText: /^saved$/ }).waitFor();
-    await netA.idle(300);
-    if (squash(held()) !== squash(base + aText)) throw new Error("the first tab's save did not land: nothing to keep");
-    const writesAfterA = writes();
-    // tab 2 renames the source; the answer carries the board at the first tab's revision, and is held
-    const rename = netB.hold(isRename);
-    await pageB.getByRole("button", { name: "boards", exact: true }).click();
-    const library = pageB.getByRole("region", { name: "Your library" });
-    const row = (name) => library.locator(".rg-row").filter({ has: pageB.getByRole("link", { name, exact: true }) });
-    await row(src.filename).getByRole("button", { name: `Actions for ${src.filename}`, exact: true }).click();
-    await row(src.filename).getByRole("menuitem", { name: "rename", exact: true }).click();
-    await library.locator(".rg-rename").fill(`Renamed mid-log ${t.seed}`);
-    await library.locator(".rg-rename").press("Enter");
-    await rename.arrived(1);
-    const snapshot = await rename.caught[0].response.json().catch(() => null);
-    if (squash(snapshot?.state?.notes) !== squash(base + aText)) throw new Error("the held answer does not carry the first tab's log — the interleaving was not pinned");
-    await pageB.getByRole("button", { name: "Close library", exact: true }).click();
-    const bText = ` Second tab: ${word()} ${word()} ${word()}.`;
-    const cut = bText.indexOf(" ", Math.floor(bText.length / 2)) + 1;
-    const logB = await edit(pageB);
-    const bSave = netB.when(isSave);
-    const typingFrom = netB.seq;
-    await logB.pressSequentially(bText.slice(0, cut), { delay: 20 });
-    rename.release();
-    let rest = bText.slice(cut), landed = false;
-    rename.caught[0].done.then(() => { landed = true; });
-    while (!landed && rest.length > 1) { await logB.pressSequentially(rest[0]); rest = rest.slice(1); await sleep(20); }
-    await rename.caught[0].done;
-    await logB.pressSequentially(rest, { delay: 20 });
-    const save = await bSave;
-    await save.done;
-    const refresh = rename.caught[0];
-    const early = netB.entries.find((e) => e.id > typingFrom && isSave(e) && e.startedAt < refresh.deliveredAt);
-    if (early) throw new Error("the second tab's save left before the snapshot landed — the interleaving was not pinned");
-    const alert = pageB.locator(".note-head [role=alert]");
-    const said = await alert.waitFor({ timeout: 10_000 }).then(() => true, () => false);
-    await netB.idle(400);
-    await netA.idle(400);
-    const now = held(), lost = writes() - writesAfterA;
-    t.say(`the second tab's save went out with If-Match ${save.headers["if-match"] ?? "(none)"} and was answered ${save.status}`);
-    t.check("kept", squash(now) === squash(base + aText) && lost === 0,
-      `server has ${JSON.stringify(squash(now).slice(-60))}; ${lost} save(s) taken over the first tab's after it landed (the save answered ${save.status})`);
-    const boxB = await boxOf(pageB);
-    t.check("asked", said && squash(boxB) === squash(base + bText),
-      `${said ? "conflict shown" : "no conflict shown"}; box ${JSON.stringify(squash(boxB).slice(-60))}`);
-  },
-};
 
 // shared by the cancel scenarios: two capture dialogs of the same captions, each save held on its own
 async function cancelAndCaptureAgain(t, title, { lostAck = null, beforeSecondPress = null, fallback = false } = {}) {
@@ -1554,7 +1139,8 @@ async function cancelAndCaptureAgain(t, title, { lostAck = null, beforeSecondPre
   await page.goto(`${t.base}/?board=${b.id}`);
   const dialog = page.getByRole("dialog");
   const captureIt = async (beforePress = null) => {
-    await page.getByRole("button", { name: "+ Add from a link", exact: true }).click();
+    await page.getByRole("navigation", { name: "Strata" }).getByRole("button", { name: "+ Add", exact: true }).click();
+    await page.locator(".addmenu").getByRole("button", { name: "from a link youtube / article", exact: true }).click();
     await dialog.locator("input").fill(url);
     await dialog.locator("input").press("Enter");
     await dialog.locator("textarea").fill(vtt);
@@ -1577,8 +1163,8 @@ async function cancelAndCaptureAgain(t, title, { lostAck = null, beforeSecondPre
 }
 async function oneListed(t, page, b, closed) {
   const rows = t.sql("SELECT id FROM resources WHERE board_id = ?", b.id);
-  const label = (await t.api(`/api/boards/${b.id}`)).pairs[0]?.label ?? "";
-  const listed = closed && !!label && await page.locator(".bp-it", { hasText: label }).first()
+  const label = (await t.api(`/api/boards/${b.id}`)).resources[0]?.filename ?? "";
+  const listed = closed && !!label && await page.locator(".pp-sname", { hasText: label }).first()
     .waitFor({ timeout: 5000 }).then(() => true, () => false);
   return { rows, label, listed };
 }
@@ -1705,9 +1291,9 @@ const planPurposeLate409 = {
     await t.api(purposePath, "PUT", { purpose: "The purpose as first read" });
     const page = await t.open({ latency: true });
     await page.goto(`${t.base}/?board=${b.id}`);
-    const box = page.getByRole("textbox", { name: "Board purpose", exact: true });
+    const box = page.getByRole("textbox", { name: "What is it for?", exact: true });
     await box.waitFor();
-    await page.waitForFunction(() => document.querySelector("textarea.bp-purpose")?.value === "The purpose as first read");
+    await page.waitForFunction(() => document.querySelector("input.pp-goal")?.value === "The purpose as first read");
     await t.net.idle(400);
     await t.api(purposePath, "PUT", { purpose: "The other device's first purpose" });
     const isPurpose = (e) => e.method === "PUT" && e.path === purposePath;
@@ -1720,11 +1306,8 @@ const planPurposeLate409 = {
     const boardPath = `/api/boards/${b.id}`;
     const isRead = (e) => e.method === "GET" && (e.path === boardPath || e.path.startsWith(`${boardPath}?`));
     const read = t.net.when(isRead);
-    await page.getByRole("button", { name: "‹ All boards" }).click();
-    const boards = page.getByRole("button", { name: /^All boards(?:\s|$)/ });
-    await boards.waitFor();
-    if (await boards.getAttribute("aria-expanded") !== "true") await boards.click();
-    await page.getByRole("region", { name: "All boards", exact: true }).getByRole("button", { name: b.title, exact: true }).click();
+    await page.getByRole("navigation", { name: "Strata" }).getByRole("button", { name: "Projects", exact: true }).click();
+    await page.locator(".pj-card").filter({ hasText: b.title }).first().click();
     const reread = await read;
     await reread.done;
     const carried = reread.response ? (await reread.response.json()).plan?.purpose : null;
@@ -1770,7 +1353,7 @@ const imageUploadLate = {
     const held = t.net.hold(isUpload);
     // a source asks under its words; the board's own thread is where a picture is pasted
     await page.goto(`${t.base}/?board=${b.id}`);
-    await page.locator(".note-head, .bp-rail").first().waitFor();
+    await page.locator(".pp-title").first().waitFor();
     await t.net.idle(400);
     await page.keyboard.press("/");
     const ask = page.locator(".ask .line input");
@@ -1954,7 +1537,7 @@ const resplitRaces = {
     once: "the server holds the chosen split exactly once: two sections, two pairs, one re-sectioning",
     kept: "every keep the server acknowledged is of a live card, filed where its card is",
     graded: "the grade made during the split is held once, on a card that still exists",
-    shown: "the editor closes and the board says the book has two sections",
+    shown: "the editor closes and the project page lists the book once",
   },
   async run(t) {
     const b = await board(t, "Race resplit");
@@ -1981,8 +1564,8 @@ const resplitRaces = {
     const page = await t.open({ latency: true, lostAck: { match: isResplit, pick: new Set([1]), key: (e) => e.headers?.["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/?board=${b.id}`);
     const name = filename.replace(/\.pdf$/, "");
-    await page.locator(".bp-rail .bp-it", { hasText: name }).first().click();
-    const cover = page.locator(".bp-cover");
+    const cover = page.locator(".pp-src").filter({ has: page.locator(".pp-sname", { hasText: name }) });
+    await cover.hover();
     await cover.locator(".tl-more").click();
     await cover.getByRole("button", { name: "re-distil…", exact: true }).click();
     const editor = page.getByRole("dialog", { name });
@@ -2010,8 +1593,8 @@ const resplitRaces = {
     const grades = t.sql("SELECT COUNT(*) n FROM events WHERE event = 'card_grade' AND json_extract(props,'$.card') = ?", twoA.id)[0].n;
     const alive = t.sql("SELECT COUNT(*) n FROM cards WHERE id = ?", twoA.id)[0].n;
     t.check("graded", (graded ? grades === 1 : grades === 0) && alive === 1, `${grades} grade(s) held (acknowledged: ${graded}); card ${alive ? "live" : "gone"}`);
-    const length = await cover.locator(".bp-facts dd").first().innerText().catch(() => "");
-    t.check("shown", closed && /^2 sections$/.test(squash(length)), `editor ${closed ? "closed" : "still open"}; length says ${JSON.stringify(squash(length))}`);
+    const listed = await page.locator(".pp-sname", { hasText: name }).count();
+    t.check("shown", closed && listed === 1, `editor ${closed ? "closed" : "still open"}; the page lists the book ${listed} time(s)`);
   },
 };
 
@@ -2300,5 +1883,5 @@ const selectionCard = {
   },
 };
 
-export const scenarios = [notesRoundtrip, highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, launcherDeleteSource, launcherDeleteLastSource, chatSwitch, notesLostSave, sourceRename503, keepsToggle,
-  notesTabClose, notesTwoTabs, planThreeMoves, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, notesRefreshTyping, planPurposeLate409, imageUploadLate, agentResend, agentRevise, selectSeveral, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dispatchPress];
+export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, chatSwitch, sourceRename503, keepsToggle,
+  planThreeMoves, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dispatchPress];

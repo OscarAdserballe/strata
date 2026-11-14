@@ -186,13 +186,11 @@ function LibraryHome({ covered = false, q, setQ, onOpen, onResume, onWarm, onNew
     <div className="veil launcher home2" {...fileDrop}>
       {dropHint}
       <TopNav here={tab === "today" ? "today" : "projects"} onAdd={onAdd} adminPath={adminPath} onSignOut={onLogout}
-        tools={<>
-          <HomeTools onCardsChanged={onCardsChanged} composeRef={composeRef} />
-          {onClose ? <button className="tn-more" aria-label="Close library" onClick={onClose}>✕</button> : null}
-        </>} />
+        tools={onClose ? <button className="tn-more" aria-label="Close library" onClick={onClose}>✕</button> : null} />
       <div className="home2-scroll">
         {tabBody}
         <ImportActivity onOpen={onOpen} />
+        {tab !== "new" ? <footer className="home2-foot"><HomeTools onCardsChanged={onCardsChanged} composeRef={composeRef} /></footer> : null}
       </div>
       {libraryAsk}
     </div>

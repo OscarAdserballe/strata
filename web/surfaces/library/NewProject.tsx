@@ -119,7 +119,7 @@ export default function NewProject({ onCancel, onCreated }: NewProjectProps) {
   const drop = {
     onDragOver(e: DragEvent) { if (Array.from(e.dataTransfer.types).includes("Files")) { e.preventDefault(); setHover(true); } },
     onDragLeave() { setHover(false); },
-    onDrop(e: DragEvent) { e.preventDefault(); setHover(false); setFiles((f) => f.concat(Array.from(e.dataTransfer.files))); },
+    onDrop(e: DragEvent) { e.preventDefault(); e.stopPropagation(); setHover(false); const dropped = Array.from(e.dataTransfer.files); setFiles((f) => f.concat(dropped)); },
   };
 
   if (step === "form" || step === "arriving") return (
@@ -135,7 +135,7 @@ export default function NewProject({ onCancel, onCreated }: NewProjectProps) {
         <div className="np-label">Material</div>
         <div className={"np-drop" + (hover ? " on" : "")} {...drop}>
           <span>Drop files, or <button type="button" className="td-link" onClick={() => document.getElementById("np-files")?.click()}>choose them</button>, or paste a link</span>
-          <input id="np-files" type="file" multiple accept=".pdf,.md,.txt,.html,.htm" hidden onChange={(e) => { setFiles((f) => f.concat(Array.from(e.target.files || []))); e.target.value = ""; }} />
+          <input id="np-files" type="file" multiple accept=".pdf,.md,.txt,.html,.htm" hidden onChange={(e) => { const chosen = Array.from(e.target.files || []); setFiles((f) => f.concat(chosen)); e.target.value = ""; }} />
           <span className="np-link"><input aria-label="A link" value={link} placeholder="https://…" onChange={(e) => setLink(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && /^https?:\/\//.test(link.trim())) { e.preventDefault(); setLinks((l) => l.concat(link.trim())); setLink(""); } }} /></span>
           {wanted ? <span className="np-count">{wanted} added</span> : null}

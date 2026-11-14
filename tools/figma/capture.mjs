@@ -102,19 +102,18 @@ async function foundations(browser, R) {
   const button = (name) => page.getByRole("button", { name, exact: true });
   const PARTS = [
     ["/", [
-      ["Button / primary", () => page.getByRole("button", { name: /^Continue board/ })],
-      ["Button / outline", () => page.getByRole("button", { name: /^Review \d+ cards/ })],
+      ["Top bar", () => page.locator(".topnav").first()],
+      ["Button / primary", () => page.locator(".td-primary").first()],
+      ["Button / outline", () => page.locator(".topnav .tn-add")],
       ["Button / quiet", () => button("New card")],
-      ["Button / suggest", () => page.locator(".lhead .suggest-button")],
+      ["Button / suggest", () => page.locator(".topnav .suggest-button")],
       ["Ask bar", () => page.locator(".askwrap").first()],
-      ["Kept chart", () => page.locator(".kc").first()],
+      ["Day grid", () => page.locator(".td-grid").first()],
     ]],
     [R.slides, [
-      ["Top bar", () => page.locator(".status").first()],
-      ["Board rail", () => page.locator(".bp-rail")],
-      ["Board / open button", () => page.locator(".bp-btn").first()],
-      ["Milestone / reached", () => page.locator(".bp-check > li.done").first()],
-      ["Milestone / open", () => page.locator(".bp-check > li:not(.done)").first()],
+      ["Project / header", () => page.locator(".pp-head")],
+      ["Project / sources", () => page.locator(".pp-unit, .pp-loose").first()],
+      ["Project / source", () => page.locator(".pp-src").first()],
     ]],
     ["/?view=review", [
       ["Card / prompt", () => page.locator(".reviewv .rcard").first()],
@@ -177,15 +176,16 @@ function surfaceSteps({ page, open, shot, phone, R }) {
     library: both([
       ["home", async () => { await open("/"); await shot("library--home", { full: true }); }],
       ...desk([
-        ["all boards", async () => { await open("/"); await page.getByRole("button", { name: /^All boards/ }).click(); await shot("library--all-boards", { full: true }); }],
+        ["projects", async () => { await open("/?view=projects"); await shot("library--projects", { full: true }); }],
+        ["new project", async () => { await open("/?view=new"); await shot("library--new-project", { full: true }); }],
         ["connect an agent", async () => { await open("/"); await button("Connect an agent").click(); await shot("library--connect-agent"); }],
         ["new card", async () => { await open("/"); await button("New card").click(); await shot("library--new-card"); }],
-        ["suggest improvement", async () => { await open("/"); await page.locator(".lhead .suggest-button").click(); await shot("library--suggest"); }],
+        ["suggest improvement", async () => { await open("/"); await page.locator(".topnav .suggest-button").click(); await shot("library--suggest"); }],
       ]),
     ]),
     board: both([
       ["finished book", async () => { await open(R.book); await shot("board--book", { full: true }); }],
-      ["plan with milestones", async () => { await open(R.slides); await shot("board--plan", { full: true }); }],
+      ["project page", async () => { await open(R.slides); await shot("board--plan", { full: true }); }],
       ["text and transcript", async () => { await open(R.essay); await shot("board--essay"); }],
       ["card-only pairs", async () => { await open(R.fe); await shot("board--decks"); }],
       ["a bare question", async () => { await open(R.gap); await shot("board--question"); }],
