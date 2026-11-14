@@ -48,6 +48,7 @@ export default function FocusReview() {
 
 function Panel({ t }: { t: DashTask }) {
   const [link, setLink] = useState("");
+  const [adding, setAdding] = useState(false);
   const links = (next: DashLink[]) => dash.patch(t.id, { links: next }, (x) => ({ ...x, links: next })).catch((e) => toast(StrataWhy(e, "not saved"), 4200));
   return (
     <article className="doc review">
@@ -55,19 +56,19 @@ function Panel({ t }: { t: DashTask }) {
       <h1 className="dtitle static">{t.title}</h1>
       <div className="arts">
         <span className="cap">What came back</span>
-        {t.links.length ? null : <p className="arts-none">Nothing linked yet. Paste the PR, the explainer or the test run Claude made for this.</p>}
+        {t.links.length ? null : <p className="arts-none">Nothing linked yet: the PR, the explainer or the test run Claude made for this goes here.</p>}
         {t.links.map((l, i) => <div key={i} className="art">
           <span className={`ic ${l.kind}`}>{ICON[l.kind] ?? l.kind.slice(0, 3)}</span>
           <span className="am"><b>{l.ref}{l.title ? ` · ${l.title}` : ""}</b><i>{l.url ? l.url.replace(/^https?:\/\//, "") : l.kind}</i></span>
           {l.url ? <a href={l.url} target="_blank" rel="noopener">Open ↗</a> : null}
           <button className="btn quiet small" aria-label="Remove link" onClick={() => void links(t.links.filter((_, n) => n !== i))}>×</button>
         </div>)}
-        <form className="addlink" onSubmit={(e) => { e.preventDefault(); const l = linkOf(link.trim()); if (!l) { toast("Paste a full link"); return; } setLink(""); toast("Link added"); void links([...t.links, l]); }}>
-          <input id="linkIn" value={link} onChange={(e) => setLink(e.target.value)} placeholder="Paste a PR, explainer or test run link…" aria-label="Add a link" autoComplete="off" />
+        {adding ? <form className="addlink" onSubmit={(e) => { e.preventDefault(); const l = linkOf(link.trim()); if (!l) { toast("Paste a full link"); return; } setLink(""); setAdding(false); toast("Link added"); void links([...t.links, l]); }}>
+          <input id="linkIn" value={link} autoFocus onChange={(e) => setLink(e.target.value)} onKeyDown={(e) => { if (e.key === "Escape") setAdding(false); }} placeholder="Paste a PR, explainer or test run link…" aria-label="Add a link" autoComplete="off" />
           <button className="btn" type="submit">Add</button>
-        </form>
+        </form> : <button className="btn quiet add-link" onClick={() => setAdding(true)}>+ Add a link</button>}
       </div>
-      {t.body.trim() ? <div className="fold"><span className="cap">What you asked for</span><Notes text={t.body} /></div> : null}
+      <div className="fold"><span className="cap">What you asked for</span>{t.body.trim() ? <Notes text={t.body} /> : <p className="arts-none">You sent it from Thinking on {new Date(t.updatedAt).toLocaleDateString([], { day: "numeric", month: "long" })} with no notes.</p>}</div>
       <div className="doc-foot">
         <button className="btn dark" onClick={() => move(t, "done")}>Done</button>
         <button className="btn" onClick={() => {

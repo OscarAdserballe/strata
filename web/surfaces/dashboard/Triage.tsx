@@ -43,13 +43,13 @@ export default function Triage({ mode, sub }: { mode: Mode; sub: Sub }) {
             <span>{t.title}</span>
             <button aria-label="Not tomorrow morning" title="Not tomorrow" onClick={() => void pick(t.id, false)}>×</button>
           </div>)}
-          <div className="tr-pick empty">{picks.length ? "Drag more here" : "Drag a thread here"}</div>
+          {picks.length ? null : <div className="tr-pick empty">Drag a thread here</div>}
         </div>
-        <p className="tr-hint">These open first in Thinking. A nudge, not a rule.</p>
+        {picks.length ? null : <p className="tr-hint">These open first in Thinking. A nudge, not a rule.</p>}
         <Routine />
       </aside>
       <div className="ws-room">
-        <div className="ws-caption"><span>{where}</span>
+        <div className="ws-caption plain"><span>{where}</span>
           <span className="tr-area" role="tablist" aria-label="Work or personal">
             {["work", "personal"].map((a) => <button key={a} role="tab" aria-selected={area === a} onClick={() => setArea(a)}>{a === "work" ? "Work" : "Personal"}</button>)}
           </span>

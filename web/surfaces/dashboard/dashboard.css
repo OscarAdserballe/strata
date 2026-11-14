@@ -128,7 +128,8 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .empty{display:flex;flex-direction:column;align-items:flex-start;gap:8px;padding:28px 20px 40px;border-top:1px solid var(--d-line)}
 .empty h4{margin:0;font-size:15px;font-weight:600;color:var(--d-ink)}
 .empty p{margin:0 0 8px;max-width:340px;font-size:13.5px;line-height:1.5;color:var(--d-mute)}
-.arts-none{margin:0;font-size:13.5px;color:var(--d-mute)}
+.arts-none{margin:0;font:13.5px/1.5 var(--sans);color:var(--d-mute)}
+.add-link{align-self:flex-start;margin-left:-14px}
 .tr-fold{padding:12px 20px;font-size:13px;color:var(--d-mute);border-bottom:1px solid var(--d-line)}
 .tr-keys{margin:14px 20px 0;font-size:12px;color:var(--d-mute)}
 .tr-routine{display:flex;flex-direction:column;gap:8px;margin-top:auto;padding:14px 2px 0;font-size:12px;line-height:1.5;color:var(--d-mute)}
@@ -160,8 +161,8 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .ws-card.impl{gap:4px;padding:10px 12px}
 .ws-card.impl .session{font-size:12px;color:var(--d-ink-3);align-self:flex-start;opacity:.6;transition:opacity .15s}
 .ws-card.impl .session:hover{color:var(--d-link)}
-.ws-card.impl .session{display:none;margin-left:6px}
-.ws-card.impl.on .session{display:inline;opacity:1}
+.ws-card.impl .session{display:none}
+.ws-card.impl.on .session{display:inline;opacity:1;margin-top:2px}
 .ws-card.impl .m{color:#7b7983}
 .ws-card.impl .session:hover{color:var(--d-link);text-decoration:none}
 .vers{list-style:none;margin:2px 0;padding:0 0 0 10px;border-left:2px solid var(--d-line-2);display:flex;flex-direction:column;gap:2px}
@@ -180,9 +181,10 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .ws-done span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ws-done i{font-style:normal;font-size:11px;color:var(--d-faint)}
 .ws-room{flex:0 1 836px;min-width:0;display:flex;flex-direction:column}
+.ws-caption.plain{font:600 11px/1.4 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--d-faint)}
 .ws-caption .tr-area,.ws-caption .notes-switch{font-style:normal;font-family:var(--sans)}
 .ws-caption .tr-area{padding:2px}
-.ws-caption .tr-area button{padding:3px 10px;font-size:12px}
+.ws-caption .tr-area button{padding:3px 10px;font-size:12px;letter-spacing:0;text-transform:none;font-weight:500}
 .ws-caption{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:34px;padding:0 4px 10px;font:italic 14.5px var(--serif);color:var(--d-mute)}
 .ws-sheet{flex:1;min-height:0;position:relative;display:flex;margin-bottom:24px;background:#fff;border-radius:10px;box-shadow:var(--d-sheet);overflow:hidden}
 .ws-sheet .livepage{border-radius:inherit}

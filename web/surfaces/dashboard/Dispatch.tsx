@@ -61,7 +61,8 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
                 </div>
               </section>
             : <button key={x.id} className="ws-card" onClick={() => setSel({ thread: x.id, n: null })}>
-                <span className="t">{x.title}</span><span className="m">{latest(x) ? label(latest(x)!) : ""}</span>
+                <span className="t">{x.title}</span>
+                <span className="m">{[latest(x) ? label(latest(x)!) : null, latest(x) ? notes(latest(x)!.notes) : null, latest(x) ? age(latest(x)!.at) : null].filter(Boolean).join(" · ")}</span>
               </button>)}
         {pane && !here.length ? <p className="ws-none">{blank}</p> : null}
       </aside>
@@ -80,7 +81,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
 function NotesSwitch() {
   const sw = useSyncExternalStore(switches.subscribe, switches.getSnapshot);
   return <button className={"notes-switch" + (sw.on.notes ? "" : " off")} aria-pressed={sw.on.notes} title={`${sw.on.notes ? "hide" : "show"} notes`}
-    onClick={() => switches.flip("notes")}><i /><b>{sw.count.notes}</b> {sw.count.notes === 1 ? "note" : "notes"}</button>;
+    onClick={() => switches.flip("notes")}>{sw.count.notes ? <><i /><b>{sw.count.notes}</b> {sw.count.notes === 1 ? "note" : "notes"}</> : "No notes yet"}</button>;
 }
 
 function Implementing({ threads, on, onPick }: { threads: DispatchThread[]; on: string | null; onPick(t: DispatchThread): void }) {
@@ -89,9 +90,9 @@ function Implementing({ threads, on, onPick }: { threads: DispatchThread[]; on: 
     <div key={t.id} className={"ws-card impl" + (t.id === on ? " on" : "")}>
       <button className="t" onClick={() => onPick(t)}>{t.title}</button>
       <span className="m">
-        {t.press ? `${t.press.kind === "send" ? "sent" : t.press.kind === "go" ? "Go" : "sent back"} ${age(t.press.at)} ago · ` : ""}next stop {STOP[t.lands ?? "decide"]}
-        {t.press?.sessionUrl ? <a className="session" href={t.press.sessionUrl} target="_blank" rel="noopener">session ↗</a> : null}
+        {t.press ? `${t.press.kind === "send" ? "Sent" : t.press.kind === "go" ? "Go" : "Sent back"} · ${age(t.press.at)} · ` : ""}then {STOP[t.lands ?? "decide"]}
       </span>
+      {t.press?.sessionUrl ? <a className="session" href={t.press.sessionUrl} target="_blank" rel="noopener">Open the session ↗</a> : null}
     </div>
   );
   return <>
