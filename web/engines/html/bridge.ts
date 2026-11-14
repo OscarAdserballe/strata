@@ -441,4 +441,11 @@ new MutationObserver((ms) => {
 let resized: ReturnType<typeof setTimeout> | undefined;
 addEventListener("resize", () => { clearTimeout(resized); resized = setTimeout(drawLayers, 120); });
 
+// the page's own height, never the frame's, so a host may fit the frame to it without a loop
+let tall = 0;
+new ResizeObserver(() => {
+  const h = Math.ceil(document.documentElement.getBoundingClientRect().height);
+  if (h !== tall) { tall = h; send({ t: "height", h }); }
+}).observe(document.documentElement);
+
 send({ t: "ready", words: walk().text.split(/\s+/).filter(Boolean).length });

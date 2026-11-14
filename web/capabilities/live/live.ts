@@ -23,7 +23,7 @@ export const liveUrlOf = (at: LiveAt): string | null =>
   at.bid && at.src && drawnAs(at.src.kind) === "html" ? StrataAPI.resourceLiveUrl(at.bid, at.src.id, at.src.generation) : null;
 
 /** The sandboxed page's engine, its selections and saved state routed to the source still open when they arrive. */
-export function liveEngine(at: () => LiveAt, marks: () => LiveMarks | null): HtmlEngine {
+export function liveEngine(at: () => LiveAt, marks: () => LiveMarks | null, onHeight?: (h: number) => void): HtmlEngine {
   // the source whose frame asked, only while it is still the one open: a frame left over from the last source gets nothing
   const page = (url: string): { bid: string; rid: string } | null => {
     const a = at();
@@ -38,6 +38,7 @@ export function liveEngine(at: () => LiveAt, marks: () => LiveMarks | null): Htm
     onPress: () => marks()?.offerLive(null, null),
     onLoad: (url) => { const p = page(url); return p ? pageState.load(p.bid, p.rid) : Promise.reject(new Error("the page was closed")); },
     onSave: (url, value) => { const p = page(url); return p ? pageState.save(p.bid, p.rid, value) : Promise.reject(new Error("the page was closed")); },
+    onHeight,
   });
 }
 

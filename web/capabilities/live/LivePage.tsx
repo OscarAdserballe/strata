@@ -17,13 +17,15 @@ export interface LivePageProps {
   resource: string;
   /** the room's zoom the page sits under, which it undoes to draw at the browser's own scale */
   scale?: number;
+  /** how tall the page draws itself, for a host that fits its sheet to it */
+  onHeight?(h: number): void;
 }
 
 const NO_EL = { current: null };
 const NO_DOC = { current: { maps: [] as number[][], text: "" } };
 
 /** One live HTML source, read for its notes outside the room: the room's reader wiring with no deck, asks or chapters. */
-export default function LivePage({ board, resource, scale = 1 }: LivePageProps) {
+export default function LivePage({ board, resource, scale = 1, onHeight }: LivePageProps) {
   const view = useBoardView(board);
   useEffect(() => {
     if (roomStore.entry(boardKey(board))?.held) return;
@@ -35,8 +37,12 @@ export default function LivePage({ board, resource, scale = 1 }: LivePageProps) 
   const pageRef = useRef<HTMLDivElement | null>(null);
   const marksRef = useRef<ReturnType<typeof useMarks> | null>(null);
   const engineRef = useRef<HtmlEngine | null>(null);
-  engineRef.current ??= liveEngine(() => at.current, () => marksRef.current);
+  const heightRef = useRef(onHeight);
+  heightRef.current = onHeight;
+  engineRef.current ??= liveEngine(() => at.current, () => marksRef.current, (h) => heightRef.current?.(h / scaleRef.current));
   const engine = engineRef.current;
+  const scaleRef = useRef(scale);
+  scaleRef.current = scale;
   useEffect(() => () => engine.dispose(), [engine]);
 
   const marks = useMarks({
@@ -48,8 +54,6 @@ export default function LivePage({ board, resource, scale = 1 }: LivePageProps) 
   }, { pairIdx: 0, loading: !src });
   marksRef.current = marks;
 
-  const scaleRef = useRef(scale);
-  scaleRef.current = scale;
   const hostRef = useRef<FoldHost | null>(null);
   hostRef.current ??= (() => {
     const adapter = sourceAdapters({

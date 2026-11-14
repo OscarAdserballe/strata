@@ -21,6 +21,8 @@ kbd{font:500 10.5px/1 var(--sans);border:1px solid var(--d-line-2);border-radius
 .dash-sky i{position:absolute;inset:0;background:radial-gradient(110% 65% at 28% -12%,#ebe8f2 0%,rgba(235,232,242,0) 62%),radial-gradient(70% 50% at 92% -8%,#f6ebe2 0%,rgba(246,235,226,0) 60%),linear-gradient(180deg,#f4f1f0 0%,#f8f6f2 42%,#faf8f4 100%)}
 
 .dash{min-height:100vh;display:flex;flex-direction:column}
+/* a page-sized sheet would otherwise grow the room rather than shrink to it */
+@media (min-width:901px){.dash{height:100vh}}
 
 /* the header: the same in both modes */
 /* the header sits on the body's grid: mode and inbox over the rail, the stages centred over the column, the clock at its edge */
@@ -185,7 +187,7 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .ws-caption .tr-area,.ws-caption .notes-switch{font-style:normal;font-family:var(--sans)}
 .ws-caption .tr-area{padding:2px}
 .ws-caption .tr-area button{padding:3px 10px;font-size:12px;letter-spacing:0;text-transform:none;font-weight:500}
-.ws-caption{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:34px;padding:0 4px 10px;font:italic 14.5px var(--serif);color:var(--d-mute)}
+.ws-caption{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:34px;padding:0 4px 10px;font:italic 14.5px var(--serif);color:var(--d-mute)}
 .ws-sheet{flex:1;min-height:0;position:relative;display:flex;margin-bottom:24px;background:#fff;border-radius:10px;box-shadow:var(--d-sheet);overflow:hidden}
 .ws-sheet .livepage{border-radius:inherit}
 .ws-sheet .htmlsrc-body{border-radius:inherit;overflow:hidden}

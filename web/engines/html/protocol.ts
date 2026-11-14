@@ -24,6 +24,7 @@ export type FromPage =
   | { t: "revealed"; n: number; found: boolean }
   | { t: "press" }
   | { t: "load"; n: number }
-  | { t: "save"; n: number; value: string };
+  | { t: "save"; n: number; value: string }
+  | { t: "height"; h: number };
 
 export const STRATA = "strata-live";
