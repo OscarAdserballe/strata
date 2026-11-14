@@ -230,9 +230,9 @@ try {
     await page.mouse.up();
   };
   const beforeMove = await dock.boundingBox();
-  // up by what room the reading area leaves above the chat (its fonts set its height), so no clamp is in play
+  // up by what room the reading area leaves above the chat (its fonts set its height), clear of the room's 8 px inset
   const above = await page.evaluate(() => document.querySelector(".ask").getBoundingClientRect().top - document.querySelector(".panes").getBoundingClientRect().top);
-  const dy = -Math.max(0, Math.min(80, Math.floor(above) - 4));
+  const dy = -Math.max(0, Math.min(80, Math.floor(above) - 12));
   await dragChat(".ask .thead", -200, dy);
   const afterMove = await dock.boundingBox();
   check("chat header follows the pointer", dy <= -20 && Math.abs(afterMove.x - beforeMove.x + 200) < 2
