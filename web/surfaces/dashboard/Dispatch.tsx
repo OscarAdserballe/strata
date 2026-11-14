@@ -80,7 +80,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
 function NotesSwitch() {
   const sw = useSyncExternalStore(switches.subscribe, switches.getSnapshot);
   return <button className={"notes-switch" + (sw.on.notes ? "" : " off")} aria-pressed={sw.on.notes} title={`${sw.on.notes ? "hide" : "show"} notes`}
-    onClick={() => switches.flip("notes")}><i />notes <b>{sw.count.notes}</b></button>;
+    onClick={() => switches.flip("notes")}><i /><b>{sw.count.notes}</b> {sw.count.notes === 1 ? "note" : "notes"}</button>;
 }
 
 function Implementing({ threads, on, onPick }: { threads: DispatchThread[]; on: string | null; onPick(t: DispatchThread): void }) {
@@ -90,8 +90,8 @@ function Implementing({ threads, on, onPick }: { threads: DispatchThread[]; on: 
       <button className="t" onClick={() => onPick(t)}>{t.title}</button>
       <span className="m">
         {t.press ? `${t.press.kind === "send" ? "sent" : t.press.kind === "go" ? "Go" : "sent back"} ${age(t.press.at)} ago · ` : ""}next stop {STOP[t.lands ?? "decide"]}
+        {t.press?.sessionUrl ? <a className="session" href={t.press.sessionUrl} target="_blank" rel="noopener">session ↗</a> : null}
       </span>
-      {t.press?.sessionUrl ? <a className="session" href={t.press.sessionUrl} target="_blank" rel="noopener">session ↗</a> : null}
     </div>
   );
   return <>

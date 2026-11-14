@@ -2046,10 +2046,9 @@ const dashboardTriage = {
     const page = await t.open({ latency: true, lostAck: { match: keeps, pick: new Set([1, 2]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dashboard?view=triage&sub=inbox`);
     await page.getByRole("tab", { name: /^Work/ }).click();
-    await page.getByRole("tab", { name: /^Inbox/ }).click();
     for (const name of titles) {
       await page.locator(".tr-row, .tr-card.in", { hasText: name }).first().click();
-      await page.locator(".tr-card.in", { hasText: name }).getByRole("button", { name: "→ Backlog" }).click();
+      await page.locator(".tr-card.in", { hasText: name }).getByRole("button", { name: "Keep in backlog" }).click();
     }
     const until = performance.now() + GRACE_MS * 2;
     let open = 3;
@@ -2066,7 +2065,8 @@ const dashboardTriage = {
     const row = page.locator(".r", { hasText: `Race task ${tag}` });
     await row.waitFor();
     await row.locator(".t").click();
-    await page.locator(".tr-card.open").getByRole("button", { name: "→ To-do" }).click();
+    await page.locator(".tr-card.open").getByRole("button", { name: "Move…" }).click();
+    await page.getByRole("menuitem", { name: "To-do", exact: true }).click();
     const until2 = performance.now() + GRACE_MS;
     let stage = "";
     for (;;) {
@@ -2098,7 +2098,8 @@ const dashboardWrites = {
     const row = page.locator(".r", { hasText: `Race pin ${tag}` });
     await row.waitFor();
     await row.locator(".t").click();
-    await page.locator(".tr-card.open").getByRole("button", { name: "Tomorrow morning" }).click();
+    await page.locator(".tr-card.open").getByRole("button", { name: "Move…" }).click();
+    await page.getByRole("menuitem", { name: "Tomorrow morning" }).click();
 
     await page.getByRole("tab", { name: /^To-do/ }).click();
     const moved = page.locator(".r", { hasText: `Race pin ${tag}` });
@@ -2147,7 +2148,8 @@ const dashboardAdd = {
       await page.getByRole("button", { name: "Add", exact: true }).click();
     }
     // a thread you add opens, ready for its prompt; the second is the one open now
-    await page.locator(".tr-card.open").getByRole("button", { name: "Tomorrow morning" }).click();
+    await page.locator(".tr-card.open").getByRole("button", { name: "Move…" }).click();
+    await page.getByRole("menuitem", { name: "Tomorrow morning" }).click();
     const until = performance.now() + GRACE_MS * 2;
     let rows = [];
     for (;;) {

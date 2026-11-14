@@ -29,44 +29,49 @@ export default function Triage({ mode, sub }: { mode: Mode; sub: Sub }) {
   const picks = (board?.tasks ?? []).filter((t) => t.stage === "todo" && t.morningAt).sort((a, b) => (a.morningAt ?? 0) - (b.morningAt ?? 0));
   const drop = useDrop();
 
+  const where = sub === "inbox" ? counts.inbox ? `${counts.inbox} new` : "Inbox" : sub === "backlog" ? counts.backlog ? `${counts.backlog} kept for later` : "Backlog" : counts.todo ? `${counts.todo} to do` : "To-do";
   return (
-    <div className="triage">
-      <section className="tr-col">
-        <div className="tr-tabs" role="tablist" aria-label="Triage">
-          {TABS.map(([k, name]) => <button key={k} role="tab" aria-selected={sub === k} {...drop.zone(k)}
-            onClick={() => { setOpen(null); go({ sub: k }); }}>{name} <i>{counts[k] || ""}</i></button>)}
-          <span className="grow" />
-          <span className="tr-area" role="tablist" aria-label="Work or personal">
-            {["work", "personal"].map((a) => <button key={a} role="tab" aria-selected={area === a} onClick={() => setArea(a)}>{a === "work" ? "Work" : "Personal"}</button>)}
-          </span>
-        </div>
-        {!board ? <p className="tr-empty">Loading…</p>
-          : sub === "inbox" ? <InboxList items={inbox} mode={mode} />
-          : sub === "backlog" ? <>
-              <NewThread area={area} onMade={setOpen} />
-              <div className="tr-list">
-                {backlog.filter((t) => unfold || Date.now() - t.createdAt <= OLD).map((t) => <Thread key={t.id} t={t} open={open === t.id} onOpen={setOpen} mode={mode} drag={drop.drag} />)}
-                {!unfold && backlog.some((t) => Date.now() - t.createdAt > OLD)
-                  ? <button className="tr-fold" onClick={() => setUnfold(true)}>{backlog.filter((t) => Date.now() - t.createdAt > OLD).length} more, older than two weeks</button> : null}
-                {backlog.length ? null : <p className="tr-empty">The backlog is empty. Keep something from the inbox, or write a thread above.</p>}
-              </div>
-            </>
-          : <div className="tr-list">
-              {todo.map((t) => <Thread key={t.id} t={t} open={open === t.id} onOpen={setOpen} mode={mode} drag={drop.drag} />)}
-              {todo.length ? null : <p className="tr-empty">Nothing in to-do. Open a backlog thread and move it here, or drag one onto the tab.</p>}
-            </div>}
-      </section>
-      <aside className="tr-morning">
-        <h2>Tomorrow morning <i>{picks.length || ""}</i></h2>
+    <div className="ws triage">
+      <aside className="ws-list" aria-label="Triage">
+        <nav className="tr-nav" role="tablist" aria-label="Triage">
+          {TABS.filter(([k]) => k !== "inbox").map(([k, name]) => <button key={k} role="tab" aria-selected={sub === k} className={"ws-card" + (sub === k ? " on" : "")} {...drop.zone(k)}
+            onClick={() => { setOpen(null); go({ sub: k }); }}><span className="t">{name}</span><i>{counts[k] || ""}</i></button>)}
+        </nav>
+        <h3 className="ws-group">Tomorrow morning</h3>
         <div className="tr-box" {...drop.zone("morning")}>
           {picks.map((t) => <div key={t.id} className="tr-pick" draggable onDragStart={drop.drag(t.id)}>
             <span>{t.title}</span>
             <button aria-label="Not tomorrow morning" title="Not tomorrow" onClick={() => void pick(t.id, false)}>×</button>
           </div>)}
-          <div className="tr-pick empty">Drag a thread here</div>
+          <div className="tr-pick empty">{picks.length ? "Drag more here" : "Drag a thread here"}</div>
         </div>
         <p className="tr-hint">These open first in Thinking. A nudge, not a rule.</p>
+        <Routine />
       </aside>
+      <div className="ws-room">
+        <div className="ws-caption"><span>{where}</span>
+          <span className="tr-area" role="tablist" aria-label="Work or personal">
+            {["work", "personal"].map((a) => <button key={a} role="tab" aria-selected={area === a} onClick={() => setArea(a)}>{a === "work" ? "Work" : "Personal"}</button>)}
+          </span>
+        </div>
+        <section className="tr-main">
+          {!board ? <p className="tr-empty">Loading…</p>
+            : sub === "inbox" ? <InboxList items={inbox} mode={mode} />
+            : sub === "backlog" ? <>
+                <NewThread area={area} onMade={setOpen} />
+                <div className="tr-list">
+                  {backlog.filter((t) => unfold || Date.now() - t.createdAt <= OLD).map((t) => <Thread key={t.id} t={t} open={open === t.id} onOpen={setOpen} mode={mode} drag={drop.drag} />)}
+                  {!unfold && backlog.some((t) => Date.now() - t.createdAt > OLD)
+                    ? <button className="tr-fold" onClick={() => setUnfold(true)}>{backlog.filter((t) => Date.now() - t.createdAt > OLD).length} more, older than two weeks</button> : null}
+                  {backlog.length ? null : <Empty title="The backlog is empty" text="Keep something from the inbox, or write a thread above." />}
+                </div>
+              </>
+            : <div className="tr-list">
+                {todo.map((t) => <Thread key={t.id} t={t} open={open === t.id} onOpen={setOpen} mode={mode} drag={drop.drag} />)}
+                {todo.length ? null : <Empty title="Nothing in to-do" text="Open a thread in the backlog and move it here, or drag one onto To-do." act={["Open the backlog", () => go({ sub: "backlog" })]} />}
+              </div>}
+        </section>
+      </div>
     </div>
   );
 }
@@ -75,7 +80,7 @@ function InboxList({ items, mode }: { items: DashItem[]; mode: Mode }) {
   const [cur, setCur] = useState<string | null>(null);
   const at = items.find((i) => i.id === cur) ? cur : items[0]?.id ?? null;
   const next = (id: string) => { const i = items.findIndex((x) => x.id === id); setCur(items[i + 1]?.id ?? items[i - 1]?.id ?? null); };
-  const keep = (id: string, stage: "backlog" | "todo", area: string) => { next(id); toast(stage === "todo" ? "→ To-do" : "→ Backlog"); dash.keep(id, stage, area).catch((e) => said(e, "not kept")); };
+  const keep = (id: string, stage: "backlog" | "todo", area: string) => { next(id); toast(stage === "todo" ? "Moved to to-do" : "Kept in the backlog"); dash.keep(id, stage, area).catch((e) => said(e, "not kept")); };
   const drop = (id: string) => { next(id); toast("Dropped"); dash.drop(id).catch((e) => said(e, "not dropped")); };
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
@@ -97,14 +102,14 @@ function InboxList({ items, mode }: { items: DashItem[]; mode: Mode }) {
           <h3>{p.title}</h3>
           {p.context ? <p className="tr-ctx">{p.context}</p> : null}
           {p.from?.quote ? <blockquote>“{p.from.quote}”</blockquote> : null}
-          <div className="tr-meta"><Src from={p.from} /><span>{age(p.at)}</span>
+          <div className="tr-meta"><Src from={p.from} /><span>{age(p.at)}</span></div>
+          <div className="acts-row">
+            <button className="btn dark" onClick={() => keep(p.id, "backlog", p.area)}>Keep in backlog</button>
+            <button className="btn" onClick={() => keep(p.id, "todo", p.area)}>To-do</button>
+            <button className="btn quiet" onClick={() => { const a = p.area === "personal" ? "work" : "personal"; next(p.id); toast(`Moved to ${a}`); dash.itemArea(p.id, a).catch((e) => said(e, "not moved")); }}>
+              Move to {p.area === "personal" ? "work" : "personal"}</button>
             <span className="grow" />
-            <span className="tr-area small" role="group" aria-label="Work or personal">
-              {["work", "personal"].map((a) => <button key={a} aria-pressed={p.area === a} onClick={() => dash.itemArea(p.id, a).catch((e) => said(e, "not moved"))}>{a === "work" ? "Work" : "Personal"}</button>)}
-            </span>
-            <button className="btn" onClick={() => keep(p.id, "backlog", p.area)}>→ Backlog</button>
-            <button className="btn" onClick={() => keep(p.id, "todo", p.area)}>→ To-do</button>
-            <button className="btn quiet" onClick={() => drop(p.id)}>Drop</button>
+            <button className="btn quiet danger" onClick={() => drop(p.id)}>Drop</button>
           </div>
         </article>
       : <button key={p.id} className="tr-row in" onClick={() => setCur(p.id)}>
@@ -112,9 +117,8 @@ function InboxList({ items, mode }: { items: DashItem[]; mode: Mode }) {
           {p.context ? <span className="ctx">“{p.context}”</span> : null}
           <span className="tr-meta"><Src from={p.from} /><span>{age(p.at)}</span></span>
         </button>)}
-    {items.length ? null : <p className="tr-empty">Nothing new. Agents add here with dashboard_add_items; you keep or drop each.</p>}
-    {items.length ? <p className="tr-keys"><kbd>b</kbd> backlog · <kbd>t</kbd> to-do · <kbd>x</kbd> drop · <kbd>j</kbd><kbd>k</kbd> move{mode === "dispatch" ? " · send a kept thread from Backlog" : ""}</p> : null}
-    <Routine />
+    {items.length ? null : <Empty title="Inbox zero" text="New things land here from your agents and from you. Keep each in the backlog or to-do, or drop it." />}
+    {items.length ? <p className="tr-keys"><kbd>b</kbd> keep · <kbd>t</kbd> to-do · <kbd>x</kbd> drop · <kbd>j</kbd> <kbd>k</kbd> move{mode === "dispatch" ? " · send a kept thread from the backlog" : ""}</p> : null}
   </div>;
 }
 
@@ -140,16 +144,16 @@ function Thread({ t, open, onOpen, mode, drag }: { t: DashTask; open: boolean; o
       <label className="cap" htmlFor={`body-${t.id}`}>Prompt · yours to trim</label>
       <Grow id={`body-${t.id}`} className="dbody" value={body} placeholder="What should be done, in a few lines you could hand to Claude." onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") leave(); }} />
-      <div className="tr-acts">
-        <button className="btn quiet" onClick={() => { leave(); move(t, "dropped"); }}>Drop</button>
-        <button className="btn quiet" aria-label={t.morningAt ? "Not tomorrow morning" : "Tomorrow morning"} onClick={() => void pick(t.id, !t.morningAt)}>{t.morningAt ? "Not tomorrow" : "Tomorrow morning"}</button>
-        {t.stage === "backlog" ? <button className="btn quiet" onClick={() => { leave(); move(t, "todo"); }}>→ To-do</button>
-          : <button className="btn quiet" onClick={() => { leave(); move(t, "backlog"); }}>← Backlog</button>}
+      <div className="acts-row">
+        <button className="btn dark" title={mode === "dispatch" ? "Claude prepares a page; it shows up in Decide" : "Claude comes back with a page in Dispatch"} onClick={() => { leave(); toast("Sent to Dispatch"); dash.send(t.id).catch((e) => said(e, "not sent")); }}>Send to Dispatch</button>
+        <button className="btn" title="Open it in Thinking and write it through yourself" onClick={() => { leave(); move(t, "thinking"); go({ mode: "focus", view: "thinking" }); }}>Think it through</button>
+        <MoveMenu items={[
+          [t.morningAt ? "Not tomorrow morning" : "Tomorrow morning", () => void pick(t.id, !t.morningAt)],
+          t.stage === "backlog" ? ["To-do", () => { leave(); move(t, "todo"); }] : ["Back to backlog", () => { leave(); move(t, "backlog"); }],
+        ]} />
         <span className="grow" />
-        <button className="btn" onClick={() => { leave(); move(t, "thinking"); go({ mode: "focus", view: "thinking" }); }}>Think it through</button>
-        <button className="btn dark" onClick={() => { leave(); toast("Sent to Dispatch"); dash.send(t.id).catch((e) => said(e, "not sent")); }}>Send to Dispatch →</button>
+        <button className="btn quiet danger" onClick={() => { leave(); move(t, "dropped"); }}>Drop</button>
       </div>
-      <p className="tr-hint">{mode === "dispatch" ? "Sending starts Claude preparing its page. It shows up in Decide when it is ready." : "Think it through opens it in Thinking. Send to Dispatch hands it to Claude, who comes back with a page."}</p>
     </article>
   );
 }
@@ -204,7 +208,7 @@ function Routine() {
           {running ? "Starting…" : "Run the routine now"}</button>
           <span>{r.ranAt ? <>Last run {hm(r.ranAt)}{r.sessionUrl ? <> · <a href={r.sessionUrl} target="_blank" rel="noopener">open</a></> : null}</> : "Not run yet"}</span>
           <button className="btn quiet small" onClick={() => setForm(!form)}>Change</button></div>
-      : <div className="row"><span>Connect the scheduled routine to run it from here, and from Dispatch.</span><button className="btn quiet small" onClick={() => setForm(!form)}>Connect</button></div>}
+      : <div className="row"><span title="Dispatch wakes Claude through it when you send a thread or press Go">Routine not connected ·</span><button className="link" onClick={() => setForm(!form)}>Connect</button></div>}
     {r.error ? <p className="err">{r.error}</p> : null}
     {form ? <form className="row" autoComplete="off" onSubmit={(e) => { e.preventDefault(); dash.routine({ url: url.trim(), token: token.trim() }).then(() => { setForm(false); toast("Routine connected."); }, (er) => said(er, "not saved")); }}>
       <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="Fire URL: https://api.anthropic.com/v1/claude_code/routines/trig_…/fire" aria-label="Fire URL" />
@@ -213,4 +217,24 @@ function Routine() {
       {r.connected ? <button className="btn quiet small" type="button" onClick={() => { dash.routine({ url: null }).then(() => { setForm(false); toast("Routine disconnected."); }, (er) => said(er, "not saved")); }}>Disconnect</button> : null}
     </form> : null}
   </div>;
+}
+
+function Empty({ title, text, act }: { title: string; text: string; act?: [string, () => void] }) {
+  return <div className="empty"><h4>{title}</h4><p>{text}</p>{act ? <button className="btn" onClick={act[1]}>{act[0]}</button> : null}</div>;
+}
+
+/** The moves that aren't the card's main choice, behind one button so the card asks one question. */
+function MoveMenu({ items }: { items: [string, () => void][] }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const shut = (e: Event) => { if (!(e.target as HTMLElement).closest?.(".menu")) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === "Escape") setOpen(false); };
+    addEventListener("pointerdown", shut); addEventListener("keydown", esc);
+    return () => { removeEventListener("pointerdown", shut); removeEventListener("keydown", esc); };
+  }, [open]);
+  return <span className="menu">
+    <button className="btn quiet" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>Move…</button>
+    {open ? <span className="menu-pop" role="menu">{items.map(([label, act]) => <button key={label} role="menuitem" onClick={() => { setOpen(false); act(); }}>{label}</button>)}</span> : null}
+  </span>;
 }

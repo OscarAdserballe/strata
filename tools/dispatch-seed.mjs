@@ -21,7 +21,7 @@ async function tool(name, args) {
 // ---------- pages: plain synthetic HTML, the way Claude would post them ----------
 const STYLE = `<style>
 body{margin:0;background:#fff;color:#141414;font:16px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
-main{padding:44px 52px 40px;display:flex;flex-direction:column;gap:22px}
+main{padding:44px 52px 64px;display:flex;flex-direction:column;gap:22px}
 .ref{font-size:12px;color:#777} .ref::before{content:"■ ";font-size:10px}
 h1{font-size:30px;line-height:1.18;letter-spacing:-.015em;margin:0} h3{font-size:13.5px;margin:0}
 p{margin:0} p.lede{font-size:16px;line-height:24px;color:#333}
@@ -60,9 +60,9 @@ const decideV1 = page("v1", `<div class="ref">RCP-128</div><h1>Steps the assista
 const decideV2 = page("v2", `<div class="ref">RCP-128</div><h1>Steps the assistant adds never get a photo</h1>
 <p class="lede">I'd make the assistant name a photo for every step it saves, and refuse an edit that leaves one out.</p>
 <div class="today"><div class="cap">What happens today</div><div class="cols">
- <div class="col"><small>1 · Recorded</small><div class="step">whisk the eggs 📷</div><div class="step dim">rest 10 minutes (timer only)</div><div class="step">fold in flour 📷</div></div>
- <div class="col"><small>2 · Assistant's draft</small><div class="step">step_1 📷</div><div class="step new">step_2 · new step</div><div class="step">step_3 📷</div></div>
- <div class="col"><small>3 · Recipe page</small><div class="step">Step 1 📷</div><div class="step bad">Step 2 · no photo</div><div class="step">Step 3 📷</div></div>
+ <div class="col"><small>1 · Recorded</small><div class="step">whisk the eggs</div><div class="step dim">rest 10 minutes (timer only)</div><div class="step">fold in flour</div></div>
+ <div class="col"><small>2 · Assistant's draft</small><div class="step">step_1</div><div class="step new">step_2 · new step</div><div class="step">step_3</div></div>
+ <div class="col"><small>3 · Recipe page</small><div class="step">Step 1</div><div class="step bad">Step 2 · no photo</div><div class="step">Step 3</div></div>
 </div></div>
 <div class="code"><pre><span class="c">// today</span>
 save_recipe({ recipe })

@@ -29,7 +29,7 @@ export default function Thinking() {
       </aside>
       <div className="ws-room">
         <div className="ws-caption">{t ? <span>Your notes · {t.area} · since {new Date(t.updatedAt).toLocaleDateString([], { day: "numeric", month: "short" })}</span> : <span />}</div>
-        <div className="ws-sheet">
+        <div className={"ws-sheet" + (t ? " fit" : "")}>
           {t ? <Doc key={t.id} t={t} /> : <div className="ws-blank"><p>{open.length ? "Pick a thread on the left." : "Nothing in Thinking yet. Open one from the left, or from Triage."}</p></div>}
         </div>
       </div>
@@ -62,11 +62,11 @@ export function Doc({ t, where = "thinking" }: { t: DashTask; where?: "thinking"
           </div>}
       <div className="doc-foot">
         {where === "thinking"
-          ? <><button className="btn dark" onClick={() => { flush(); move(t, "review"); go({ view: "review" }); }}>→ Review</button>
-              <button className="btn" onClick={() => { flush(); toast("Sent to Dispatch"); dash.send(t.id).catch((e) => toast(StrataWhy(e, "not sent"), 4200)); }}>Send to Dispatch →</button>
+          ? <><button className="btn dark" onClick={() => { flush(); move(t, "review"); go({ view: "review" }); }}>Ready for review</button>
+              <button className="btn" onClick={() => { flush(); toast("Sent to Dispatch"); dash.send(t.id).catch((e) => toast(StrataWhy(e, "not sent"), 4200)); }}>Send to Dispatch</button>
               <button className="btn quiet" onClick={copy}>Copy for Claude</button>
               <span className="grow" />
-              <button className="btn quiet" onClick={() => { flush(); move(t, "todo"); }}>Close for now</button></>
+              <button className="btn quiet" onClick={() => { flush(); move(t, "todo"); }}>Back to to-do</button></>
           : <button className="btn quiet" onClick={copy}>Copy for Claude</button>}
       </div>
     </article>

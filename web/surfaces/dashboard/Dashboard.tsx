@@ -9,6 +9,8 @@ import FocusReview from "./FocusReview.tsx";
 import Dispatch from "./Dispatch.tsx";
 import { hm } from "./parts.tsx";
 
+// what waits on you carries an orange count; the rest is information
+const WAITS: View[] = ["review", "decide", "built"];
 const RAIL: Record<Mode, [View, string][]> = {
   focus: [["thinking", "Thinking"], ["review", "Review"]],
   dispatch: [["decide", "Decide"], ["implementing", "Implementing"], ["built", "Review"]],
@@ -17,7 +19,7 @@ const RAIL: Record<Mode, [View, string][]> = {
 export default function Dashboard() {
   const nav = useNav();
   return <>
-    <Sky view={nav.view} mode={nav.mode} />
+    <Sky />
     <Poller />
     <div className="dash" data-mode={nav.mode} data-view={nav.view}>
       <Header />
@@ -32,11 +34,9 @@ export default function Dashboard() {
   </>;
 }
 
-// One sky per view, cross-faded: the layers stay mounted and only their opacity moves.
-const SKIES: string[] = ["triage", "thinking", "review", "dispatch", "built"];
-function Sky({ view, mode }: { view: View; mode: Mode }) {
-  const on = view === "triage" ? "triage" : view === "thinking" ? "thinking" : view === "review" ? "review" : view === "built" ? "built" : "dispatch";
-  return <div className="dash-sky" aria-hidden="true" data-mode={mode}>{SKIES.map((k) => <i key={k} className={`sky-${k}`} style={{ opacity: k === on ? 1 : 0 }} />)}</div>;
+// One calm sky under every view of both modes: the mode is said by the toggle, not the weather.
+function Sky() {
+  return <div className="dash-sky" aria-hidden="true"><i /></div>;
 }
 
 function Header() {
@@ -48,7 +48,7 @@ function Header() {
     if (v === "thinking") return String(tasks.filter((t) => t.stage === "thinking" || (t.stage === "todo" && t.morningAt)).length || "");
     if (v === "review") return String(tasks.filter((t) => t.stage === "review" && !t.dispatched).length || "");
     const n = threads.filter((t) => t.stage === (v === "built" ? "review" : v)).length;
-    return v === "implementing" ? `(${n})` : String(n);
+    return !n ? "" : v === "implementing" ? `(${n})` : String(n);
   };
   const rail = RAIL[nav.mode];
   return (
@@ -58,18 +58,21 @@ function Header() {
           {(["focus", "dispatch"] as Mode[]).map((m) => <button key={m} role="tab" aria-selected={nav.mode === m} onClick={() => go({ mode: m })}>
             {m === "focus" ? "Focus" : "Dispatch"}</button>)}
         </div>
-        <button className={"dh-inbox" + (nav.view === "triage" ? " on" : "")} aria-pressed={nav.view === "triage"}
-          onClick={() => go({ view: "triage", sub: nav.view === "triage" ? nav.sub : "inbox" })}>
+        <button className={"dh-inbox" + (nav.view === "triage" && nav.sub === "inbox" ? " on" : "")} aria-pressed={nav.view === "triage" && nav.sub === "inbox"}
+          onClick={() => go({ view: "triage", sub: "inbox" })}>
           Inbox <i>{inbox || ""}</i>
         </button>
       </div>
-      <nav className={"dh-rail" + (nav.view === "triage" ? " quiet" : "")} aria-label="Stages">
+      <div className="dh-main">
+      <span />
+      <nav className="dh-rail" aria-label="Stages">
         {rail.map(([v, name], i) => <span key={v} className="dh-step">
           {i ? <b aria-hidden="true">›</b> : null}
-          <button aria-current={nav.view === v ? "page" : undefined} onClick={() => go({ view: v })}>{name} <i>{count(v)}</i></button>
+          <button aria-current={nav.view === v ? "page" : undefined} onClick={() => go({ view: v })}>{name} <i className={WAITS.includes(v) ? "wait" : undefined}>{count(v)}</i></button>
         </span>)}
       </nav>
       <div className="dh-side end"><Clock /></div>
+      </div>
     </header>
   );
 }

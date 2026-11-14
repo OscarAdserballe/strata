@@ -13,7 +13,7 @@ export function move(t: DashTask, stage: string): void {
     return;
   }
   const morning = stage !== "todo" && stage !== "thinking" && t.morningAt ? { morning: false } : {};
-  if (stage !== "thinking") toast(`→ ${NAME[stage]}`);
+  if (stage !== "thinking") toast(`Moved to ${NAME[stage].toLowerCase()}`);
   dash.patch(t.id, { stage, ...morning }, (x) => ({ ...x, stage, morningAt: "morning" in morning ? null : x.morningAt, updatedAt: Date.now() })).catch(failed);
 }
 

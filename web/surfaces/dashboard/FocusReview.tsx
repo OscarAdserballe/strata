@@ -34,13 +34,13 @@ export default function FocusReview() {
         {list.map((x) => <button key={x.id} className={"ws-card" + (t?.id === x.id ? " on" : "")} onClick={() => setSel(x.id)}>
           <span className="t">{x.title}</span><span className="m">since {hm(x.updatedAt)}{x.links.length ? ` · ${x.links.length} link${x.links.length > 1 ? "s" : ""}` : ""}</span></button>)}
         {!list.length ? <p className="ws-none">Nothing waiting. A thread comes here from Thinking when Claude has made something for it.</p> : null}
-        <button className="ws-fold" aria-expanded={doneOpen} onClick={() => setDoneOpen(!doneOpen)}>{doneOpen ? "▾" : "▸"} Done{board ? ` · ${board.archived + ended.length}` : ""}</button>
+        {board && board.archived + ended.length ? <button className="ws-fold" aria-expanded={doneOpen} onClick={() => setDoneOpen(!doneOpen)}>{doneOpen ? "Hide what’s done" : `Done · ${board.archived + ended.length}`}</button> : null}
         {doneOpen ? ended.map((x) => <div key={x.id} className="ws-done"><span>{x.title}</span><i>{x.stage === "dropped" ? "dropped" : "done"}</i>
           <button className="btn quiet small" onClick={() => dash.patch(x.id, { cleared: false, stage: "backlog" }, (y) => ({ ...y, stage: "backlog", clearedAt: null })).then(() => toast("Back in the backlog"), (e) => toast(StrataWhy(e, "not restored"), 4200))}>Back</button></div>) : null}
       </aside>
       <div className="ws-room">
         <div className="ws-caption">{t ? <span>Ready for you · since {hm(t.updatedAt)}</span> : <span />}</div>
-        <div className="ws-sheet">{t ? <Panel key={t.id} t={t} /> : <div className="ws-blank"><p>Nothing to review.</p></div>}</div>
+        <div className={"ws-sheet" + (t ? " fit" : "")}>{t ? <Panel key={t.id} t={t} /> : <div className="ws-blank"><p>Nothing to review.</p></div>}</div>
       </div>
     </div>
   );
@@ -48,13 +48,14 @@ export default function FocusReview() {
 
 function Panel({ t }: { t: DashTask }) {
   const [link, setLink] = useState("");
-  const [notesOpen, setNotesOpen] = useState(false);
   const links = (next: DashLink[]) => dash.patch(t.id, { links: next }, (x) => ({ ...x, links: next })).catch((e) => toast(StrataWhy(e, "not saved"), 4200));
   return (
     <article className="doc review">
       <div className="doc-crumb"><Src from={t.createdFrom} />{t.area === "personal" ? <span className="tag">personal</span> : null}</div>
       <h1 className="dtitle static">{t.title}</h1>
       <div className="arts">
+        <span className="cap">What came back</span>
+        {t.links.length ? null : <p className="arts-none">Nothing linked yet. Paste the PR, the explainer or the test run Claude made for this.</p>}
         {t.links.map((l, i) => <div key={i} className="art">
           <span className={`ic ${l.kind}`}>{ICON[l.kind] ?? l.kind.slice(0, 3)}</span>
           <span className="am"><b>{l.ref}{l.title ? ` · ${l.title}` : ""}</b><i>{l.url ? l.url.replace(/^https?:\/\//, "") : l.kind}</i></span>
@@ -66,10 +67,7 @@ function Panel({ t }: { t: DashTask }) {
           <button className="btn" type="submit">Add</button>
         </form>
       </div>
-      {t.body.trim() ? <div className="fold">
-        <button className="cap" aria-expanded={notesOpen} onClick={() => setNotesOpen(!notesOpen)}>{notesOpen ? "▾" : "▸"} Your notes</button>
-        {notesOpen ? <Notes text={t.body} /> : null}
-      </div> : null}
+      {t.body.trim() ? <div className="fold"><span className="cap">What you asked for</span><Notes text={t.body} /></div> : null}
       <div className="doc-foot">
         <button className="btn dark" onClick={() => move(t, "done")}>Done</button>
         <button className="btn" onClick={() => {
@@ -79,7 +77,7 @@ function Panel({ t }: { t: DashTask }) {
           go({ view: "triage", sub: "backlog" });
         }}>New thread from this…</button>
         <span className="grow" />
-        <button className="btn quiet" onClick={() => move(t, "dropped")}>Drop</button>
+        <button className="btn quiet danger" onClick={() => move(t, "dropped")}>Drop</button>
       </div>
     </article>
   );
