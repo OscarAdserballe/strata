@@ -336,6 +336,7 @@ const reviewGrades = {
     });
     await page.goto(`${t.base}/?view=review`);
     const review = page.locator(".reviewv");
+    await review.locator(".rv-go").click();
     await review.locator(".q").waitFor();
     const alert = review.getByRole("alert");
     let graded = 0;
@@ -685,6 +686,46 @@ const planThreeMoves = {
     t.say(`${t.net.entries.filter(isMove).length} moves sent`);
     t.check("last", held.join() === last.join(), `server ${held.join(" · ")}`);
     t.check("shown", shown.join() === held.join(), `page ${shown.join(" · ")} — server ${held.join(" · ")}`);
+  },
+};
+
+// a project's dates are field patches in the plan's lane: two quick changes end with the last one, wherever answers land
+const unitDateTwice = {
+  name: "unit-date-twice",
+  what: "change a unit's date twice and the project's end twice, quickly, with the first answer held and the rest out of order; the server holds the last of each and the page shows it",
+  checks: {
+    unit: "the server holds the unit's last date",
+    end: "the server holds the project's last end",
+    shown: "the page shows the server's dates",
+  },
+  async run(t) {
+    const b = await board(t, "Race dates");
+    const { id: gid } = await t.api(`/api/boards/${b.id}/plan/groups`, "POST", { name: "Dated unit" });
+    const page = await t.open({ latency: true, reorder: { writes: true } });
+    await page.goto(`${t.base}/?board=${b.id}`);
+    const unitDate = page.getByLabel("Unit 1 date", { exact: true });
+    await unitDate.waitFor({ state: "attached" });
+    await t.net.idle(400);
+    const isDate = (e) => e.method === "PATCH" && e.path === `/api/boards/${b.id}/plan/groups/${gid}`;
+    const firstAnswer = t.net.hold((e) => isDate(e) && e === t.net.entries.find(isDate));
+    await unitDate.fill("2026-12-01");
+    await unitDate.fill("2026-12-08");
+    await firstAnswer.arrived(1);
+    firstAnswer.release();
+    await page.getByRole("button", { name: "Project menu", exact: true }).click();
+    const ends = page.locator(".pp-mrow input[type=date]");
+    await ends.fill("2027-01-10");
+    await ends.fill("2027-01-17");
+    await page.evaluate(() => window.__strataSettled?.());
+    await t.net.idle(600);
+    await sleep(600);
+    const plan = (await t.api(`/api/boards/${b.id}`)).plan;
+    const unit = plan.groups.find((g) => g.id === gid)?.byDate;
+    t.say(`${t.net.entries.filter(isDate).length} unit date writes; ${t.net.entries.filter((e) => e.method === "PATCH" && e.path.endsWith("/plan/project")).length} end writes`);
+    t.check("unit", unit === "2026-12-08", `server ${unit}`);
+    t.check("end", plan.endsAt === "2027-01-17", `server ${plan.endsAt}`);
+    const shown = [await unitDate.inputValue(), await ends.inputValue()];
+    t.check("shown", shown[0] === unit && shown[1] === plan.endsAt, `page ${shown.join(" · ")} — server ${unit} · ${plan.endsAt}`);
   },
 };
 
@@ -1884,4 +1925,4 @@ const selectionCard = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dispatchPress];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dispatchPress];
