@@ -9,6 +9,8 @@ export interface HtmlHooks {
   /** The saved state (JSON text) of the page opened at `url`, or null if it has none; rejects when it can't be read. */
   onLoad(url: string): Promise<string | null>;
   onSave(url: string, value: string): Promise<void>;
+  /** how tall the page draws itself, in its own pixels */
+  onHeight?(h: number): void;
 }
 
 // Owns one sandboxed iframe and the conversation with the bridge inside it; knows nothing of the room.
@@ -117,6 +119,7 @@ export class HtmlEngine {
       }
       case "revealed": { const done = this.asks.get(m.n); this.asks.delete(m.n); done?.(m.found); break; }
       case "press": this.hooks.onPress(); break;
+      case "height": this.hooks.onHeight?.(m.h); break;
       case "load": this.answer(f, this.hooks.onLoad(this.url).then((value) => ({ t: "state", n: m.n, value }) as ToPage,
         (e: unknown) => ({ t: "state", n: m.n, value: null, why: reason(e) }))); break;
       case "save": this.answer(f, this.hooks.onSave(this.url, m.value).then(() => ({ t: "saved", n: m.n, ok: true }) as ToPage,

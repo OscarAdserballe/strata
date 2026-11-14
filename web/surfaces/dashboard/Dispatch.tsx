@@ -30,6 +30,9 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   const t = here.find((x) => x.id === sel?.thread) ?? here[0] ?? null;
   const v = t ? (t.versions.find((x) => x.n === (sel?.thread === t.id ? sel.n : null)) ?? latest(t)) : null;
   useEffect(() => { setSel(null); }, [view]);
+  // the sheet fits a short page; a long one fills the room and scrolls in its frame
+  const [tall, setTall] = useState<{ rid: string; h: number } | null>(null);
+  const fit = v && tall?.rid === v.resourceId ? Math.max(tall.h, 240) : null;
 
   function press(th: DispatchThread, kind: "go" | "back"): void {
     const rest = here.filter((x) => x.id !== th.id);
@@ -68,8 +71,9 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
       </aside>
       <div className="ws-room">
         <div className="ws-caption"><span>{t && v ? caption(t, v) : ""}</span>{t && v ? <NotesSwitch /> : null}</div>
-        <div className="ws-sheet">
-          {t && v && pane?.board ? <LivePage key={v.resourceId} board={pane.board} resource={v.resourceId} /> : null}
+        <div className="ws-sheet" style={fit ? { flex: `0 1 ${fit}px` } : undefined}>
+          {t && v && pane?.board ? <LivePage key={v.resourceId} board={pane.board} resource={v.resourceId}
+            onHeight={(h) => setTall((was) => (was?.rid === v.resourceId && was.h === h ? was : { rid: v.resourceId, h }))} /> : null}
           {blank ? <div className="ws-blank"><p>{blank}</p></div> : null}
         </div>
       </div>

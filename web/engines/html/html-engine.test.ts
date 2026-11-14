@@ -49,3 +49,15 @@ test("a paint asked before any frame existed is sent once, not twice", () => {
   ready(f);
   assert.deepEqual(marks(f), [["mk-early"]]);
 });
+
+test("the page's height reaches the host only from the frame that is open", () => {
+  const heights: number[] = [];
+  const engine = new HtmlEngine({ ...hooks, onHeight: (h: number) => heights.push(h) } as never);
+  engine.open(host, "/live/four");
+  const old = frames[frames.length - 1];
+  engine.open(host, "/live/five");
+  const f = frames[frames.length - 1];
+  hear({ source: old.contentWindow, data: { [STRATA]: { t: "height", h: 900 } } });
+  hear({ source: f.contentWindow, data: { [STRATA]: { t: "height", h: 512 } } });
+  assert.deepEqual(heights, [512]);
+});
