@@ -101,7 +101,7 @@ test("dashboard_read gives the board by stage as Markdown, and one thread in ful
   const all = await call("dashboard_read");
   assert.equal(all.isError, false, all.text);
   assert.match(all.text, /^# Dashboard · /);
-  assert.match(all.text, /Inbox 1 · Backlog \d+ · To-do \d+ · Thinking \d+ · Review 1/);
+  assert.match(all.text, /Inbox 1 · Backlog \d+ · To-do \d+ · Thinking \d+ · Decide \d+ · Implementing \d+ · Review 1/);
   assert.match(all.text, /## Review\n### Fix the sticking gate on "#12" · t_\w+ · work\nLinks: github trynolan\/nolan#1438 <https:\/\/github\.com\/trynolan\/nolan\/pull\/1438>\nFrom: Notion · Garden committee sync · 23 Oct\n\nThe latch jams/);
   assert.match(all.text, /## Inbox\n- in_\w+ · "Rain gauge reading" · from Notion · Garden committee sync · 23 Oct\n  Mara asked for last week's numbers\./);
   assert.doesNotMatch(all.text, /Scratch pad|## Sources/);

@@ -2,7 +2,8 @@ import { sendJson } from "../../platform/http/http.ts";
 import { route, type Route } from "../../platform/router/router.ts";
 import { addItems, archive, checkItem, createTask, dropItem, editItem, keepItem, patchTask, snapshot, taskView } from "./dashboard.ts";
 import { dashboardRepo as q } from "./repo.ts";
-import { fireRoutine, recordRun, routineView, setRoutine } from "./routine.ts";
+import { fireRoutine, recordRun, routineView, setRoutine, wake } from "./routine.ts";
+import { checkPress, checkSend, pane, pressThread, sendThread } from "./dispatch.ts";
 
 const ID = "([A-Za-z0-9_]{3,60})";
 
@@ -43,6 +44,28 @@ export const dashboardRoutes: Route[] = [
     commit(() => {
       const t = patchTask(params[0], b);
       return { status: 200, body: taskView(t, q.updatesOf.all(t.id)) };
+    });
+  }, { receipt: "atomic" }),
+
+  // Dispatch: the left pane's threads, and the presses that hand a thread to Claude.
+  route("GET", "/api/dashboard/dispatch", ({ res }) => { sendJson(res, 200, pane(q.inboxOpen.all().length)); }),
+
+  route("POST", new RegExp(`^/api/dashboard/tasks/${ID}/send$`), async ({ params, commit }) => {
+    checkSend(params[0]);
+    const w = await wake(`Sent to Dispatch: ${q.task.get(params[0])?.title ?? params[0]}`);
+    commit(() => {
+      if (w.ran) recordRun(w.ran);
+      return { status: 200, body: { press: sendThread(params[0], w.sessionUrl), pane: pane(q.inboxOpen.all().length) } };
+    });
+  }, { receipt: "atomic" }),
+
+  route("POST", new RegExp(`^/api/dashboard/tasks/${ID}/press$`), async ({ params, body, commit }) => {
+    const b = await body();
+    checkPress(params[0], b.kind);
+    const w = await wake(`${b.kind === "go" ? "Go" : "Send back"}: ${q.task.get(params[0])?.title ?? params[0]}`);
+    commit(() => {
+      if (w.ran) recordRun(w.ran);
+      return { status: 200, body: { press: pressThread(params[0], b.kind, w.sessionUrl), pane: pane(q.inboxOpen.all().length) } };
     });
   }, { receipt: "atomic" }),
 

@@ -44,6 +44,11 @@ body[data-mode="review"] .b2{left:48%;top:-250px;width:1100px;height:700px;backg
 header.top{height:64px;display:flex;align-items:center;padding:0 32px;gap:24px}
 .brand{font-weight:700;font-size:17px;letter-spacing:-.01em;flex:1 1 0;min-width:0}
 .brand a{color:var(--text)}
+.brand{display:flex;align-items:center;gap:14px}
+.dmodes{display:inline-flex;padding:3px;background:#1a1a1a;border-radius:10px;font-size:13px;font-weight:600;letter-spacing:0}
+.dmodes > *{padding:6px 13px;border-radius:8px;color:#9a9a9a}
+.dmodes > [aria-current]{background:#fff;color:#141414}
+.dmodes a:hover{color:#fff}
 .modes{display:flex;justify-content:center}
 .seg{display:flex;gap:2px;padding:3px;background:rgba(255,255,255,.55);border:1px solid rgba(255,255,255,.7);border-radius:10px}
 .seg .m{min-height:36px;padding:0 18px;border-radius:8px;border:0;background:transparent;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:var(--text-2);position:relative}
@@ -218,7 +223,7 @@ details.fold2 summary::-webkit-details-marker{display:none}
 <body data-mode="triage">
 <div class="sky" aria-hidden="true"><div class="base"></div><div class="b b1"></div><div class="b b2"></div><div class="b b3"></div></div>
 <header class="top">
-  <div class="brand"><a id="strataLink" href="./">Focus</a></div>
+  <div class="brand"><nav class="dmodes" aria-label="Dashboard mode"><span aria-current="page">Focus</span><a id="dispatchLink" href="dispatch">Dispatch</a></nav><a id="strataLink" class="sm muted" href="./">Strata</a></div>
   <nav class="modes"><div class="seg" role="tablist" aria-label="Modes">
     <button class="m" role="tab" data-mode="triage" data-drop="triage">Triage<span class="badge" id="triageBadge" hidden></span></button>
     <button class="m" role="tab" data-mode="thinking" data-drop="thinking">Thinking <span class="n" id="thinkN"></span></button>
@@ -236,7 +241,7 @@ const BASE = window.STRATA_BASE && window.STRATA_BASE !== "__STRATA_BASE__" ? wi
 const MODES = ['triage', 'thinking', 'review'];
 const ENDED = (t) => t.stage === 'done' || t.stage === 'dropped';
 const MODE_NAME = {triage: 'Triage', thinking: 'Thinking', review: 'Review'};
-const STAGE_NAME = {backlog: 'Backlog', todo: 'To-do', thinking: 'Thinking', review: 'Review', done: 'Done', dropped: 'Dropped'};
+const STAGE_NAME = {backlog: 'Backlog', todo: 'To-do', thinking: 'Thinking', decide: 'Decide', implementing: 'Implementing', review: 'Review', done: 'Done', dropped: 'Dropped'};
 
 // Server data, plus what only this tab knows: the mode, which thread is open, edits not yet saved.
 const S = {tasks: [], inbox: [], archived: 0, mode: 'triage', sub: 'backlog', area: 'work', open: null, sheet: null, sel: null, cur: null, editing: null,
@@ -403,6 +408,12 @@ function move(id, stage, extra = {}){
   if (stage !== 'todo' && stage !== 'thinking' && t.morningAt) extra = {...extra, morning: false};
   patch(id, {stage, ...extra}, (x) => { x.stage = stage; if (extra.morning === false) x.morningAt = null; if (extra.morning === true) x.morningAt ||= Date.now(); x.updatedAt = Date.now(); }, stage === 'thinking' ? null : `→ ${STAGE_NAME[stage]}`);
 }
+// Dispatch takes it from here: Claude prepares a page, and the thread shows up in Decide in Dispatch.
+function sendToDispatch(id){
+  const t = task(id);
+  if (!t) return;
+  write(() => { t.stage = 'implementing'; t.dispatched = true; t.morningAt = null; toast('Sent to Dispatch'); }, `api/dashboard/tasks/${id}/send`, 'POST', {});
+}
 function pickMorning(id, on){
   const t = task(id);
   if (!t) return;
@@ -462,7 +473,7 @@ const picks = () => S.tasks.filter((t) => t.stage === 'todo' && t.morningAt).sor
 function rowActs(t){
   const tmrw = t.morningAt ? `<button class="btn ghost sm" data-morning="${t.id}|0" aria-label="Not tomorrow morning">Not tomorrow</button>` : `<button class="btn ghost sm" data-morning="${t.id}|1" aria-label="Tomorrow morning">Tomorrow</button>`;
   const fwd = t.stage === 'backlog' ? `<button class="btn ghost sm" data-move="${t.id}|todo">→ To-do</button>` : `<button class="btn ghost sm" data-move="${t.id}|thinking">→ Thinking</button><button class="btn ghost sm" data-move="${t.id}|backlog">← Backlog</button>`;
-  return `<span class="acts">${fwd}${tmrw}<button class="btn ghost sm" data-move="${t.id}|dropped">Drop</button></span>`;
+  return `<span class="acts"><button class="btn ghost sm" data-send="${t.id}">Send to Dispatch →</button>${fwd}${tmrw}<button class="btn ghost sm" data-move="${t.id}|dropped">Drop</button></span>`;
 }
 function row(t){
   return `<div class="r${t.morningAt ? ' pick' : ''}${Date.now() - t.updatedAt > OLD ? ' dim' : ''}" draggable="true" data-id="${t.id}">
@@ -557,7 +568,7 @@ function thinkingView(){
 }
 function artIcon(l){ return `<span class="ic ${l.kind}">${l.kind === 'github' ? 'PR' : l.kind === 'linear' ? 'LN' : l.kind === 'slack' ? 'SL' : l.kind === 'web' ? 'WEB' : esc(l.kind.slice(0, 3))}</span>`; }
 function reviewView(){
-  const list = S.tasks.filter((t) => t.stage === 'review').sort((a, b) => b.updatedAt - a.updatedAt);
+  const list = S.tasks.filter((t) => t.stage === 'review' && !t.dispatched).sort((a, b) => b.updatedAt - a.updatedAt);
   if (S.sel && !list.some((t) => t.id === S.sel)) S.sel = null;
   if (!S.sel && list.length) S.sel = list[0].id;
   const t = S.sel && task(S.sel);
@@ -607,7 +618,7 @@ function render(){
   document.body.dataset.mode = S.mode;
   document.querySelectorAll('.m[data-mode]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === S.mode)));
   document.getElementById('thinkN').textContent = String(S.tasks.filter((t) => t.stage === 'thinking' || (t.stage === 'todo' && t.morningAt)).length || '');
-  document.getElementById('reviewN').textContent = String(S.tasks.filter((t) => t.stage === 'review').length || '');
+  document.getElementById('reviewN').textContent = String(S.tasks.filter((t) => t.stage === 'review' && !t.dispatched).length || '');
   // Something arrived while you were elsewhere: a count on Triage, nothing more.
   const badge = document.getElementById('triageBadge');
   badge.hidden = S.mode === 'triage' || !S.inbox.length;
@@ -675,6 +686,7 @@ document.addEventListener('click', (e) => {
   if (d.openthread) { flushTask(S.open); S.open = d.openthread; return render(); }
   if (d.move) { const [id, s] = d.move.split('|'); flushTask(id); if (s === 'thinking' && S.mode !== 'thinking') { S.sheet = null; } return move(id, s); }
   if (d.morning) { const [id, on] = d.morning.split('|'); return pickMorning(id, on === '1'); }
+  if (d.send) return sendToDispatch(d.send);
   if (d.keep) { const [id, s] = d.keep.split('|'); return keep(id, s); }
   if (d.dropitem) return dropItem(d.dropitem);
   if (d.itemarea) { const [id, a] = d.itemarea.split('|'); return setItemArea(id, a); }
@@ -750,9 +762,11 @@ async function runNow(){
 }
 
 document.getElementById('strataLink').href = BASE;
+document.getElementById('dispatchLink').href = BASE + 'dispatch';
 S.area = storage.get('dashboard-area', 'work') === 'personal' ? 'personal' : 'work';
 S.mode = MODES.includes(session.get('focus-mode', null)) ? session.get('focus-mode', null) : hourMode();
 S.sub = ['inbox', 'backlog', 'todo'].includes(session.get('focus-sub', null)) ? session.get('focus-sub', null) : 'backlog';
+if (location.hash === '#inbox') { S.mode = 'triage'; S.sub = 'inbox'; history.replaceState(null, '', location.pathname + location.search); }
 render();
 load().catch((e) => { document.getElementById('view').innerHTML = `<p class="muted">Couldn’t load: ${esc(e.message)}</p>`; });
 api('api/dashboard/routine').then((r) => { S.routine = r; render(); }, () => {});

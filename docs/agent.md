@@ -22,7 +22,7 @@ bearer_token_env_var = "STRATA_TOKEN"
 The room stores only a token's SHA-256. The same page lists tokens with when each was last used, and
 revokes them.
 
-## The fifteen tools
+## The tools
 
 | Tool | Does |
 |---|---|
@@ -39,7 +39,10 @@ revokes them.
 | `apply` | A batch of typed operations, all or nothing; each op's fields are in its input schema |
 | `create_board` | A new board, with a handle and a purpose |
 | `dashboard_add_items` | Tasks into the dashboard's inbox: a title, a line of context and where it came from, for the reader to send on or drop |
-| `dashboard_read` | The dashboard as Markdown: every thread by stage (backlog, to-do, thinking, review) with notes and links, then the inbox |
+| `dashboard_read` | The dashboard as Markdown: every thread by stage (backlog, to-do, thinking, decide, implementing, review) with notes and links, then the inbox |
+| `dashboard_board` | Dispatch: every open thread as JSON `[{ id, title, stage }]`, implementing first |
+| `dashboard_open` | Dispatch: one thread `{ id, title, text, stage, page, notes: [{ id, on, text }] }`, the newest version's page and the notes on it |
+| `dashboard_post` | Dispatch: `{ page?, replies? }`, the next version and replies under the reader's notes |
 
 Every answer is Markdown, cut to about 6k tokens (up to 24k with `max_tokens`), and ends with the exact
 call for the next part. Ids carry a prefix (`src_`, `sec_`, `deck_`, `card_`, `q_`, `hl_`, `grp_`, `ms_`,
@@ -64,6 +67,16 @@ The notes on a thread (`body`) are the reader's own, written in Thinking; no too
 thread. Run now on the board wakes the reader's own scheduled routine through its API trigger
 (`server/features/dashboard/routine.ts`): the Fire URL and token are set on the board and never sent
 back, a run carries no task list because the routine reads the board itself, and runs are a minute apart.
+Dispatch (`server/features/dashboard/dispatch.ts`, page at `<room>/dispatch`) is the dashboard's second
+mode: the room's own reader with a pane of threads on its left. A thread sent from the backlog or to-do
+goes to `implementing`; each page Claude posts with `dashboard_post` becomes a new version, an HTML source
+on the board with the `dispatch` handle (`dashboard_versions`), so every version is kept and the reader's
+notes on it are that version's notes, with agent replies under them as `reply_note` writes them. Where a
+page lands follows the thread's newest press (`dashboard_presses`): sent, or sent back in Decide → Decide;
+Go in Decide → Review; sent back in Review → Review; Go in Review → done. Go and Send back show to the
+agent as the newest note, on nothing. Sending and both presses wake the routine as Run now does, and the
+session it answered with is kept on the press; `STRATA_ROUTINE_STUB=1` (the preview sets it) logs the wake
+instead. Decide and Implementing are reached only this way; Focus leaves Dispatch threads out of its Review.
 Every thread is work or personal (`area`): the page shows one backlog at a time, and an item that names
 no area goes where its source suggests. The older `state` and `pinned_at` columns, the updates,
 sources and pad tables stay in the database; nothing writes them but the mirror of `stage`.

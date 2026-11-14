@@ -43,6 +43,8 @@ import { distilWorkOf, generateCards, isUnstudied, kickDistil, retryDistil, useD
 import { sourceAnswers } from "../capabilities/sources/answers.ts";
 import { warmKeeps } from "../surfaces/keeps/keeps-load.ts";
 import { warmCram } from "../surfaces/cram/cram-load.ts";
+import DispatchPane from "../surfaces/dispatch/DispatchPane.tsx";
+import { DISPATCH } from "./dispatch.ts";
 
 // Warm the keeps and cram chunks only once the wire is quiet, so they don't compete with a board's own reads.
 const warmKeyed = (): void => { warmKeeps(); warmCram(); };
@@ -214,7 +216,8 @@ export default function BoardRoute() {
   const reading = !onHome && !solo && !launcher && !reviewing && !cramming && !keepsUp;
   const deskTools = <DownloadButton boardId={activeId} onDownload={keepBoardOffline} />;
   const cardWork = src && distilWork.busy.find((w) => w.r.id === src.id);
-  const onGenerate = src && !cardWork && isUnstudied(board, src.id) ? () => generateCards(current(), src, sourceActions.redistil) : null;
+  // a Dispatch page is read and answered, never studied
+  const onGenerate = src && !cardWork && !DISPATCH && isUnstudied(board, src.id) ? () => generateCards(current(), src, sourceActions.redistil) : null;
 
   const roomComposer = composer && !composer.fold && !reviewing && !cramming && !keepsUp
     ? <Composer front0={composer.front} answer={composer.answer} anchor={composer.anchor}
@@ -222,8 +225,7 @@ export default function BoardRoute() {
   const host = (name: RoomHostName) => <div ref={roomHost(name)} className="room-host" data-host={name} style={{ display: "contents" }} />;
 
   // `--room` is published so the chat can counter-zoom itself out of the room's scale.
-  return (
-    <div className="app" style={{ zoom: String(ui * ROOM), "--room": String(ROOM) } as React.CSSProperties}>
+  const roomColumn = <>
       {reading && src
         ? <ReaderBar board={boardTitle} file={src.filename} kind={src.kind} onHome={() => openPair(0)}
         onBoards={openLibrary}
@@ -267,6 +269,10 @@ export default function BoardRoute() {
           onCompose={openComposer} boardId={activeId}
           name={threadRid && src ? `${src.filename} — its thread` : "this board’s thread"} />}
       </div>
+  </>;
+  return (
+    <div className={"app" + (DISPATCH ? " dispatch" : "")} style={{ zoom: String(ui * ROOM), "--room": String(ROOM) } as React.CSSProperties}>
+      {DISPATCH ? <DispatchPane>{roomColumn}</DispatchPane> : roomColumn}
 
       <Layers slots={{
         veil: <>

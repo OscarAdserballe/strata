@@ -6,7 +6,9 @@ import { dashboardRepo as q, type InboxRow, type TaskRow, type UpdateRow } from 
 export class DashError extends Error { httpStatus = 400; }
 const fail = (msg: string): never => { throw new DashError(msg); };
 
-export const STAGES = ["backlog", "todo", "thinking", "review", "done", "dropped"] as const;
+export const STAGES = ["backlog", "todo", "thinking", "decide", "implementing", "review", "done", "dropped"] as const;
+// Dispatch moves a thread into these itself, when it is sent, pressed or posted to.
+const DISPATCH_ONLY = ["decide", "implementing"];
 export const OPEN_STAGES = ["backlog", "todo", "thinking", "review"];
 const isEnded = (s: string): boolean => s === "done" || s === "dropped";
 // state and pinned_at predate stages; they are written in step so the rows read the same from either side.
@@ -139,6 +141,7 @@ export function patchTask(id: string, b: Record<string, unknown>): TaskRow {
   if (b.stage !== undefined) {
     stage = String(b.stage);
     if (!(STAGES as readonly string[]).includes(stage)) fail(`stage is one of ${STAGES.join(", ")}.`);
+    if (DISPATCH_ONLY.includes(stage) && stage !== stageOf(cur)) fail(`A thread goes to ${stage} through Dispatch, not by hand.`);
   }
   const t = now();
   // morning: picked for tomorrow, which lifts a backlog thread into to-do.
@@ -162,13 +165,14 @@ export function patchTask(id: string, b: Record<string, unknown>): TaskRow {
 export interface TaskView {
   id: string; title: string; body: string; stage: string; morningAt: number | null;
   links: Link[]; createdFrom: From | null; createdAt: number; updatedAt: number; clearedAt: number | null; area: string;
+  dispatched: boolean;
   updates: { id: string; at: number; text: string; from: From | null; links: Link[] }[];
 }
 const updateView = (u: UpdateRow) => ({ id: u.id, at: u.at, text: u.text, from: parseJson<From | null>(u.from_json, null), links: parseJson<Link[]>(u.links, []) });
-export function taskView(t: TaskRow, ups: UpdateRow[]): TaskView {
+export function taskView(t: TaskRow, ups: UpdateRow[], dispatched = false): TaskView {
   return { id: t.id, title: t.title, body: t.body, stage: stageOf(t), morningAt: t.morning_at,
     links: parseJson<Link[]>(t.links, []), createdFrom: parseJson<From | null>(t.created_from, null),
-    createdAt: t.created_at, updatedAt: t.updated_at, clearedAt: t.cleared_at, area: t.area ?? "personal", updates: ups.map(updateView) };
+    createdAt: t.created_at, updatedAt: t.updated_at, clearedAt: t.cleared_at, area: t.area ?? "personal", dispatched, updates: ups.map(updateView) };
 }
 export function inboxView(r: InboxRow): Record<string, unknown> & { id: string; at: number; kind: string } {
   const it = parseJson<Record<string, unknown>>(r.item, {});
@@ -179,7 +183,8 @@ export function inboxView(r: InboxRow): Record<string, unknown> & { id: string; 
 function withUpdates(rows: TaskRow[]): TaskView[] {
   const byTask = new Map<string, UpdateRow[]>();
   for (const u of q.updates.all()) { const list = byTask.get(u.task_id) ?? []; list.push(u); byTask.set(u.task_id, list); }
-  return rows.map((t) => taskView(t, byTask.get(t.id) ?? []));
+  const sent = new Set(q.dispatched.all().map((r) => r.task_id));
+  return rows.map((t) => taskView(t, byTask.get(t.id) ?? [], sent.has(t.id)));
 }
 
 // STRATA_DASHBOARD_LINKS="Tracker=https://…,Chat=https://…" names the tools you work in, for the page to link.

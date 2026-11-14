@@ -370,7 +370,7 @@ CREATE TABLE IF NOT EXISTS dashboard_tasks (
   pinned_at INTEGER,                      -- set: on Today
   area TEXT,                              -- work | personal: which board it shows on
   cleared_at INTEGER,                     -- set: off the board, in the archive; never deleted
-  stage TEXT,                             -- backlog | todo | thinking | review | done | dropped; state mirrors it
+  stage TEXT,                             -- backlog | todo | thinking | decide | implementing | review | done | dropped; state mirrors it
   morning_at INTEGER                      -- set: picked for tomorrow morning (pinned_at mirrors it)
 );
 CREATE INDEX IF NOT EXISTS idx_dashboard_tasks_parent ON dashboard_tasks(parent_id);
@@ -397,6 +397,22 @@ CREATE TABLE IF NOT EXISTS dashboard_routine (
   id INTEGER PRIMARY KEY CHECK (id = 1), url TEXT NOT NULL, token TEXT NOT NULL,
   ran_at INTEGER, session_url TEXT, error TEXT, updated_at INTEGER NOT NULL
 );
+-- Dispatch: every page Claude posted on a thread, kept. Each is an HTML source on the board with the
+-- dispatch handle, so the reader opens it and the reader's notes on it are that version's notes.
+CREATE TABLE IF NOT EXISTS dashboard_versions (
+  task_id TEXT NOT NULL, n INTEGER NOT NULL, resource_id TEXT NOT NULL,
+  landed TEXT NOT NULL,                   -- decide | review | done: where posting it put the thread
+  at INTEGER NOT NULL, PRIMARY KEY (task_id, n)
+);
+-- Sending a thread, Go and Send back. The newest press on a thread decides where its next page lands.
+CREATE TABLE IF NOT EXISTS dashboard_presses (
+  id TEXT PRIMARY KEY, task_id TEXT NOT NULL,
+  kind TEXT NOT NULL,                     -- send | go | back
+  stage TEXT NOT NULL,                    -- where it was pressed: backlog | todo | decide | review
+  version INTEGER,                        -- the version it was pressed on; null for send
+  at INTEGER NOT NULL, session_url TEXT   -- the routine session it woke, or the one already running
+);
+CREATE INDEX IF NOT EXISTS idx_dashboard_presses_task ON dashboard_presses(task_id, at);
 -- The scratch pad: one free-text document, written whole, so it carries a rev for If-Match.
 CREATE TABLE IF NOT EXISTS dashboard_pad (
   id INTEGER PRIMARY KEY CHECK (id = 1), text TEXT NOT NULL, rev INTEGER NOT NULL, updated_at INTEGER NOT NULL
