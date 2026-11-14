@@ -194,10 +194,10 @@ export const DASHBOARD_LINKS: { label: string; url: string }[] = (process.env.ST
   .filter((l) => l.label && /^https?:\/\//.test(l.url));
 
 /** The board: every thread not cleared, the open inbox, and how many are in the archive. */
-export function snapshot(): { tasks: TaskView[]; inbox: ReturnType<typeof inboxView>[]; archived: number; links: { label: string; url: string }[] } {
+export function snapshot(): { rev: number; tasks: TaskView[]; inbox: ReturnType<typeof inboxView>[]; archived: number; links: { label: string; url: string }[] } {
   const all = q.allTasks.all();
   const live = all.filter((t) => t.cleared_at === null);
-  return { tasks: withUpdates(live), inbox: q.inboxOpen.all().map(inboxView), archived: all.length - live.length, links: DASHBOARD_LINKS };
+  return { rev: q.dashRev.get()!.rev, tasks: withUpdates(live), inbox: q.inboxOpen.all().map(inboxView), archived: all.length - live.length, links: DASHBOARD_LINKS };
 }
 
 /** The archive: threads you cleared off the board, newest first. */

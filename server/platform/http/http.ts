@@ -15,8 +15,8 @@ const MIME: Record<string, string> = {
 
 // The build stamp hashes the client files' mtimes and sizes, so a deploy moves it without a restart.
 const CLIENT_FILES = [
-  "public/index.html", "public/sw.js", "public/pdf.worker.min.js",
-  "dist/main.js", "dist/main.css",
+  "public/index.html", "public/dashboard.html", "public/sw.js", "public/pdf.worker.min.js",
+  "dist/main.js", "dist/main.css", "dist/dashboard.js", "dist/dashboard.css",
 ];
 const stampCache = { v: "", at: 0 };
 export async function buildStamp(): Promise<string> {
@@ -174,8 +174,8 @@ const PUBLIC_FILES = new Set([
 const fileFor = (rel: string): string | null => rel.startsWith("dist/") ? rel : PUBLIC_FILES.has(rel) ? `public/${rel}` : null;
 
 export async function serveStatic(req: IncomingMessage, res: ServerResponse, urlPath: string, nonce: string): Promise<void> {
-  // /dispatch is the room itself, opened with the dashboard's thread pane beside the reader.
-  const rel = urlPath === "/" || urlPath === "/dispatch" ? "index.html" : urlPath === "/dashboard" ? "dashboard.html" : urlPath.slice(1);
+  // the dashboard is one page with two modes, Focus at /dashboard and Dispatch at /dispatch
+  const rel = urlPath === "/" ? "index.html" : urlPath === "/dashboard" || urlPath === "/dispatch" ? "dashboard.html" : urlPath.slice(1);
   const file = fileFor(rel);
   if (!file) { sendJson(res, 404, { error: "not found" }); return; }
   const full = normalize(join(APP_DIR, file));

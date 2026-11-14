@@ -26,7 +26,6 @@ import "./capabilities/sources/sources.css";
 import "./surfaces/library/launcher.css";
 import "./surfaces/review/review.css";
 import "./surfaces/keeps/keeps.css";
-import "./surfaces/dispatch/dispatch.css";
 import "./styles/phone.css";
 import "./shell/toast.css";
 import "./capabilities/card/composer.css";

@@ -262,8 +262,8 @@ self.addEventListener("fetch", (e) => {
   if (req.method !== "GET") return;                       // writes go to the wire or fail there
   if (req.cache === "no-store") return;                   // connectivity checks must reach the server
   const u = new URL(req.url);
-  // The dashboard is its own page: answered with the room's shell, it opened as Strata until the second visit.
-  if (req.mode === "navigate" && u.pathname === `${BASE}dashboard`) return;
+  // The dashboard (Focus and Dispatch) is its own page: answered with the room's shell, it opened as Strata until the second visit.
+  if (req.mode === "navigate" && (u.pathname === `${BASE}dashboard` || u.pathname === `${BASE}dispatch`)) return;
   if (req.mode === "navigate") { e.respondWith(shellNavigation(e, req)); return; }
   if (isRaw(u)) { e.respondWith(bytesFromShelf(e, req)); return; }
   if (isImage(u)) { e.respondWith(imageFromShelf(e, req)); return; }

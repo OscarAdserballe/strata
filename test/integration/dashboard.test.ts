@@ -27,7 +27,7 @@ test("the page is served at /dashboard and starts empty", async () => {
   const html = await page.text();
   assert.match(html, /<title>Focus<\/title>/);
   assert.match(html, /<script nonce="/, "inline scripts carry the response's CSP nonce");
-  assert.deepEqual(await dash(), { tasks: [], inbox: [], archived: 0, links: [] });
+  assert.deepEqual(await dash(), { rev: 0, tasks: [], inbox: [], archived: 0, links: [] });
 });
 
 test("an agent adds tasks with a line of context; you send each to the backlog or to-do, and the thread holds what was asked", async () => {
@@ -183,4 +183,16 @@ test("every thread is work or personal: guessed from its source, set by the agen
   assert.match(work, /^# Dashboard · work · /);
   assert.match(work, /## To-do\n(### [^\n]*\n[^#][^\n]*\n\n)*### Made on the work board · t_areawork1 · work/);
   assert.doesNotMatch(work, /Area from Slack/, "a thread moved to personal leaves the work read");
+});
+
+test("every write answers with the board and the Dispatch pane as they now are, under a revision that only rises", async () => {
+  const before = (await dash()) as unknown as { rev: number };
+  const made = await send("/api/dashboard/tasks", "POST", { id: "t_revcheck01", title: "Revision check", area: "work" }, "dash-rev-000001");
+  assert.equal(made.status, 201);
+  assert.ok(made.body.board.rev >= before.rev, "the answer's board is no older than what was read");
+  assert.ok(made.body.board.tasks.some((t: { id: string }) => t.id === "t_revcheck01"), "the answer holds the write");
+  assert.equal(made.body.pane.rev, made.body.board.rev, "the board and the pane share one revision");
+  const moved = await send("/api/dashboard/tasks/t_revcheck01", "PATCH", { stage: "todo" }, "dash-rev-000002");
+  assert.ok(moved.body.board.rev >= made.body.board.rev);
+  assert.equal(moved.body.board.tasks.find((t: { id: string }) => t.id === "t_revcheck01").stage, "todo");
 });

@@ -6,6 +6,9 @@ import { fireRoutine, recordRun, routineView, setRoutine, wake } from "./routine
 import { checkPress, checkSend, pane, pressThread, sendThread } from "./dispatch.ts";
 
 const ID = "([A-Za-z0-9_]{3,60})";
+// Every write answers with the board and the Dispatch pane as they now are: a dashboard write leaves the room's revision
+// where it was, so the page can't tell a fresh read from a stale one any other way.
+const state = () => ({ board: snapshot(), pane: pane(q.inboxOpen.all().length) });
 
 export const dashboardRoutes: Route[] = [
   route("GET", "/api/dashboard", ({ res }) => { sendJson(res, 200, snapshot()); }),
@@ -17,33 +20,33 @@ export const dashboardRoutes: Route[] = [
   route("POST", "/api/dashboard/inbox", async ({ body, commit }) => {
     const b = await body();
     const item = checkItem({ from: { source: "You" }, ...b }, "item");
-    commit(() => ({ status: 201, body: { id: addItems([item])[0] } }));
+    commit(() => ({ status: 201, body: { id: addItems([item])[0], ...state() } }));
   }, { receipt: "atomic" }),
 
   route("PATCH", new RegExp(`^/api/dashboard/inbox/${ID}$`), async ({ params, body, commit }) => {
     const b = await body();
-    commit(() => ({ status: 200, body: editItem(params[0], b) }));
+    commit(() => ({ status: 200, body: { ...editItem(params[0], b), ...state() } }));
   }, { receipt: "atomic" }),
 
   route("POST", new RegExp(`^/api/dashboard/inbox/${ID}/keep$`), async ({ params, body, commit }) => {
     const edits = await body();
-    commit(() => ({ status: 200, body: keepItem(params[0], edits) }));
+    commit(() => ({ status: 200, body: { ...keepItem(params[0], edits), ...state() } }));
   }, { receipt: "atomic" }),
 
   route("POST", new RegExp(`^/api/dashboard/inbox/${ID}/drop$`), ({ params, commit }) => {
-    commit(() => { dropItem(params[0]); return { status: 200, body: { outcome: "dropped" } }; });
+    commit(() => { dropItem(params[0]); return { status: 200, body: { outcome: "dropped", ...state() } }; });
   }, { receipt: "atomic" }),
 
   route("POST", "/api/dashboard/tasks", async ({ body, commit }) => {
     const b = await body();
-    commit(() => ({ status: 201, body: { id: createTask(b) } }));
+    commit(() => ({ status: 201, body: { id: createTask(b), ...state() } }));
   }, { receipt: "atomic" }),
 
   route("PATCH", new RegExp(`^/api/dashboard/tasks/${ID}$`), async ({ params, body, commit }) => {
     const b = await body();
     commit(() => {
       const t = patchTask(params[0], b);
-      return { status: 200, body: taskView(t, q.updatesOf.all(t.id)) };
+      return { status: 200, body: { ...taskView(t, q.updatesOf.all(t.id)), ...state() } };
     });
   }, { receipt: "atomic" }),
 
@@ -55,7 +58,7 @@ export const dashboardRoutes: Route[] = [
     const w = await wake(`Sent to Dispatch: ${q.task.get(params[0])?.title ?? params[0]}`);
     commit(() => {
       if (w.ran) recordRun(w.ran);
-      return { status: 200, body: { press: sendThread(params[0], w.sessionUrl), pane: pane(q.inboxOpen.all().length) } };
+      return { status: 200, body: { press: sendThread(params[0], w.sessionUrl), ...state() } };
     });
   }, { receipt: "atomic" }),
 
@@ -65,7 +68,7 @@ export const dashboardRoutes: Route[] = [
     const w = await wake(`${b.kind === "go" ? "Go" : "Send back"}: ${q.task.get(params[0])?.title ?? params[0]}`);
     commit(() => {
       if (w.ran) recordRun(w.ran);
-      return { status: 200, body: { press: pressThread(params[0], b.kind, w.sessionUrl), pane: pane(q.inboxOpen.all().length) } };
+      return { status: 200, body: { press: pressThread(params[0], b.kind, w.sessionUrl), ...state() } };
     });
   }, { receipt: "atomic" }),
 

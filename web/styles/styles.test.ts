@@ -16,10 +16,16 @@ const imports = modules.flatMap((file) =>
   [...readFileSync(file, "utf8").matchAll(/^\s*import\s+["'](\.{1,2}\/[^"']+\.css)["'];/gm)]
     .map((m) => ({ from: file, sheet: normalize(join(dirname(file), m[1])) })));
 
-test("every stylesheet under web/ is imported, and only once", () => {
+// The dashboard is a bundle of its own: it may take a sheet the room's bundle takes too, once, and its own sheets are its alone.
+const DASH = normalize("web/dashboard.tsx");
+const DASH_OWN = normalize("web/surfaces/dashboard");
+test("every stylesheet under web/ is imported, and only once in each bundle", () => {
   for (const sheet of sheets) {
-    const by = imports.filter((i) => i.sheet === sheet).map((i) => i.from);
-    assert.equal(by.length, 1, `${sheet} is imported ${by.length} times${by.length ? ` (${by.join(", ")})` : ""}`);
+    const room = imports.filter((i) => i.sheet === sheet && normalize(i.from) !== DASH).map((i) => i.from);
+    const dash = imports.filter((i) => i.sheet === sheet && normalize(i.from) === DASH).length;
+    assert.ok(dash <= 1, `${sheet} is imported ${dash} times by the dashboard`);
+    if (sheet.startsWith(DASH_OWN)) { assert.equal(dash, 1, `${sheet} is the dashboard's and imported by it once`); assert.equal(room.length, 0, `${sheet} is the dashboard's alone`); continue; }
+    assert.equal(room.length, 1, `${sheet} is imported ${room.length} times${room.length ? ` (${room.join(", ")})` : ""}`);
   }
   for (const { from, sheet } of imports) {
     if (/^(web)[\\/]/.test(sheet)) assert.ok(sheets.includes(sheet), `${from} imports ${sheet}, which does not exist`);

@@ -2044,14 +2044,12 @@ const dashboardTriage = {
 
     const keeps = (e) => e.method === "POST" && /\/api\/dashboard\/inbox\/[^/]+\/keep$/.test(e.path);
     const page = await t.open({ latency: true, lostAck: { match: keeps, pick: new Set([1, 2]), key: (e) => e.headers["idempotency-key"] ?? null } });
-    await page.goto(`${t.base}/dashboard`);
-    await page.getByRole("tab", { name: "Triage" }).click();
+    await page.goto(`${t.base}/dashboard?view=triage&sub=inbox`);
     await page.getByRole("tab", { name: /^Work/ }).click();
     await page.getByRole("tab", { name: /^Inbox/ }).click();
     for (const name of titles) {
-      const row = page.locator(".ir", { hasText: name });
-      await row.click();
-      await row.getByRole("button", { name: "→ Backlog" }).click();
+      await page.locator(".tr-row, .tr-card.in", { hasText: name }).first().click();
+      await page.locator(".tr-card.in", { hasText: name }).getByRole("button", { name: "→ Backlog" }).click();
     }
     const until = performance.now() + GRACE_MS * 2;
     let open = 3;
@@ -2067,8 +2065,8 @@ const dashboardTriage = {
     await page.getByRole("tab", { name: /^Backlog/ }).click();
     const row = page.locator(".r", { hasText: `Race task ${tag}` });
     await row.waitFor();
-    await row.hover();
-    await row.getByRole("button", { name: "→ To-do" }).click();
+    await row.locator(".t").click();
+    await page.locator(".tr-card.open").getByRole("button", { name: "→ To-do" }).click();
     const until2 = performance.now() + GRACE_MS;
     let stage = "";
     for (;;) {
@@ -2094,24 +2092,23 @@ const dashboardWrites = {
     await t.api("/api/dashboard/tasks", "POST", { id, title: `Race pin ${tag}`, body: "Picked under loss.", area: "work" });
     const lost = (e) => e.write && /\/api\/dashboard\/tasks\/[^/]+$/.test(e.path) && e.method !== "POST";
     const page = await t.open({ latency: true, lostAck: { match: lost, pick: new Set([1, 2, 3]), key: (e) => e.headers["idempotency-key"] ?? null } });
-    await page.goto(`${t.base}/dashboard`);
-    await page.getByRole("tab", { name: "Triage" }).click();
+    await page.goto(`${t.base}/dashboard?view=triage&sub=backlog`);
     await page.getByRole("tab", { name: /^Work/ }).click();
     await page.getByRole("tab", { name: /^Backlog/ }).click();
     const row = page.locator(".r", { hasText: `Race pin ${tag}` });
     await row.waitFor();
-    await row.hover();
-    await row.getByRole("button", { name: "Tomorrow morning" }).click();
+    await row.locator(".t").click();
+    await page.locator(".tr-card.open").getByRole("button", { name: "Tomorrow morning" }).click();
 
     await page.getByRole("tab", { name: /^To-do/ }).click();
     const moved = page.locator(".r", { hasText: `Race pin ${tag}` });
     await moved.waitFor();
     await moved.locator(".t").click();
-    const title = page.locator("#sheet .dtitle");
+    const title = page.locator(".tr-card.open .dtitle");
     await title.focus();
     await page.keyboard.press("Control+End");
     await title.pressSequentially(" edited", { delay: 15 });
-    const notes = page.locator("#sheet .dbody");
+    const notes = page.locator(".tr-card.open .dbody");
     await notes.focus();
     await page.keyboard.press("Control+End");
     await notes.pressSequentially(`\nNotes ${tag}`, { delay: 15 });
@@ -2143,16 +2140,14 @@ const dashboardAdd = {
     const titles = [`Race add ${tag} one`, `Race add ${tag} two`];
     const adds = (e) => e.write && /\/api\/dashboard\/tasks(\/[^/]+)?$/.test(e.path);
     const page = await t.open({ latency: true, lostAck: { match: adds, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
-    await page.goto(`${t.base}/dashboard`);
-    await page.getByRole("tab", { name: "Triage" }).click();
+    await page.goto(`${t.base}/dashboard?view=triage&sub=backlog`);
     await page.getByRole("tab", { name: /^Backlog/ }).click();
     for (const title of titles) {
       await page.locator("#addIn").fill(title);
       await page.getByRole("button", { name: "Add", exact: true }).click();
     }
-    const row = page.locator(".r", { hasText: titles[1] });
-    await row.hover();
-    await row.getByRole("button", { name: "Tomorrow morning" }).click();
+    // a thread you add opens, ready for its prompt; the second is the one open now
+    await page.locator(".tr-card.open").getByRole("button", { name: "Tomorrow morning" }).click();
     const until = performance.now() + GRACE_MS * 2;
     let rows = [];
     for (;;) {
@@ -2196,10 +2191,10 @@ const dispatchPress = {
     const page = await t.open({ latency: true, lostAck: { match: presses, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dispatch`);
     for (const [i, button] of [[0, "Send back"], [1, "Go →"]]) {
-      const card = page.locator(".dp-card", { hasText: titles[i] });
+      const card = page.locator(".ws-card", { hasText: titles[i] });
       await card.first().waitFor();
       if (!(await card.first().evaluate((el) => el.classList.contains("open")))) await card.first().click();
-      await page.locator(".dp-card.open", { hasText: titles[i] }).getByRole("button", { name: button, exact: true }).click();
+      await page.locator(".ws-card.open", { hasText: titles[i] }).getByRole("button", { name: button, exact: true }).click();
     }
     const until = performance.now() + GRACE_MS * 2;
     let rows = [];
@@ -2213,7 +2208,7 @@ const dispatchPress = {
     const stages = ids.map((id) => t.sql("SELECT stage FROM dashboard_tasks WHERE id = ?", id)[0]?.stage);
     t.check("once", rows[0].length === 1 && rows[0][0].kind === "back" && rows[1].length === 1 && rows[1][0].kind === "go", rows.map((r, i) => `${titles[i]}: ${r.map((x) => x.kind).join(",") || "none"}`).join("; "));
     t.check("moved", stages.every((s) => s === "implementing"), stages.join(", "));
-    const listed = await page.locator(".dp-list").textContent();
+    const listed = await page.locator(".ws-list").textContent();
     t.check("shown", !titles.some((x) => listed.includes(x)), `the Decide list reads ${JSON.stringify(listed.slice(0, 160))}`);
   },
 };

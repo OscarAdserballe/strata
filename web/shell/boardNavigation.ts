@@ -15,7 +15,6 @@ import { begin as journey, end as arrived } from "../platform/rum.ts";
 import { keepsFrames, navigate, readRoute, routeBoard, routeSearch, type Navigation } from "./routes.ts";
 import { putKeepsAway, screensNow, setKeeps, setLibraryQuery, showCram, showLibrary, showReview } from "./screens.ts";
 import { holdPair } from "./pair.ts";
-import { DISPATCH } from "./dispatch.ts";
 
 type Wire = any;
 
@@ -59,8 +58,7 @@ export function useBoardNavigation(room: BoardNavigationRoom) {
     const on = routeBoard(route);
     const over = route.kind === "cram" ? { cram: true } : route.kind === "keeps" ? { bench: keepsFrames(route) } : {};
     if (!on) {
-      // Dispatch opens its own first page once its threads arrive; the library would only flash over it.
-      navigate(route, "none"); showLibrary(!DISPATCH);
+      navigate(route, "none"); showLibrary(true);
       if (route.kind === "keeps") land(over);
       else if (stack.length && stack[0].library) putKeepsAway();
       return;

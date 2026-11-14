@@ -33,7 +33,8 @@ const watch = process.argv.includes("--watch");
 
 /** @type {import("esbuild").BuildOptions} */
 const options = {
-  entryPoints: ["web/main.tsx"],
+  // the room, and the dashboard (Focus and Dispatch) it hosts; what both use lands in shared chunks
+  entryPoints: ["web/main.tsx", "web/dashboard.tsx"],
   bundle: true,
   outdir: "dist",
   format: "esm",

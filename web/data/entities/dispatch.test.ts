@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Store } from "../store.ts";
 import { Mutator, type SendAnswer, type SendRequest } from "../mutate.ts";
-import { DISPATCH_KEY, dispatchOps, type DispatchPane, type DispatchThread } from "./dispatch.ts";
+import { DISPATCH_KEY, dashOps as dispatchOps, type DispatchPane, type DispatchThread } from "./dashboard.ts";
 
 const tick = async () => { for (let i = 0; i < 3; i++) await new Promise((resolve) => setImmediate(resolve)); };
 const thread = (id: string, stage: string): DispatchThread => ({ id, title: id, stage, links: [], updatedAt: 1, versions: [{ n: 1, resourceId: `res-${id}`, at: 1, landed: stage, notes: 0 }], press: null, lands: null });
