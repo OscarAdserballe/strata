@@ -5,7 +5,7 @@ import { room, useHeldId, useRoomHost } from "../../shell/room.ts";
 import { CRAM, REVIEW, openTab, screensNow, setLibrary, setLibraryQuery, setReviewing, useScreens, useScreensUp } from "../../shell/screens.ts";
 import { addSourceFrom } from "../../capabilities/sources/BoardPicker.tsx";
 import { readRoute, routeBoard } from "../../shell/routes.ts";
-import { signOut } from "../../shell/StatusBar.tsx";
+import { signOut } from "../../shell/signOut.ts";
 import { useAdminPath } from "../../shell/session.ts";
 import { reviewStrip, useReviewStrip } from "../../data/entities/review.ts";
 import { refreshBoards } from "../../data/entities/register.ts";

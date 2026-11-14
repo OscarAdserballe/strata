@@ -109,3 +109,19 @@ export function readingList(views: readonly ProjectView[], keptAt: (id: string) 
 
 export const starCount = (views: readonly ProjectView[]): number =>
   views.reduce((n, v) => n + (v.project.archivedAt ? 0 : v.sources.filter((s) => s.pinned && !s.finished).length), 0);
+
+/** The same view from a board's own state, so the project page agrees with Today without the register. */
+export function boardProject(
+  id: string, title: string,
+  plan: { purpose: string; endsAt?: string; archivedAt?: number | null; groups: ProjectEntry["groups"]; places: Record<string, { group: string | null; ord: number | null; pinned: boolean }> },
+  resources: readonly { id: string; filename: string; kind: string; readPct?: number; lastReadAt?: number | null; doneAt?: number | null; createdAt: number }[],
+  now = new Date(),
+): ProjectView {
+  const p: ProjectEntry = { id, title, purpose: plan.purpose, endsAt: plan.endsAt ?? "", archivedAt: plan.archivedAt ?? null, createdAt: 0, touchedAt: null,
+    groups: plan.groups.map((g) => ({ ...g, byDate: g.byDate ?? "" })), places: plan.places };
+  const entries: RegisterEntry[] = resources.map((r) => ({
+    resourceId: r.id, pairId: null, boardId: id, boardTitle: title, unfiled: false, filename: r.filename, kind: r.kind, originUrl: null,
+    createdAt: r.createdAt, status: r.doneAt ? "done" : "reading", readPct: Math.round(r.readPct ?? 0), kept: 0, cards: 0, waiting: !r.doneAt, lastAt: r.lastReadAt ?? 0,
+  }));
+  return projectView(p, entries, now);
+}

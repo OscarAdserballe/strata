@@ -5,7 +5,9 @@ import { store as roomStore } from "../data/store.ts";
 import { applyBoardState, boardKey, useBoardView } from "../data/entities/boards.ts";
 import { AddSourceHost, ImportReceipt, captureOpen, closeCapture } from "../capabilities/sources/AddSource.tsx";
 import { DropZone, filesDrop } from "../capabilities/sources/drop.tsx";
-import StatusBar, { signOut as leaveRoom } from "./StatusBar.tsx";
+import { signOut as leaveRoom } from "./signOut.ts";
+import TopNav from "./TopNav.tsx";
+import { ImportsStatus } from "../capabilities/sources/ImportsPanel.tsx";
 import ReaderBar from "../surfaces/reader/ReaderBar.tsx";
 import Layers from "./Layers.tsx";
 import { toast } from "./layers.ts";
@@ -232,14 +234,15 @@ export default function BoardRoute() {
         follow={!onHome && openSection ? followChapters : null}
         onFollow={() => setFollowChapters(on=>{localStorage.setItem("strata.followChapters",on?"0":"1");return !on;})}
         onNewCard={() => openComposer("", "")} adminPath={adminPath} onSignOut={signOut} />
-        : <StatusBar onBoards={openLibrary}
-        homeOff={onHome && !solo} onHome={() => { if (stateRef.current.solo) toggleCardsOnly(false); openPair(0); }}
-        onAdd={pickAddSource}
-        solo={soloLine}
-        imports={!keepsUp && !cramming && !launcher} onImport={(b, r) => openBoard(b, r)}
-        follow={!onHome && openSection ? followChapters : null}
-        onFollow={() => setFollowChapters(on=>{localStorage.setItem("strata.followChapters",on?"0":"1");return !on;})}
-        onNewCard={() => openComposer("", "")} adminPath={adminPath} onSignOut={signOut} />}
+        : <TopNav here={onHome && !solo ? "projects" : null} onAdd={pickAddSource} adminPath={adminPath} onSignOut={signOut}
+        tools={<>
+          {soloLine ? <span className="tn-solo">{soloLine}</span> : null}
+          {!onHome || solo ? <button className="tn-more" onClick={() => { if (stateRef.current.solo) toggleCardsOnly(false); openPair(0); }} title="this project's page (h)">{boardTitle}</button> : null}
+          {!keepsUp && !cramming && !launcher ? <ImportsStatus onOpen={(b, r) => openBoard(b, r)} /> : null}
+          {!onHome && openSection ? <button className="tn-more" aria-pressed={followChapters} title="Switch the deck automatically as you read into another chapter"
+            onClick={() => setFollowChapters(on=>{localStorage.setItem("strata.followChapters",on?"0":"1");return !on;})}>Follow chapters: {followChapters ? "on" : "off"}</button> : null}
+          <button className="tn-more newcard" onClick={() => openComposer("", "")} title="make a card (c grabs the last answer)">+ card</button>
+        </>} />}
 
       <div className={"panes" + (solo ? " solo" : "")} ref={panesRef}
         onDragOver={panesDrag.onDragOver} onDragLeave={panesDrag.onDragLeave} onDrop={panesDrag.onDrop}>
