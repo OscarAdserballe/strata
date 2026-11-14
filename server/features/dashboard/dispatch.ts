@@ -185,5 +185,5 @@ export function pane(inbox: number): { rev: number; board: string | null; inbox:
       press: p ? { kind: p.kind, stage: p.stage, version: p.version, at: p.at, sessionUrl: p.session_url } : null,
       lands: stage === "implementing" ? landsIn(p) : null }];
   });
-  return { rev: q.paneRev.get()!.rev, board: dispatchBoardId(), inbox, threads };
+  return { rev: q.dashRev.get()!.rev, board: dispatchBoardId(), inbox, threads };
 }

@@ -21,7 +21,7 @@ import { holdDecks } from "../../shell/room.ts";
 import { useSourceColumn } from "./useSourceColumn.ts";
 import type { HeldPlace, SourceRoom } from "./useSourceColumn.ts";
 import { useReaderHere } from "./here.ts";
-import HtmlSource from "./HtmlSource.tsx";
+import HtmlSource from "../../capabilities/live/HtmlSource.tsx";
 import { drawnAs } from "../../engines/html/drawn.ts";
 import { ROOM } from "../../engines/zoom/zoom.ts";
 import { switches } from "../../capabilities/fold/switches.ts";
