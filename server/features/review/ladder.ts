@@ -99,27 +99,36 @@ export interface KeptQueue {
   unkeptDue: number;
   /** when the earliest not-yet-due KEPT card arrives — null if nothing kept waits */
   nextDueAt: number | null;
+  /** due times of kept cards that arrive within AHEAD_MS */
+  ahead: number[];
+  /** kept cards on each rung of the ladder, from the bottom */
+  rungs: number[];
 }
+export const AHEAD_MS = 8 * 864e5;
 
 export function keptQueue(sched: Map<string, CardSchedule>, kept: ReadonlyMap<string, number>, t: number): KeptQueue {
   const due: [string, CardSchedule][] = [];
   let unkeptDue = 0;
   let nextDueAt: number | null = null;
-  const arrive = (at: number) => { if (nextDueAt === null || at < nextDueAt) nextDueAt = at; };
+  const ahead: number[] = [];
+  const rungs: number[] = LADDER_DAYS.map(() => 0);
+  const arrive = (at: number) => { if (nextDueAt === null || at < nextDueAt) nextDueAt = at; if (at - t <= AHEAD_MS) ahead.push(at); };
   for (const [card, s] of sched) {
     const at = dueAtOf(s);
     if (!kept.has(card)) { if (at <= t) unkeptDue++; continue; }
+    rungs[Math.min(Math.max(s.rung, 0), rungs.length - 1)]++;
     if (at > t) { arrive(at); continue; }
     due.push([card, s]);
   }
   // A kept card the fold never met is enrolled at its keep time, with the same seeded draw.
   for (const [card, keptAt] of kept) {
     if (sched.has(card)) continue;
+    rungs[0]++;
     const s: CardSchedule = { rung: 0, at: keptAt, dueAt: keptAt + intervalMs(card, 0, keptAt) };
     if (s.dueAt > t) { arrive(s.dueAt); continue; }
     due.push([card, s]);
   }
-  return { due, unkeptDue, nextDueAt };
+  return { due, unkeptDue, nextDueAt, ahead, rungs };
 }
 
 // `usable` is false when no card points into the tree, so coverage cannot be measured.

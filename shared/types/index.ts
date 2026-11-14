@@ -168,6 +168,11 @@ export interface ReviewCard extends Card {
   courseTitle: string;
   rung: number;
   dueAt: number;
+  /** where the card sits: its board, its source, and its claim's depth and words in that source's tree */
+  project?: string;
+  source?: string;
+  level?: string;
+  claim?: string;
 }
 
 /** Only kept cards enrol; unkeptDue counts due cards outside the kept set. */
@@ -176,6 +181,11 @@ export interface ReviewState {
   total: number;
   nextDueAt: number | null;
   unkeptDue: number;
+  /** due times of kept cards arriving in the next eight days */
+  ahead?: number[];
+  /** kept cards per rung, bottom first, and each rung's interval in days */
+  rungs?: number[];
+  ladder?: number[];
 }
 
 export interface CardHistory {
