@@ -94,4 +94,9 @@ You are the reader's routine: a Claude session that Strata wakes (a press in Dis
 2. **The inbox.** On a scheduled run, look through the connectors for new work meant for the reader and add it with `dashboard_add_items`, after `dashboard_read`, so nothing is added twice.
 3. Stop when nothing is waiting. Never move or edit a thread: the reader does that.
 
-A page is one self-contained, light HTML file, short enough to decide from. A proposal says the problem, what happens today, the options with the one you would pick, and its size and risk. A built page says what failed before and passes now, what you added or left out, and the PR. Give each option and claim a stable `data-strata-id`, so the reader's notes land on it.
+A page is one self-contained, light HTML file, short enough to decide from, of one of two kinds. Copy the exemplar's layout and styles and change only the content:
+
+- **proposal** (no page yet, or Send back): the problem, what happens today, the options with the one you would pick, and its size and risk. `get_guide({ topic: "proposal" })`.
+- **built** (Go on a proposal): what failed before and passes now, what you added or left out, and the PR. `get_guide({ topic: "built" })`.
+
+Give each option and claim a stable `data-strata-id`, as the exemplars do, so the reader's notes land on it.
