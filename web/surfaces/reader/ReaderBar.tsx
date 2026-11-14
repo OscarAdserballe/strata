@@ -5,7 +5,6 @@ import Suggest from "../../capabilities/feedback/Suggest.tsx";
 import { openKeysSheet } from "../../capabilities/keys/registry.ts";
 import { type Layer, switches } from "../../capabilities/fold/switches.ts";
 import { barSlot } from "./barSlot.ts";
-import { useDispatchBar } from "../../shell/dispatch.ts";
 
 export interface ReaderBarProps {
   board: string;
@@ -29,7 +28,6 @@ const LAYERS: [Layer, string][] = [["notes", "notes"], ["cards", "cards"], ["ask
 // While a source is open the bar is one row: where you are, and which layers are on.
 export default function ReaderBar(p: ReaderBarProps) {
   const sw = useSyncExternalStore(switches.subscribe, switches.getSnapshot);
-  const dispatch = useDispatchBar();
   const [menu, setMenu] = useState(false);
   const [study, setStudy] = useState(true);
   useEffect(() => {
@@ -45,16 +43,15 @@ export default function ReaderBar(p: ReaderBarProps) {
       <button className="rbar-home" onClick={p.onBoards} title="all boards (b)" aria-label="boards">
         <svg viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" strokeWidth="1.3" aria-hidden="true"><path d="M2.5 7.5 8 3l5.5 4.5" /><path d="M4 7v6h8V7" /></svg>
       </button>
-      <button className="rbar-board" onClick={p.onHome} title="this board's home">{dispatch?.board ?? p.board}</button>
+      <button className="rbar-board" onClick={p.onHome} title="this board's home">{p.board}</button>
       <span className="rbar-slash">/</span>
       <span className="rbar-file" title={p.file}>{p.file}</span>
       <span className="rbar-kind">{KIND[p.kind] || "text"}</span>
-      {dispatch ? <span className="rbar-ver">{dispatch.version}</span> : null}
       <span className="rbar-grow" />
       {p.imports ? <ImportsStatus onOpen={p.onImport} className="rbar-imports" /> : null}
       <span className="rbar-slot" ref={barSlot.set} />
       <span className="rbar-lbl">layers</span>
-      {LAYERS.filter(([l]) => (l !== "ask" || sw.count.ask > 0) && !(dispatch && l === "cards")).map(([l, label]) =>
+      {LAYERS.filter(([l]) => l !== "ask" || sw.count.ask > 0).map(([l, label]) =>
         <button key={l} className={"rbar-chip " + (l === "ask" ? "asks" : l) + (sw.on[l] ? "" : " off")} aria-pressed={sw.on[l]}
           title={`${sw.on[l] ? "hide" : "show"} ${label}`} onClick={() => switches.flip(l)}>
           <i />{label}<b>{sw.count[l]}</b>

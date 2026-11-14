@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { type ReactNode, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { StrataPath, StrataWhy } from "../../data/api.ts";
 import { store } from "../../data/store.ts";
 import { DISPATCH_KEY, dispatch, useDispatch, type DispatchThread, type DispatchVersion } from "../../data/entities/dispatch.ts";
 import { room } from "../../shell/room.ts";
-import { setDispatchBar } from "../../shell/dispatch.ts";
 import { toast } from "../../shell/layers.ts";
+import { switches } from "../../capabilities/fold/switches.ts";
 
 type Tab = "decide" | "implementing" | "review";
 const TABS: [Tab, string][] = [["decide", "Decide"], ["implementing", "Implementing"], ["review", "Review"]];
@@ -16,6 +16,14 @@ const notesLabel = (n: number): string => (n ? `${n} note${n === 1 ? "" : "s"}` 
 function ago(at: number): string {
   const m = Math.max(1, Math.round((Date.now() - at) / 60000));
   return m < 60 ? `${m} min` : m < 60 * 24 ? `${Math.round(m / 60)} h` : `${Math.round(m / 1440)} d`;
+}
+const hm = (at: number): string => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+/** The line above the sheet: whose page, which version, and what it answers. */
+export function caption(t: DispatchThread, v: DispatchVersion): string {
+  const prev = t.versions.find((x) => x.n === v.n - 1);
+  const why = !prev ? "" : v.landed === "review" && prev.landed === "decide" ? ` · after you said Go on v${prev.n}` : ` · after you sent v${prev.n} back`;
+  const older = latest(t)?.n !== v.n ? " · an older version" : "";
+  return `Claude's page · ${versionLabel(v)} · ${hm(v.at)}${why}${older}`;
 }
 /** The resource the address bar names, so a reload lands on the same version. */
 const urlResource = (): string | null => new URLSearchParams(location.search).get("resource");
@@ -41,7 +49,22 @@ function usePanePoll(busy: boolean): void {
   }, [busy]);
 }
 
-export default function DispatchPane() {
+// The minute changes on its own clock, so only this re-renders.
+function Clock() {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => { const h = window.setInterval(() => setNow(new Date()), 30_000); return () => clearInterval(h); }, []);
+  return <span className="dp-clock">{hm(now.getTime())} · {now.toLocaleDateString([], { weekday: "long" })}</span>;
+}
+
+// Strata's own notes layer, its count and its switch, set above the sheet instead of in a reader bar.
+function NotesChip() {
+  const sw = useSyncExternalStore(switches.subscribe, switches.getSnapshot);
+  return <button type="button" className={"dp-notes" + (sw.on.notes ? "" : " off")} aria-pressed={sw.on.notes}
+    title={`${sw.on.notes ? "hide" : "show"} notes`} onClick={() => switches.flip("notes")}><i />notes <b>{sw.count.notes}</b></button>;
+}
+
+/** The whole Dispatch screen around the room's reader, which arrives as children and is never re-rendered by it. */
+export default function DispatchPane({ children }: { children: ReactNode }) {
   const pane = useDispatch();
   const threads = pane?.threads ?? [];
   const [tab, setTab] = useState<Tab | null>(null);
@@ -86,10 +109,6 @@ export default function DispatchPane() {
 
   const t = shown ? threads.find((x) => x.id === shown.thread) : null;
   const v = t && shown ? t.versions.find((x) => x.n === shown.n) : null;
-  useEffect(() => {
-    setDispatchBar(t && v ? { board: `Dispatch — ${t.stage}`, version: versionLabel(v).replace(" · built", "") } : null);
-  }, [t?.stage, v?.n]);
-  useEffect(() => () => setDispatchBar(null), []);
 
   async function press(th: DispatchThread, kind: "go" | "back"): Promise<void> {
     const s = th.stage as Tab, rest = of(s).filter((x) => x.id !== th.id);
@@ -105,36 +124,48 @@ export default function DispatchPane() {
       : tab === "review" ? "Nothing to review. Built pages show up here." : "Nothing to decide. Send a thread from the backlog in Focus.")
     : null;
 
+  const capt = t && v ? caption(t, v) : null;
   return <>
-    <aside className={`dispatch-pane on-${tab ?? "decide"}`} aria-label="Dispatch threads">
-      <div className="dp-top">
+    <header className={`dp-head on-${tab ?? "decide"}`}>
+      <div className="dp-side-top">
         <nav className="dp-modes" aria-label="Mode">
           <a href={StrataPath("/dashboard")}>Focus</a>
           <span aria-current="page">Dispatch</span>
         </nav>
-        <a className="dp-inbox" href={StrataPath("/dashboard#inbox")}>Inbox {pane?.inbox ?? ""}</a>
+        <a className="dp-inbox" href={StrataPath("/dashboard#inbox")}>Inbox <i>{pane?.inbox ?? ""}</i></a>
       </div>
       <nav className="dp-rail" aria-label="Stages">
         {TABS.map(([s, name], i) => <span key={s} className="dp-step">
           {i ? <i aria-hidden="true">›</i> : null}
           <button type="button" aria-current={tab === s ? "true" : undefined} onClick={() => choose(s)}>
-            {s === "implementing" ? `${name} (${of(s).length})` : `${name} ${of(s).length}`}
+            {name} <b>{s === "implementing" ? `(${of(s).length})` : of(s).length}</b>
           </button>
         </span>)}
       </nav>
-      <div className="dp-list">
-        {tab === "implementing" ? <Implementing threads={here} openId={openId} onPick={(x) => pick(x)} />
-          : here.map((x) => x.id === openId
-            ? <OpenCard key={x.id} t={x} shown={shown?.thread === x.id ? shown.n : null} board={pane?.board ?? null}
-                onVersion={(ver) => show(x, ver)} onPress={(kind) => void press(x, kind)} />
-            : <button key={x.id} type="button" className="dp-card" onClick={() => pick(x)}
-                onPointerDown={() => { if (pane?.board) room.warmBoard(pane.board); }}>
-                <span className="dp-title">{x.title}</span>
-                <span className="dp-meta">{latest(x) ? versionLabel(latest(x)!) : ""}</span>
-              </button>)}
+      <div className="dp-side-top end"><Clock /></div>
+    </header>
+    <div className={`dp-body on-${tab ?? "decide"}`}>
+      <aside className="dispatch-pane" aria-label="Dispatch threads">
+        <div className="dp-list">
+          {tab === "implementing" ? <Implementing threads={here} openId={openId} onPick={(x) => pick(x)} />
+            : here.map((x) => x.id === openId
+              ? <OpenCard key={x.id} t={x} shown={shown?.thread === x.id ? shown.n : null} board={pane?.board ?? null}
+                  onVersion={(ver) => show(x, ver)} onPress={(kind) => void press(x, kind)} />
+              : <button key={x.id} type="button" className="dp-card" onClick={() => pick(x)}
+                  onPointerDown={() => { if (pane?.board) room.warmBoard(pane.board); }}>
+                  <span className="dp-title">{x.title}</span>
+                  <span className="dp-meta">{latest(x) ? versionLabel(latest(x)!) : ""}</span>
+                </button>)}
+        </div>
+      </aside>
+      <div className="dispatch-room">
+        <div className="dp-caption"><span>{capt ?? ""}</span>{capt ? <NotesChip /> : null}</div>
+        <div className="dp-sheet">
+          {children}
+          {blank ? <div className="dispatch-blank"><p>{blank}</p></div> : null}
+        </div>
       </div>
-    </aside>
-    {blank ? <div className="dispatch-blank"><p>{blank}</p></div> : null}
+    </div>
   </>;
 }
 
