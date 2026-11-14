@@ -234,7 +234,7 @@ export default function BoardRoute() {
         follow={!onHome && openSection ? followChapters : null}
         onFollow={() => setFollowChapters(on=>{localStorage.setItem("strata.followChapters",on?"0":"1");return !on;})}
         onNewCard={() => openComposer("", "")} adminPath={adminPath} onSignOut={signOut} />
-        : <TopNav here={onHome && !solo ? "projects" : null} onAdd={pickAddSource} adminPath={adminPath} onSignOut={signOut}
+        : launcher || reviewing ? null : <TopNav here={onHome && !solo ? "projects" : null} onAdd={pickAddSource} adminPath={adminPath} onSignOut={signOut}
         tools={<>
           {soloLine ? <span className="tn-solo">{soloLine}</span> : null}
           {!onHome || solo ? <button className="tn-more" onClick={() => { if (stateRef.current.solo) toggleCardsOnly(false); openPair(0); }} title="this project's page (h)">{boardTitle}</button> : null}

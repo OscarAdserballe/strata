@@ -9,6 +9,9 @@ import Ask from "../../capabilities/ask/Ask.tsx";
 import { useProvideHere } from "../../shell/here.ts";
 import { sinceLoad } from "../../platform/rum.ts";
 import { useBoardList, useRegister } from "../../data/entities/register.ts";
+import type { RegisterEntry } from "../../../shared/types/index.ts";
+import Timeline from "../../capabilities/progress/Timeline.tsx";
+import { useSourceActions } from "../../capabilities/sources/useSourceActions.ts";
 import type { ReviewStrip } from "../../data/entities/review.ts";
 import type { BoardActions } from "../../capabilities/sources/useBoardActions.ts";
 import BoardVerbs from "../../capabilities/sources/BoardVerbs.tsx";
@@ -59,7 +62,7 @@ export interface LibraryHomeProps {
   q: string;
   setQ: (q: string) => void;
   onOpen: (boardId: string, sourceId?: string) => void;
-  onResume?: ((boardId: string) => void) | null;
+  onResume?: ((boardId: string, sourceId?: string) => void) | null;
   onWarm?: ((boardId: string, resume?: boolean) => void) | null;
   onNew: () => void;
   onClose?: (() => void) | null;
@@ -75,7 +78,7 @@ export interface LibraryHomeProps {
   onAdd(kind: "file" | "link", study?: boolean): void;
 }
 
-function LibraryHome({ covered = false, q, setQ, onOpen, onWarm, onNew, onClose, boardActions, review, onReview, onLogout, adminPath, onCardsChanged, tab, onTab, onAdd }: LibraryHomeProps) {
+function LibraryHome({ covered = false, q, setQ, onOpen, onResume, onWarm, onNew, onClose, boardActions, onSourceMutation, review, onReview, onLogout, adminPath, onCardsChanged, tab, onTab, onAdd }: LibraryHomeProps) {
   useProvideHere(() => ({ surface: "library" }));
   const composeRef = useRef<Compose | null>(null);
   const libraryAsk = covered ? null : <Ask thread="library" lazy name="the library’s thread" placeholder="ask anything, or paste a passage to talk about…"
@@ -86,6 +89,16 @@ function LibraryHome({ covered = false, q, setQ, onOpen, onWarm, onNew, onClose,
   useEffect(() => { if (reg && BOOTED_HOME && !homeTimed) { homeTimed = true; sinceLoad("home"); } }, [reg]);
   useEffect(() => { if (regError) setErr(StrataWhy(regError, "couldn't read the register")); }, [regError]);
   const [boardsOpen, setBoardsOpen] = useState(false);
+  const sourceActions = useSourceActions({
+    onState: (id, state, verb) => onSourceMutation?.(id, state, verb),
+    onError: (x, said) => setErr(StrataWhy(x, said)),
+  });
+  const [filing, setFiling] = useState<string | null>(null);
+  function file(e: RegisterEntry, to: string | null) {
+    setFiling(null); setErr("");
+    const dest = to ? boards.find((b) => b.id === to) : null;
+    void sourceActions.file(e, to ? { id: to, title: dest ? dest.title : "" } : null);
+  }
   const dragDepth = useRef(0);
   const [dragHover, setDragHover] = useState(false);
   const fileDrop = {
@@ -151,20 +164,37 @@ function LibraryHome({ covered = false, q, setQ, onOpen, onWarm, onNew, onClose,
     </div>
   );
 
-  const tabBody = tab === "projects" ? <ProjectsIndex reg={reg} onOpen={(id) => onOpen(id)} onWarm={onWarm ? (id) => onWarm(id, false) : undefined} onNew={() => onTab("new")} />
+  const unfiled = (reg ? reg.entries : []).filter((e) => e.unfiled && e.waiting);
+  const tabBody = tab === "projects" ? <>
+    <ProjectsIndex reg={reg} onOpen={(id) => onOpen(id)} onWarm={onWarm ? (id) => onWarm(id, false) : undefined} onNew={() => onTab("new")} />
+    <section className="reg pj-unfiled" aria-label="Unfiled">
+      <h2>Unfiled{unfiled.length ? ` · ${unfiled.length}` : ""}</h2>
+      <AddSourceForm />
+      {err ? <div className="rg-err" role="alert">{err}</div> : null}
+      {unfiled.length ? <Timeline entries={unfiled} boards={threads} onOpen={onOpen} onFile={file}
+        onRename={(e, name) => { setErr(""); void sourceActions.rename(e.boardId, e.resourceId, name); }}
+        onDelete={(e) => { setErr(""); void sourceActions.remove(e.boardId, e.resourceId); }}
+        filing={filing} setFiling={setFiling} empty="" /> : null}
+    </section>
+  </>
     : tab === "new" ? <NewProject onCancel={() => onTab("projects")} onCreated={(id) => onOpen(id)} />
     : <Today reg={reg} review={review} onReview={onReview} onOpen={(id, rid) => (rid ? onOpen(id, rid) : onOpen(id))}
+        onResume={(id, rid) => (onResume ? onResume(id, rid) : onOpen(id, rid))}
         onWarm={onWarm ? (id) => onWarm(id, false) : undefined} onProjects={() => onTab("projects")} error={err} />;
 
   return (
     <div className="veil launcher home2" {...fileDrop}>
       {dropHint}
       <TopNav here={tab === "today" ? "today" : "projects"} onAdd={onAdd} adminPath={adminPath} onSignOut={onLogout}
-        tools={onClose ? <button className="tn-more" aria-label="Close library" onClick={onClose}>✕</button> : null} />
+        tools={<>
+          <HomeTools onCardsChanged={onCardsChanged} composeRef={composeRef} />
+          {onClose ? <button className="tn-more" aria-label="Close library" onClick={onClose}>✕</button> : null}
+        </>} />
       <div className="home2-scroll">
         {tabBody}
         <ImportActivity onOpen={onOpen} />
       </div>
+      {libraryAsk}
     </div>
   );
 }

@@ -102,7 +102,7 @@ try {
   await at(0);
   assert.equal((await saved()).scroll, 0);
   await page.goto(`${base}/?board=${board.id}`);
-  await page.locator(".bp-hname").filter({ hasText: board.title }).waitFor();
+  await page.locator(".pp-title").filter({ hasText: board.title }).waitFor();
   assert.equal(new URL(page.url()).searchParams.get("pair"), null);
   assert.deepEqual(errors, []);
   console.log("✓ returning to the start is saved; a board-home URL still opens home");

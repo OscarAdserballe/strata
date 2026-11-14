@@ -70,6 +70,8 @@ try {
       courseTitle: "Unfiled cards", rung: 0, dueAt: Date.now(), ord: 0 };
     await page.route("**/api/review", route => route.fulfill({ json: { ...review, cards: [card], total: 1 } }));
     await page.goto(base + "/?view=review", { waitUntil: "networkidle" });
+    await page.locator(".rv-go, .ced-b").first().waitFor();
+    if (await page.locator(".rv-go").count()) await page.locator(".rv-go").click();
     await page.locator(".ced-b").click();
     assert.equal(await page.getByRole("button", { name: "tidy", exact: true }).count(), 0);
     await page.locator(".ced textarea").first().fill(front + " edited");

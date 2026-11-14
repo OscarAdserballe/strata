@@ -7,6 +7,7 @@ const { chromium } = await import("playwright");
 const { afterRequests, atRest } = await import("./settled.mjs");
 
 const results = [];
+const navTo = (p, name) => p.getByRole("navigation", { name: "Strata" }).getByRole("button", { name, exact: true });
 const check = (name, ok, detail) => { results.push({ name, ok }); console.log(`${ok ? "✓" : "✗"} ${name}${detail ? ` — ${detail}` : ""}`); };
 
 // found by title so reseeding never breaks the smoke
@@ -40,11 +41,9 @@ try {
   const source = await post(`/api/boards/${inbox.id}/resources`, { filename: "filing-smoke.md", text: "# Filing smoke\nA disposable note for testing the board picker." });
   await post(`/api/boards/${inbox.id}/pairs`, { resourceId: source.id, label: "filing-smoke.md" });
   await page.reload({ waitUntil: "networkidle" });
-  const allBoards = page.getByRole("button", { name: /^All boards / });
-  await allBoards.click();
-  await page.getByRole("region", { name: "All boards", exact: true }).getByRole("button", { name: book.title, exact: true }).waitFor();
-  await allBoards.click();
-  const row = page.locator(".rg-row").filter({ has: page.getByRole("link", { name: "filing-smoke.md", exact: true }) });
+  await navTo(page, "Projects").click();
+  await page.locator(".pj-card").filter({ hasText: book.title }).first().waitFor();
+  const row = page.getByRole("region", { name: "Unfiled", exact: true }).locator(".rg-row").filter({ has: page.getByRole("link", { name: "filing-smoke.md", exact: true }) });
   await row.getByRole("button", { name: "File to board", exact: true }).click();
   let picker = page.getByRole("dialog", { name: "File to a board" });
   await picker.getByRole("searchbox", { name: "Find a board" }).press("Escape");
@@ -53,7 +52,7 @@ try {
   picker = page.getByRole("dialog", { name: "File to a board" });
   await picker.getByRole("searchbox", { name: "Find a board" }).fill(book.title);
   await picker.getByRole("button", { name: book.title, exact: true }).click();
-  await row.getByRole("link", { name: book.title, exact: true }).waitFor();
+  await row.waitFor({ state: "detached" });
   const register = await (await fetch(`${APP}/api/register`)).json();
   check("filing can be cancelled, searched, and saved", register.entries.some((e) => e.resourceId === source.id && e.boardId === book.id && !e.unfiled));
   const removed = await fetch(`${APP}/api/boards/${book.id}/resources/${source.id}?pairs=1`, { method: "DELETE" });
@@ -64,8 +63,7 @@ try {
   // a fresh seed lands on home, a resumed board on the reader: take whichever door is open
   let canvas = await page.waitForSelector("canvas", { timeout: 4000 }).catch(() => null);
   if (!canvas) {
-    await page.locator('.bp-rail [title*="step inside"]').first().click();
-    await page.getByRole("button", { name: /^Open the book/ }).click();
+    await page.locator(".pp-sname").first().click();
     await page.locator('button[title^="One:"], button:has-text("One:")').first().click();
     canvas = await page.waitForSelector("canvas", { timeout: 15000 });
   }
@@ -295,9 +293,10 @@ try {
   const standOn = (card) => [`strata.at.${book.id}`, JSON.stringify({ cards: { [one.deck]: card.id } })];
   {
     const { c, p: doors, asked } = await freshDoor(`${APP}/?board=${book.id}`);
-    const cramButton = doors.getByRole("button", { name: "Cram", exact: true });
-    await cramButton.waitFor({ timeout: 10000 });
+    await doors.locator(".pp-title").waitFor({ timeout: 10000 });
     check("opening a board fetches neither the keeps nor the cram on its way to the page", asked.length > 0 && !asked.some(keepsChunk) && !asked.some(cramChunk));
+    await doors.getByRole("button", { name: "Project menu", exact: true }).click();
+    const cramButton = doors.getByRole("button", { name: "Cram these cards", exact: true });
     const cramAsked = askedFor(doors, cramChunk);
     await cramButton.hover();
     const cramWarm = await cramAsked;
@@ -307,7 +306,7 @@ try {
   }
   {
     const { c, p: doors, asked } = await freshDoor(`${APP}/?board=${book.id}`, standOn(deckCards[0]));
-    await doors.locator(".bp-front .bp-btn.primary").click();
+    await doors.locator(".pp-sname").first().click();
     await doors.locator('button[title^="One:"], button:has-text("One:")').first().click();
     const station = doors.locator(".jn-rev");
     await station.waitFor({ timeout: 15000 });
@@ -321,20 +320,20 @@ try {
   }
   {
     const { c, p: doors, asked } = await freshDoor(`${APP}/?board=${book.id}`);
-    await doors.locator(".bp-front").getByRole("button", { name: "Details", exact: true }).click();
-    const keep = doors.locator(".bp-cover").getByRole("button", { name: "Choose what to keep", exact: true });
-    await keep.waitFor({ timeout: 10000 });
+    const src = doors.locator(".pp-src").first();
+    await src.hover();
+    await src.locator(".tl-more").waitFor({ timeout: 10000 });
     const keepsEarly = asked.some(keepsChunk);
     const keepsAsked = askedFor(doors, keepsChunk);
-    await keep.hover();
+    await src.locator(".tl-more").click();
     const keepsWarm = await keepsAsked;
-    await keep.click();
-    check("a pointer over the cover sheet's 'Choose what to keep' fetches the keeps' chunk before the click, and the keeps draw", !keepsEarly && keepsWarm && await drawn(doors, ".bench"));
+    await src.getByRole("button", { name: "choose what to keep", exact: true }).click();
+    check("opening a source's ⋯ on the project page fetches the keeps' chunk before its 'choose what to keep' is clicked, and the keeps draw", !keepsEarly && keepsWarm && await drawn(doors, ".bench"));
     await c.close();
   }
   {
     const { c, p: doors, asked } = await freshDoor(`${APP}/?board=${book.id}`);
-    await doors.locator(".bp-front .bp-btn.primary").click();
+    await doors.locator(".pp-sname").first().click();
     const chapter = doors.locator(".dk-row").filter({ hasText: "One:" });
     await chapter.locator(".tl-more").waitFor({ timeout: 10000 });
     const keepsEarly = asked.some(keepsChunk);
@@ -357,7 +356,7 @@ try {
   }
   {
     const { c, p: doors, asked } = await freshDoor(`${APP}/?board=${book.id}`);
-    await doors.getByRole("button", { name: "Cram", exact: true }).waitFor({ timeout: 10000 });
+    await doors.locator(".pp-title").waitFor({ timeout: 10000 });
     const early = asked.some(keepsChunk) || asked.some(cramChunk);
     const both = Promise.all([askedFor(doors, keepsChunk), askedFor(doors, cramChunk)]);
     await doors.keyboard.press("j");
@@ -368,7 +367,7 @@ try {
   }
   {
     const { c, p: doors, asked } = await freshDoor(`${APP}/?board=${book.id}`, null, { idle: true });
-    await doors.getByRole("button", { name: "Cram", exact: true }).waitFor({ timeout: 10000 });
+    await doors.locator(".pp-title").waitFor({ timeout: 10000 });
     const keepsWarm = asked.some(keepsChunk) || await askedFor(doors, keepsChunk);
     const cramWarm = asked.some(cramChunk) || await askedFor(doors, cramChunk);
     check("a board's wire going quiet fetches the keeps' and the cram's chunks, with no pointer or key before it", keepsWarm && cramWarm);
@@ -379,12 +378,12 @@ try {
     ["r", keepsChunk, ".bench", "the keeps' chunk already fetched, and the keeps draw"],
     ["x", cramChunk, ".cram-choose", "the cram's chunk already fetched, and the cram draws"]]) {
     const { c, p: lib, asked, landed } = await freshDoor(`${APP}/`, null, { idle: true });
-    await lib.getByRole("button", { name: /^All boards / }).click();
-    const row = lib.getByRole("region", { name: "All boards", exact: true }).getByRole("button", { name: book.title, exact: true });
+    await navTo(lib, "Projects").click();
+    const row = lib.locator(".pj-card").filter({ hasText: book.title }).first();
     await row.waitFor({ timeout: 10000 });
     const rowAt = await lib.evaluate(() => performance.now());
     await row.click();
-    await lib.getByRole("button", { name: "Cram", exact: true }).waitFor({ timeout: 10000 });
+    await lib.locator(".pp-title").waitFor({ timeout: 10000 });
     const drawnAt = await lib.evaluate(() => performance.now());
     const onTheWay = (await lib.evaluate(() => performance.getEntriesByType("resource")
       .filter((e) => /\/chunks\/(Keeps|Cram)Surface-/.test(e.name)).map((e) => e.startTime)))
@@ -401,7 +400,7 @@ try {
     const { c, p: lib } = await freshDoor(`${APP}/`, null, { idle: true });
     const both = Promise.all([keepsChunk, cramChunk].map((chunk) =>
       lib.waitForEvent("requestfinished", { predicate: (r) => chunk(r.url()), timeout: 8000 }).then(() => true, () => false)));
-    await lib.getByRole("button", { name: /^All boards / }).click();
+    await navTo(lib, "Projects").click();
     const fetched = (await both).every(Boolean);
     await lib.keyboard.press("r");
     check("on the library, a click that opens no board fetches the keeps' and the cram's chunks once the wire is quiet, and r pressed first then draws the keeps from it",
@@ -410,12 +409,18 @@ try {
   }
   {
     // Continue must not start either chunk before its page inks: they compete for the board's connections
+    // half-read and opened today, so the book is on Today's Reading with a Resume
     await fetch(`${APP}/api/log`, { method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ event: "smoke_touch", props: { board: book.id } }) });
+      body: JSON.stringify({ event: "read_progress", props: { board: book.id, resource: one.resourceId, deepest: 30, ms: 60_000 } }) });
+    const reading = (await (await fetch(`${APP}/api/register`)).json()).entries.find((e) => e.resourceId === one.resourceId);
     const { c, p: home } = await freshDoor(`${APP}/`, [`strata.at.${book.id}`, JSON.stringify({ pairId: one.id })], { idle: true });
-    const go = home.locator(".home-doors").getByRole("button", { name: /Continue board/ });
+    // a day with reviews in it opens on "You're clear."; the reading is one click past it
+    await home.locator(".td-row, .today.clear").first().waitFor({ timeout: 10000 });
+    if (await home.locator(".today.clear").count()) await home.getByRole("button", { name: "Keep reading anyway", exact: true }).click();
+    const first = home.locator(".td-row").first();
+    const go = first.getByRole("button", { name: "Resume", exact: true });
     await go.waitFor({ timeout: 10000 });
-    const fronted = (await home.locator(".home-doors h1").textContent())?.trim();
+    const fronted = (await first.locator(".td-title").textContent())?.trim();
     await home.evaluate(() => {
       const look = () => {
         for (const cv of document.querySelectorAll(".slide canvas")) {
@@ -435,8 +440,8 @@ try {
     const { inkAt, starts } = await home.evaluate(() => ({ inkAt: window.__inkAt,
       starts: performance.getEntriesByType("resource").filter((e) => /\/chunks\/(Keeps|Cram)Surface-/.test(e.name)).map((e) => Math.round(e.startTime)) }));
     check("the continue journey starts neither chunk before its page inks, and its board's quiet wire fetches both after",
-      fronted === book.title && inked && fetchedBoth && starts.length === 2 && starts.every((s) => s >= inkAt),
-      `fronted ${fronted === book.title}, inked at ${Math.round(inkAt)} ms, chunks started at ${starts.join(", ")} ms`);
+      fronted === reading?.filename && inked && fetchedBoth && starts.length === 2 && starts.every((s) => s >= inkAt),
+      `fronted ${fronted === reading?.filename}, inked at ${Math.round(inkAt)} ms, chunks started at ${starts.join(", ")} ms`);
     await c.close();
   }
 

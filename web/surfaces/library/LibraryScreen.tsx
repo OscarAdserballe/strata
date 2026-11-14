@@ -37,7 +37,7 @@ export default function LibraryScreen() {
   return host && createPortal(
     <LibraryHome covered={!!(up & (REVIEW | CRAM))} q={q} setQ={setLibraryQuery}
       onOpen={room.openBoard} onNew={() => room.newBoard(q)}
-      onResume={(id: string) => { journey("continue"); void room.openBoard(id, undefined, { resume: true }); }}
+      onResume={(id: string, rid?: string) => { journey("continue"); void room.openBoard(id, rid, rid ? undefined : { resume: true }); }}
       onWarm={room.warmBoard} onCardsChanged={reviewStrip.refresh}
       review={review} onReview={() => { journey("review.open"); setReviewing(true); }}
       onSourceMutation={room.sourceMutated}

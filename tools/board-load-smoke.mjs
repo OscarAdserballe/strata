@@ -24,6 +24,12 @@ async function hold(page,path) {
   await page.route(base+path,async route=>{started();await gate;await route.continue();});
   return {release,requested};
 }
+// Today lists the project; a day already reviewed opens on "You're clear." with the page one click past it
+async function todayShows(page,title) {
+  await page.locator(".td-proj, .today.clear").first().waitFor();
+  if (await page.locator(".today.clear").count()) await page.getByRole("button",{name:"Keep reading anyway",exact:true}).click();
+  await page.locator(".td-proj").filter({hasText:title}).first().waitFor();
+}
 try {
   const context = await browser.newContext({serviceWorkers:"block",viewport:{width:1440,height:1000}});
   const page = await context.newPage();
@@ -34,13 +40,12 @@ try {
   const decks = await hold(page,"/api/decks");
   await page.goto(base,{waitUntil:"domcontentloaded"});
   await page.getByRole("button",{name:"New card",exact:true}).waitFor();
-  await page.getByRole("region",{name:"Your library"}).locator(".rg-title").filter({hasText:filename}).waitFor();
+  await todayShows(page,board.title);
   assert.equal(paths.filter(path=>path==="/api/decks").length,0,"home does not need the deck catalogue");
   assert.equal(paths.filter(path=>path==="/api/boards").length,1,"home only loads its board list once");
   assert.equal(paths.filter(path=>path==="/api/register").length,1,"home only loads its ledger once");
-  await page.getByRole("button",{name:/^All boards /}).click();
-  await page.getByRole("region",{name:"All boards",exact:true}).getByRole("button",{name:board.title,exact:true}).click();
-  await page.locator(".bp-hname").filter({hasText:board.title}).waitFor();
+  await page.locator(".td-proj").filter({hasText:board.title}).first().click();
+  await page.locator(".pp-title").filter({hasText:board.title}).waitFor();
   await within(decks.requested,"board deck request");
   assert.equal(new URL(page.url()).searchParams.get("resource"),null);
   assert.equal(paths.some(path=>path.endsWith("/raw")),false,"opening a board downloads none of its sources");
@@ -49,9 +54,9 @@ try {
   await page.waitForLoadState("networkidle");
   assert.equal(paths.filter(path=>path==="/api/register").length,1,"opening a board does not re-read the ledger");
   const ledger = await hold(page,"/api/register");
-  await page.getByRole("button",{name:"boards",exact:true}).click();
+  await page.getByRole("navigation",{name:"Strata"}).getByRole("button",{name:"Today",exact:true}).click();
   await within(ledger.requested,"returning home refreshes ledger");
-  await page.getByRole("region",{name:"Your library"}).locator(".rg-title").filter({hasText:filename}).waitFor();
+  await todayShows(page,board.title);
   ledger.release();
   await page.unrouteAll({behavior:"wait"});
   assert.deepEqual(errors,[]);
@@ -63,7 +68,7 @@ try {
   const list = await hold(direct,"/api/boards");
   const catalogue = await hold(direct,"/api/decks");
   await direct.goto(`${base}/?board=${board.id}`,{waitUntil:"domcontentloaded"});
-  await direct.locator(".bp-hname").filter({hasText:board.title}).waitFor();
+  await direct.locator(".pp-title").filter({hasText:board.title}).waitFor();
   list.release(); catalogue.release();
   await direct.unrouteAll({behavior:"wait"});
   const asset = await direct.evaluate(()=>performance.getEntriesByType("resource").find(entry=>/\/dist\/main\.js/.test(entry.name))?.toJSON());

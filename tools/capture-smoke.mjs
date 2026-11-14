@@ -38,7 +38,9 @@ try {
     }
     return route.fulfill({json:{kind:"youtube",url,title,author:"Capture fixture",ytDlpCommand:ytDlpCommand(url),ytDlpCommands:{macos:ytDlpCommand(url),windows:ytDlpCommand(url,"windows")}}});
   });
-  await page.goto(base,{waitUntil:"domcontentloaded"});
+  // the paste-a-link line sits with what is unfiled, under Projects
+  await page.goto(base+"/?view=projects",{waitUntil:"domcontentloaded"});
+  const home = base+"/?view=projects";
   const cap = page.locator(".cap");
   async function fromHome() {
     await page.getByRole("textbox",{name:"Link to save"}).fill(url);
@@ -62,7 +64,7 @@ try {
   assert.equal(requests.length,1,"home hands the existing YouTube response to the caption dialog");
   await cap.getByRole("button",{name:"cancel",exact:true}).click();
   await cap.waitFor({state:"detached"});
-  assert.equal(page.url(),base+"/","cancelling stays home");
+  assert.equal(page.url(),home,"cancelling stays home");
   assert.ok(!(await api("/api/register")).entries.some(entry=>entry.filename===title));
 
   await fromHome();
@@ -73,8 +75,8 @@ try {
   assert.ok(result.resourceId,JSON.stringify(result));
   saved.push({board:result.state.board.id,id:result.resourceId});
   await cap.waitFor({state:"detached"});
-  assert.equal(page.url(),base+"/","adding a transcript stays home");
-  await page.getByRole("region",{name:"Your library"}).getByRole("link",{name:title,exact:true}).waitFor();
+  assert.equal(page.url(),home,"adding a transcript stays home");
+  await page.getByRole("region",{name:"Unfiled"}).getByRole("link",{name:title,exact:true}).waitFor();
   const raw = await (await fetch(`${base}/api/boards/inbox/resources/${result.resourceId}/raw`)).text();
   assert.match(raw,/\[0:00\] An idea becomes useful/);
   assert.match(raw,/\[0:50\] Practice makes the idea concrete/);
@@ -86,19 +88,19 @@ try {
   assert.equal(await page.getByRole("textbox",{name:"Link to save"}).inputValue(),articleUrl,"a failed capture retains the pasted link");
   assert.equal(await cap.count(),0);
   await page.getByRole("button",{name:"Save link",exact:true}).click();
-  await page.getByRole("region",{name:"Your library"}).getByRole("link",{name:articleTitle,exact:true}).waitFor();
-  assert.equal(page.url(),base+"/");
+  await page.getByRole("region",{name:"Unfiled"}).getByRole("link",{name:articleTitle,exact:true}).waitFor();
+  assert.equal(page.url(),home);
   assert.equal(articleAttempts,2);
   // pressing again reuses the Idempotency-Key, so a lost answer is replayed, not a second article
   assert.match(articleKeys[0] || "",/^[A-Za-z0-9-]{8,80}$/,"the form's capture goes under a key");
   assert.equal(articleKeys[1],articleKeys[0],"the same link pressed again goes under the same key");
   await page.reload({waitUntil:"domcontentloaded"});
-  await page.getByRole("region",{name:"Your library"}).getByRole("link",{name:articleTitle,exact:true}).waitFor();
+  await page.getByRole("region",{name:"Unfiled"}).getByRole("link",{name:articleTitle,exact:true}).waitFor();
   console.log("✓ a failed article capture explains the error, retains the link for retry, and persists the successful retry after reload");
 
   await page.goto(`${base}/?board=${board.id}`,{waitUntil:"domcontentloaded"});
-  await page.locator(".bp-hname").filter({hasText:board.title}).waitFor();
-  await page.getByTitle("add a source — a file, or from a link",{exact:true}).click();
+  await page.locator(".pp-title").filter({hasText:board.title}).waitFor();
+  await page.getByRole("navigation",{name:"Strata"}).getByRole("button",{name:"+ Add",exact:true}).click();
   await page.locator(".addmenu").getByRole("button",{name:"from a link youtube / article",exact:true}).click();
   await cap.locator("input").fill(url);
   await cap.getByRole("button",{name:"fetch it",exact:true}).click();

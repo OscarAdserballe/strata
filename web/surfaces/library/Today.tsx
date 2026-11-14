@@ -22,12 +22,13 @@ export interface TodayProps {
   review: ReviewStrip | null;
   onReview(): void;
   onOpen(board: string, source?: string): void;
+  onResume(board: string, source: string): void;
   onWarm?: (board: string) => void;
   onProjects(): void;
   error: string;
 }
 
-export default function Today({ reg, review, onReview, onOpen, onWarm, onProjects, error }: TodayProps) {
+export default function Today({ reg, review, onReview, onOpen, onResume, onWarm, onProjects, error }: TodayProps) {
   const [unstarred, setUnstarred] = useState<string[]>([]);
   const [anyway, setAnyway] = useState(false);
   const [why, setWhy] = useState("");
@@ -108,7 +109,7 @@ export default function Today({ reg, review, onReview, onOpen, onWarm, onProject
                 <button className="td-btn" onClick={() => keep(r)}>Keep ★</button>
                 <button className="td-link" onClick={() => unstar(r)}>unstar</button>
               </span> : <button className={i === 0 && r.source.pct ? "td-primary small" : "td-btn"} {...warm(r.source.board)}
-                onClick={() => onOpen(r.source.board, r.source.id)}>{r.source.pct ? "Resume" : "Open"}</button>}
+                onClick={() => (r.source.pct ? onResume : onOpen)(r.source.board, r.source.id)}>{r.source.pct ? "Resume" : "Open"}</button>}
             </div>)}
           <p className="td-foot">Star any source from its project. Up to {STAR_CAP}; a sixth asks which to drop.</p>
         </section>

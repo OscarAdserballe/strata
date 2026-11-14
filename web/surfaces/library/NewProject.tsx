@@ -60,6 +60,7 @@ export default function NewProject({ onCancel, onCreated }: NewProjectProps) {
       if (ends) await write(id, planGestures.project({ endsAt: ends }));
       if (files.length) await addSource.files(files, id);
       for (const url of links) await addSource.saveLink(id, url).catch(() => "added");
+      if (!wanted) { refreshRegister(); onCreated(id); return; }
       setStep("arriving");
       await arrive(id);
     } catch (e) { if (live.current) setError(StrataWhy(e, "couldn't start the project")); }

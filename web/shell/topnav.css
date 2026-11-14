@@ -25,3 +25,6 @@
   .tn-days,.tn-jump{display:none;}
 }
 .tn-solo{font:400 11px/1 var(--mono);color:var(--ink-faint);margin-right:8px;max-width:22vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.topnav .home-tools{display:inline-flex;gap:2px;margin-right:10px;}
+.topnav .home-tools > button{border:none;background:none;padding:8px 6px;font:400 13px/1 var(--sans);color:var(--ink-faint);cursor:pointer;}
+.topnav .home-tools > button:hover{color:var(--accent-deep);}

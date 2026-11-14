@@ -47,6 +47,8 @@ async function fixture(cards, touch = false) {
   });
   await page.goto(`${base}/?view=review`, { waitUntil: "domcontentloaded" });
   const review = page.locator(".reviewv");
+  // a desk opens on the overview; the phone goes straight to the cards
+  if (!touch) await review.getByRole("button", { name: /^Start/ }).click();
   await review.locator(".q").waitFor();
   return { page, review, attempts, receipts, get loads() { return loads; }, get maps() { return maps; },
     async attempt(n) { await until(() => attempts.length >= n); return attempts[n - 1]; },
