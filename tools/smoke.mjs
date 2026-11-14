@@ -230,10 +230,14 @@ try {
     await page.mouse.up();
   };
   const beforeMove = await dock.boundingBox();
-  await dragChat(".ask .thead", -200, -80);
+  // up by what room the reading area leaves above the chat (its fonts set its height), so no clamp is in play
+  const above = await page.evaluate(() => document.querySelector(".ask").getBoundingClientRect().top - document.querySelector(".panes").getBoundingClientRect().top);
+  const dy = -Math.max(0, Math.min(80, Math.floor(above) - 4));
+  await dragChat(".ask .thead", -200, dy);
   const afterMove = await dock.boundingBox();
-  check("chat header follows the pointer", Math.abs(afterMove.x - beforeMove.x + 200) < 2
-    && Math.abs(afterMove.y - beforeMove.y + 80) < 2);
+  check("chat header follows the pointer", dy <= -20 && Math.abs(afterMove.x - beforeMove.x + 200) < 2
+    && Math.abs(afterMove.y - beforeMove.y - dy) < 2,
+    `moved ${Math.round(afterMove.x - beforeMove.x)}, ${Math.round(afterMove.y - beforeMove.y)} for -200, ${dy}; ${Math.round(above)} px above it`);
   const savedPosition = await dock.evaluate((el) => el.style.transform);
   await page.reload({ waitUntil: "networkidle" });
   await page.locator('.ask button[title="show the thread"]').click();
