@@ -4,7 +4,8 @@ import type { ReviewStrip } from "../../data/entities/review.ts";
 import { refreshRegister } from "../../data/entities/register.ts";
 import { plan, planGestures } from "../../data/entities/plan.ts";
 import { StrataWhy } from "../../data/api.ts";
-import { foldDays, type Days } from "../../capabilities/today/days.ts";
+import { foldDays } from "../../capabilities/today/days.ts";
+import DayGrid from "../../capabilities/today/DayGrid.tsx";
 import { endLabel, projectView, readingList, starCount, STAR_CAP, type ProjectView, type ReadingRow } from "../../capabilities/today/projects.ts";
 import { courseOf } from "../../shell/format.js";
 import "./today.css";
@@ -15,12 +16,6 @@ const keptAt = (id: string): number => { try { return Number(localStorage.getIte
 
 export const minutesFor = (cards: number): number => Math.max(1, Math.round(cards / 2));
 const dateLine = (d = new Date()) => d.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" });
-
-export function DayGrid({ days, big }: { days: Days; big?: boolean }) {
-  return <div className={"td-grid" + (big ? " big" : "")} aria-label={`${days.total} days with Strata, ${days.streak} in a row`} role="img">
-    {days.grid.map((col, w) => <div key={w} className="td-col">{col.map((v, i) => <i key={i} className={"td-ink i" + v} />)}</div>)}
-  </div>;
-}
 
 export interface TodayProps {
   reg: RegisterResponse | null;

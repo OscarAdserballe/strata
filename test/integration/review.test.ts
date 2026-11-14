@@ -15,7 +15,8 @@ test("the review ladder: a grade schedules, but only a KEPT card is owed back", 
   const cardId = dk.cards[0].id;
 
   const { body: before } = await api("/api/review");
-  assert.deepEqual(before, { cards: [], total: 0, nextDueAt: null, unkeptDue: 0 }, "an ungraded library owes nothing");
+  assert.deepEqual(before, { cards: [], total: 0, nextDueAt: null, unkeptDue: 0, ahead: [], rungs: [0, 0, 0, 0, 0, 0], ladder: [2, 5, 14, 30, 60, 120] },
+    "an ungraded library owes nothing");
 
   await api("/api/log", { method: "POST", body: JSON.stringify({ event: "card_grade", props: { card: cardId, got: true, review: true } }) });
   const { body: graded } = await api("/api/review");
@@ -30,6 +31,8 @@ test("the review ladder: a grade schedules, but only a KEPT card is owed back", 
   // the first rung is a mean of 2 days with a ±40% per-card draw: [1.2d, 2.8d]
   assert.ok(after.nextDueAt !== null && after.nextDueAt > Date.now() + 1.1 * 864e5
     && after.nextDueAt < Date.now() + 2.9 * 864e5, "…it is due a couple of days out — rung one's draw");
+  assert.equal(after.rungs.reduce((a: number, b: number) => a + b, 0), 1, "the kept card stands on one rung of the ladder");
+  assert.deepEqual(after.ahead, [after.nextDueAt], "…and arrives inside the coming week");
 
   const gone = await api(`/api/decks/${slug}/keeps`, { method: "POST", body: JSON.stringify({ remove: [cardId] }) });
   assert.deepEqual(gone.body.ids, [], "unkeeping empties the set");

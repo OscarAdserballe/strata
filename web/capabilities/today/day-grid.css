@@ -1,0 +1,10 @@
+.td-grid{display:flex;gap:2px;}
+.td-col{display:flex;flex-direction:column;gap:2px;}
+.td-ink{display:block;width:8px;height:8px;border-radius:2px;}
+.td-grid.big .td-ink{width:12px;height:12px;}
+.td-ink.i-1{visibility:hidden;}
+.td-ink.i0{background:oklch(0.94 0.012 70);}
+.td-ink.i1{background:oklch(0.88 0.035 248);}
+.td-ink.i2{background:oklch(0.75 0.05 248);}
+.td-ink.i3{background:oklch(0.58 0.07 248);}
+.td-ink.i4{background:oklch(0.42 0.072 248);}

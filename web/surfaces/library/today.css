@@ -32,16 +32,6 @@
 .td-counter{display:flex;align-items:center;gap:18px;}
 .td-day b{display:block;font:600 34px/1 var(--serif);}
 .td-day span{display:block;font:500 9.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-top:8px;}
-.td-grid{display:flex;gap:2px;}
-.td-col{display:flex;flex-direction:column;gap:2px;}
-.td-ink{display:block;width:8px;height:8px;border-radius:2px;}
-.td-grid.big .td-ink{width:12px;height:12px;}
-.td-ink.i-1{visibility:hidden;}
-.td-ink.i0{background:oklch(0.94 0.012 70);}
-.td-ink.i1{background:oklch(0.88 0.035 248);}
-.td-ink.i2{background:oklch(0.75 0.05 248);}
-.td-ink.i3{background:oklch(0.58 0.07 248);}
-.td-ink.i4{background:oklch(0.42 0.072 248);}
 
 .td-proj{display:block;width:100%;text-align:left;border:none;border-bottom:1px solid var(--line-soft);background:none;padding:14px 0;cursor:pointer;color:var(--ink);}
 .td-proj:hover .td-proj-name{color:var(--accent-deep);}
