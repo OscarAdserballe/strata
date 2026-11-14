@@ -22,7 +22,7 @@ export interface PlanWrite {
   rebuild?: (theirs: BoardPlan) => PlanWrite | null;
 }
 
-const EMPTY: BoardPlan = { purpose: "", groups: [], milestones: [], places: {} };
+const EMPTY: BoardPlan = { purpose: "", endsAt: "", archivedAt: null, groups: [], milestones: [], places: {} };
 
 export const planOps = {
   write(board: string, w: PlanWrite, s: Store = roomStore): Op<PlanAnswer> {

@@ -4,7 +4,7 @@ import { q } from "../repo.ts";
 import { kindOf } from "../sources/blobs.ts";
 import { deckTotals } from "../decks/decks.ts";
 import { INBOX_TYPE } from "../boards/unfiled.ts";
-import type { KeptAt, RegisterEntry, RegisterOverview, RegisterResponse, RegisterStatus } from "../../../shared/types/index.ts";
+import type { KeptAt, ProjectEntry, RegisterEntry, RegisterOverview, RegisterResponse, RegisterStatus } from "../../../shared/types/index.ts";
 
 const WEEK = 7 * 864e5;
 export const KEPT_WINDOW_DAYS = 14;
@@ -81,6 +81,7 @@ export function registerOf(): RegisterResponse {
       kept: keptN,
       cards,
       waiting: !r.done_at && keptN === 0,
+      lastAt: Math.max(p?.at ?? 0, viewed.get(r.id) ?? 0),
     };
   });
 
@@ -104,7 +105,19 @@ export function registerOf(): RegisterResponse {
   const keptRecent: KeptAt[] = recentKeeps
     .map((k) => ({ boardId: boardOfDeck.get(k.course) ?? null, at: k.created_at }));
 
-  return { entries, overview, keptRecent };
+  const projects = new Map<string, ProjectEntry>();
+  for (const b of q.projectsAll.all()) projects.set(b.id, {
+    id: b.id, title: b.title, purpose: b.purpose ?? "", endsAt: b.ends_at ?? "", archivedAt: b.archived_at ?? null,
+    createdAt: b.created_at, touchedAt: b.touched_at ?? null, groups: [], places: {},
+  });
+  for (const g of q.groupsAll.all()) projects.get(g.board_id)?.groups.push({ id: g.id, name: g.name, ord: g.ord, byDate: g.by_date ?? "" });
+  for (const p of q.placesAll.all()) {
+    const pr = projects.get(p.board_id);
+    if (pr) pr.places[p.item] = { group: p.group_id, ord: p.ord, pinned: p.pinned !== 0 };
+  }
+  const hours = q.hoursAll.all().map((h) => ({ hour: h.hour, ms: Math.round(h.ms), cards: h.cards }));
+
+  return { entries, overview, keptRecent, projects: [...projects.values()], hours };
 }
 
 function lastTouch(

@@ -97,12 +97,14 @@ export type Touched = Record<string, { seen: number; done: number; last?: string
 export interface CardsSeen { seen: string[]; done: string[] }
 
 /* `places` is sparse: a missing key means ungrouped and unpinned, never an error. */
-export interface PlanGroup { id: string; name: string; ord: number }
+/** `byDate` is the reader's YYYY-MM-DD, or "" for none. */
+export interface PlanGroup { id: string; name: string; ord: number; byDate: string }
 /** `due` is free text ("before the exam"), not a date; `doneAt` null = not reached. */
 export interface PlanMilestone { id: string; name: string; due: string; note: string; doneAt: number | null; ord: number }
 /** `ord` is the item's position inside its group; null = never placed (sorts last). */
 export interface PlanPlace { group: string | null; milestone: string | null; pinned: boolean; ord: number | null }
-export interface BoardPlan { purpose: string; groups: PlanGroup[]; milestones: PlanMilestone[]; places: Record<string, PlanPlace>; rev?: number }
+/** `endsAt` is the reader's YYYY-MM-DD, or "" for no end; `archivedAt` null = active. */
+export interface BoardPlan { purpose: string; endsAt: string; archivedAt: number | null; groups: PlanGroup[]; milestones: PlanMilestone[]; places: Record<string, PlanPlace>; rev?: number }
 
 /* Revs are stamps from one room counter: of two answers about one scope, the higher rev is newer. */
 export interface NotesSaved { rev: number; notesRev: number }
@@ -356,6 +358,8 @@ export interface RegisterEntry {
   kept: number;
   cards: number;
   waiting: boolean;
+  /** last read or opened; 0 = never */
+  lastAt: number;
 }
 
 export type RegisterStatus =
@@ -377,4 +381,17 @@ export interface RegisterResponse {
   entries: RegisterEntry[];
   overview: RegisterOverview;
   keptRecent: KeptAt[];
+  projects: ProjectEntry[];
+  /** hours with reading or reviewing in them, oldest first; only the client knows the reader's midnight */
+  hours: ActivityHour[];
 }
+
+/** A board as a project: its plan without milestones, for Today and the projects list. */
+export interface ProjectEntry {
+  id: string; title: string; purpose: string; endsAt: string; archivedAt: number | null;
+  createdAt: number; touchedAt: number | null;
+  groups: PlanGroup[];
+  places: Record<string, { group: string | null; ord: number | null; pinned: boolean }>;
+}
+/** `hour` is ms since the epoch / 3,600,000. */
+export interface ActivityHour { hour: number; ms: number; cards: number }

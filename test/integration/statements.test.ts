@@ -42,14 +42,14 @@ async function board(title: string, deck?: string): Promise<string> {
   return b;
 }
 
-test("the register asks the same eleven queries, each once, with one board or four, and never the bytes", async () => {
+test("the register asks the same fifteen queries, each once, with one board or four, and never the bytes", async () => {
   first = await board("one", "aio-lecture-4");
   const one = await ran(() => get("/api/register"));
   for (const t of ["two", "three", "four"]) await board(t, "aio-lecture-4");
   const four = await ran(() => get("/api/register"));
 
   assert.deepEqual([...tally(four)].filter(([, n]) => n > 1), [], "a statement ran more than once in one register");
-  assert.equal(four.length, 11, `register.ts says eleven queries; it ran:\n${four.join("\n")}`);
+  assert.equal(four.length, 15, `register.ts says fifteen queries; it ran:\n${four.join("\n")}`);
   assert.deepEqual(tally(four), tally(one), "the register asked more of the database with more boards: it loops over them");
   assert.deepEqual(four.filter((s) => BYTES.test(s)), [], "the register read a source's bytes");
 });

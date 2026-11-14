@@ -29,7 +29,7 @@ test("a divided book is one source with its chapters inside; apparatus and empty
 });
 
 test("sources stand under the board page's own groups, in its own order", () => {
-  const plan: BoardPlan = { purpose: "", milestones: [], groups: [{ id: "g1", name: "Exam", ord: 0 }],
+  const plan: BoardPlan = { purpose: "", endsAt: "", archivedAt: null, milestones: [], groups: [{ id: "g1", name: "Exam", ord: 0, byDate: "" }],
     places: { b: { group: "g1", milestone: null, pinned: false, ord: 0 }, a: { group: null, milestone: null, pinned: false, ord: 1 } } };
   const sources = cramSources([pair("pa", "a", "da", "A"), pair("pb", "b", "db", "B")], [res("a", "a.pdf"), res("b", "b.pdf")], [],
     [deck("da", 3, 0), deck("db", 3, 0)], plan);

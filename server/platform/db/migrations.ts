@@ -284,6 +284,12 @@ const MIGRATIONS: [name: string, run: () => void][] = [
   ["comments-to-notes", commentsToNotes],
   // A question asked at words names them; a turn asked without any keeps null.
   ["messages-ask", () => addColumn("messages", "ask_id", "TEXT")],
+  // A project's optional end and its archive, and a unit's optional date; dates are the reader's YYYY-MM-DD.
+  ["project-dates", () => {
+    addColumn("boards", "ends_at", "TEXT");
+    addColumn("boards", "archived_at", "INTEGER");
+    addColumn("board_groups", "by_date", "TEXT");
+  }],
 ];
 
 // A comment thread is now a note with replies: the reader's first words are the note, everything after a reply.

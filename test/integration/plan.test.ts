@@ -14,7 +14,7 @@ const PORT = await freePort();
 const BASE = `http://127.0.0.1:${PORT}`;
 const DB = join(tmpdir(), `strata-plantest-${process.pid}.db`);
 const OLD = "b-oldboard";
-const EMPTY = { purpose: "", groups: [], milestones: [], places: {} };
+const EMPTY = { purpose: "", endsAt: "", archivedAt: null, groups: [], milestones: [], places: {} };
 const bare = ({ rev: _rev, ...plan }: { rev?: number; [k: string]: unknown }) => plan;
 let server: ChildProcess;
 
@@ -90,7 +90,7 @@ test("groups: add (defaulted, capped, ordered), rename, and a delete that un-gro
   const b = await send("POST", `/api/boards/${id}/plan/groups`, {});
   const c = await send("POST", `/api/boards/${id}/plan/groups`, { name: "n".repeat(200) });
   assert.deepEqual(c.body.plan.groups, [
-    { id: a.body.id, name: "Week one", ord: 0 }, { id: b.body.id, name: "New group", ord: 1 }, { id: c.body.id, name: "n".repeat(80), ord: 2 },
+    { id: a.body.id, name: "Week one", ord: 0, byDate: "" }, { id: b.body.id, name: "New group", ord: 1, byDate: "" }, { id: c.body.id, name: "n".repeat(80), ord: 2, byDate: "" },
   ]);
 
   const ren = await send("PATCH", `/api/boards/${id}/plan/groups/${a.body.id}`, { name: " Foundations " });
@@ -272,4 +272,53 @@ test("unknown boards, groups and milestones are 404s — on every route", async 
   }
   assert.deepEqual(bare(await planOf(id)), EMPTY);
   assert.deepEqual(rows("SELECT COUNT(*) n FROM board_places WHERE board_id = ?", nope)[0].n, 0);
+});
+
+test("a project's end, its archive and a unit's date: set, cleared, refused when not a day, and each moves plan_rev", async () => {
+  const id = await newBoard("A project");
+  const rev = () => Number(rows("SELECT plan_rev FROM boards WHERE id = ?", id)[0].plan_rev);
+  const r0 = rev();
+  let r = await send("PATCH", `/api/boards/${id}/plan/project`, { endsAt: "2026-12-14" });
+  assert.equal(r.status, 200);
+  assert.equal(r.body.plan.endsAt, "2026-12-14");
+  const r1 = rev();
+  assert.ok(r1 > r0, "an end moves plan_rev");
+  r = await send("PATCH", `/api/boards/${id}/plan/project`, { archived: true });
+  assert.ok(typeof r.body.plan.archivedAt === "number" && r.body.plan.endsAt === "2026-12-14", "archiving keeps the end");
+  assert.ok(rev() > r1, "archiving moves plan_rev");
+  const at = r.body.plan.archivedAt;
+  r = await send("PATCH", `/api/boards/${id}/plan/project`, { archived: true });
+  assert.equal(r.body.plan.archivedAt, at, "archiving twice keeps the first date");
+  r = await send("PATCH", `/api/boards/${id}/plan/project`, { archived: false, endsAt: "" });
+  assert.deepEqual([r.body.plan.archivedAt, r.body.plan.endsAt], [null, ""]);
+  for (const bad of [{ endsAt: "14 Dec" }, { endsAt: 5 }, { archived: "yes" }]) {
+    assert.equal((await send("PATCH", `/api/boards/${id}/plan/project`, bad)).status, 400, JSON.stringify(bad));
+  }
+  assert.equal((await send("PATCH", "/api/boards/b-nope/plan/project", { endsAt: "" })).status, 404);
+
+  const u1 = (await send("POST", `/api/boards/${id}/plan/groups`, { name: "One", byDate: "2026-11-21" })).body.id;
+  const u2 = (await send("POST", `/api/boards/${id}/plan/groups`, { name: "Two" })).body.id;
+  assert.equal((await send("POST", `/api/boards/${id}/plan/groups`, { name: "Bad", byDate: "soon" })).status, 400);
+  r = await send("PATCH", `/api/boards/${id}/plan/groups/${u2}`, { byDate: "2026-11-28", move: -1 });
+  assert.deepEqual(r.body.plan.groups.map((g: { id: string; byDate: string }) => [g.id, g.byDate]), [[u2, "2026-11-28"], [u1, "2026-11-21"]]);
+  r = await send("PATCH", `/api/boards/${id}/plan/groups/${u1}`, { name: "Uno" });
+  assert.equal(r.body.plan.groups[1].byDate, "2026-11-21", "a rename keeps the date");
+  r = await send("PATCH", `/api/boards/${id}/plan/groups/${u1}`, { byDate: null });
+  assert.equal(r.body.plan.groups[1].byDate, "", "null clears the date");
+});
+
+test("the register lists each board as a project with its units and places, and the inbox is not one", async () => {
+  const id = await newBoard("Listed project");
+  const rid = await addSource(id, "listed.md");
+  const gid = (await send("POST", `/api/boards/${id}/plan/groups`, { name: "Unit", byDate: "2026-12-01" })).body.id;
+  await send("PUT", `/api/boards/${id}/plan/order`, { group: gid, items: [rid] });
+  await send("PATCH", `/api/boards/${id}/plan/places/${rid}`, { pinned: true });
+  await send("PATCH", `/api/boards/${id}/plan/project`, { endsAt: "2026-12-14" });
+  const reg = (await api("/api/register")).body;
+  const p = reg.projects.find((x: { id: string }) => x.id === id);
+  assert.deepEqual([p.title, p.endsAt, p.archivedAt, p.groups.map((g: { name: string; byDate: string }) => [g.name, g.byDate]), p.places[rid]],
+    ["Listed project", "2026-12-14", null, [["Unit", "2026-12-01"]], { group: gid, ord: 0, pinned: true }]);
+  assert.ok(!reg.projects.some((x: { title: string }) => /unfiled|inbox/i.test(x.title)), "the inbox is not a project");
+  assert.ok(Array.isArray(reg.hours), "the register carries the activity hours");
+  assert.equal(reg.entries.find((e: { resourceId: string }) => e.resourceId === rid).lastAt, 0, "a source never opened has no lastAt");
 });
