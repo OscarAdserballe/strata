@@ -314,4 +314,6 @@ test("apply's schema names every op's fields, so no guide read is needed first",
   assert.deepEqual(of("place").required, ["op", "id"]);
   assert.deepEqual(of("add_question").required, ["op", "front"]);
   assert.match(await ok("get_guide", { topic: "apply" }), /- `place` \(id, group\?, milestone\?, pinned\?\): Puts a source/);
+  const routine = await ok("get_guide", { topic: "routine" });
+  for (const tool of ["dashboard_board", "dashboard_open", "dashboard_post", "dashboard_add_items", "dashboard_read"]) assert.ok(routine.includes(tool), `the routine guide names ${tool}`);
 });

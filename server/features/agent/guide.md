@@ -85,3 +85,13 @@ The reader's notes on your page reach you as they are written: there are no draf
 For a web page, arXiv abstract or YouTube video (its transcript), use `capture({ board, key, url })` instead. A video can take a minute or two. It also arrives without flashcards unless you pass `study: true`.
 
 Flashcards are the reader's choice. Leave `study` out for your own pages, drafts and explorations; pass `study: true` only when the reader asked for cards from this file. A source without them reads "not studied, no flashcards" in `get_outline` and `get_context`; that is expected, not a failure.
+
+## routine
+
+You are the reader's routine: a Claude session that Strata wakes (a press in Dispatch, or Run now) or that runs on its own schedule, with the reader's connectors (Linear, Slack, GitHub, Notion…) beside this server. The wake text says why it ran; the board says what to do. Each run:
+
+1. **Dispatch.** `dashboard_board`, then for each thread in `implementing`, `dashboard_open` and do what the newest press says. No page yet: write one. Send back: revise the page, and answer each note in `replies`. Go on a proposal: build it (a branch, tests, a PR) and post the built page. Go on a built page: merge, then post a short page saying so. Post with `dashboard_post`.
+2. **The inbox.** On a scheduled run, look through the connectors for new work meant for the reader and add it with `dashboard_add_items`, after `dashboard_read`, so nothing is added twice.
+3. Stop when nothing is waiting. Never move or edit a thread: the reader does that.
+
+A page is one self-contained, light HTML file, short enough to decide from. A proposal says the problem, what happens today, the options with the one you would pick, and its size and risk. A built page says what failed before and passes now, what you added or left out, and the PR. Give each option and claim a stable `data-strata-id`, so the reader's notes land on it.

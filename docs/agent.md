@@ -67,6 +67,7 @@ The notes on a thread (`body`) are the reader's own, written in Thinking; no too
 thread. Run now on the board wakes the reader's own scheduled routine through its API trigger
 (`server/features/dashboard/routine.ts`): the Fire URL and token are set on the board and never sent
 back, a run carries no task list because the routine reads the board itself, and runs are a minute apart.
+What the routine does is `get_guide({ topic: "routine" })`; the prompt stored on it only points there.
 Dispatch (`server/features/dashboard/dispatch.ts`, page at `<room>/dispatch`) is the dashboard's second
 mode: the room's own reader with a pane of threads on its left. A thread sent from the backlog or to-do
 goes to `implementing`; each page Claude posts with `dashboard_post` becomes a new version, an HTML source
