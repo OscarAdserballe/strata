@@ -68,6 +68,11 @@ thread. Run now on the board wakes the reader's own scheduled routine through it
 (`server/features/dashboard/routine.ts`): the Fire URL and token are set on the board and never sent
 back, a run carries no task list because the routine reads the board itself, and runs are a minute apart.
 What the routine does is `get_guide({ topic: "routine" })`; the prompt stored on it only points there.
+Setting one up, at claude.ai/code under Routines: the prompt is `You are the Strata routine. Call
+get_guide({ topic: "routine" }) on the Strata server and follow it.`; its connectors are the room's MCP server
+(a write token) and whatever the work lives in (Linear, Slack, GitHub, Notion); its repositories are the ones
+Dispatch threads build in; it runs on a schedule (weekday mornings fill the inbox) and has an API trigger,
+whose Fire URL and token go into Connect on the dashboard.
 Dispatch (`server/features/dashboard/dispatch.ts`, page at `<room>/dispatch`) is the dashboard's second
 mode: the room's own reader with a pane of threads on its left. A thread sent from the backlog or to-do
 goes to `implementing`; each page Claude posts with `dashboard_post` becomes a new version, an HTML source
