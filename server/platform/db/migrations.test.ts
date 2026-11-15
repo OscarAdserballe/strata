@@ -37,7 +37,7 @@ test("existing dashboard tasks get an area from their source once; one already s
   assert.deepEqual(["t_a1", "t_a2", "t_a3", "t_a4"].map(area), ["work", "personal", "work", "personal"]);
 });
 
-test("existing dashboard tasks get a stage once: open ones go to the backlog, pinned ones to to-do as tomorrow morning's pick, Claude's to review", () => {
+test("existing dashboard tasks get a stage once: open and pinned ones land in to-do, Claude's in review", () => {
   const db = new DatabaseSync(":memory:");
   migrate(db);
   const add = db.prepare("INSERT INTO dashboard_tasks (id,title,body,state,links,created_at,updated_at,pinned_at,stage) VALUES (?,?,?,?,'[]',0,0,?,?)");
@@ -51,7 +51,27 @@ test("existing dashboard tasks get a stage once: open ones go to the backlog, pi
   migrate(db);
   const row = (id: string) => ({ ...(db.prepare("SELECT stage, morning_at FROM dashboard_tasks WHERE id = ?").get(id) as { stage: string; morning_at: number | null }) });
   assert.deepEqual(["t_s1", "t_s2", "t_s3", "t_s4", "t_s5", "t_s6"].map(row), [
-    { stage: "backlog", morning_at: null }, { stage: "todo", morning_at: 5 }, { stage: "review", morning_at: null },
-    { stage: "backlog", morning_at: null }, { stage: "done", morning_at: null }, { stage: "thinking", morning_at: null },
+    { stage: "todo", morning_at: null }, { stage: "todo", morning_at: null }, { stage: "review", morning_at: null },
+    { stage: "todo", morning_at: null }, { stage: "done", morning_at: null }, { stage: "thinking", morning_at: null },
+  ]);
+});
+
+test("backlog folds into to-do once: backlog and unstaged threads go to to-do, every morning pick is cleared", () => {
+  const db = new DatabaseSync(":memory:");
+  migrate(db);
+  const add = db.prepare("INSERT INTO dashboard_tasks (id,title,body,state,links,created_at,updated_at,stage,morning_at,pinned_at) VALUES (?,?,'',?,'[]',0,3,?,?,?)");
+  add.run("t_b1", "Kept for later", "you", "backlog", null, null);
+  add.run("t_b2", "Picked", "you", "todo", 9, 9);
+  add.run("t_b3", "Unstaged", "you", null, null, null);
+  add.run("t_b4", "Unstaged, finished", "done", null, null, null);
+  add.run("t_b5", "Thinking, picked", "you", "thinking", 4, 4);
+  add.run("t_b6", "In review", "you", "review", null, null);
+  migrate(db);
+  migrate(db);
+  const row = (id: string) => ({ ...(db.prepare("SELECT stage, morning_at, pinned_at, updated_at FROM dashboard_tasks WHERE id = ?").get(id) as object) });
+  assert.deepEqual(["t_b1", "t_b2", "t_b3", "t_b4", "t_b5", "t_b6"].map(row), [
+    { stage: "todo", morning_at: null, pinned_at: null, updated_at: 3 }, { stage: "todo", morning_at: null, pinned_at: null, updated_at: 3 },
+    { stage: "todo", morning_at: null, pinned_at: null, updated_at: 3 }, { stage: "done", morning_at: null, pinned_at: null, updated_at: 3 },
+    { stage: "thinking", morning_at: null, pinned_at: null, updated_at: 3 }, { stage: "review", morning_at: null, pinned_at: null, updated_at: 3 },
   ]);
 });

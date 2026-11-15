@@ -4,7 +4,7 @@ export interface TaskRow {
   id: string; title: string; body: string; state: string; waiting_on: string | null; parent_id: string | null;
   links: string; prompt: string | null; created_from: string | null; created_at: number; updated_at: number;
   pinned_at: number | null; cleared_at: number | null; area: string | null;
-  stage: string | null; morning_at: number | null;
+  stage: string | null;
 }
 export interface UpdateRow { id: string; task_id: string; at: number; text: string; from_json: string | null; links: string }
 export interface InboxRow { id: string; kind: string; item: string; at: number; handled_at: number | null; outcome: string | null; result_id: string | null }
@@ -21,7 +21,7 @@ export const dashboardRepo = {
   task: stmt<TaskRow>("SELECT * FROM dashboard_tasks WHERE id = ?"),
   insTask: stmt("INSERT INTO dashboard_tasks (id,title,body,state,waiting_on,parent_id,links,prompt,created_from,created_at,updated_at,area,stage) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)"),
   setArea: stmt("UPDATE dashboard_tasks SET area = ?, updated_at = ? WHERE id = ?"),
-  setTask: stmt("UPDATE dashboard_tasks SET title=?, body=?, state=?, waiting_on=?, parent_id=?, links=?, prompt=?, pinned_at=?, cleared_at=?, updated_at=?, stage=?, morning_at=? WHERE id = ?"),
+  setTask: stmt("UPDATE dashboard_tasks SET title=?, body=?, state=?, waiting_on=?, parent_id=?, links=?, prompt=?, cleared_at=?, updated_at=?, stage=? WHERE id = ?"),
   updates: stmt<UpdateRow>("SELECT * FROM dashboard_updates ORDER BY at, rowid"),
   updatesOf: stmt<UpdateRow>("SELECT * FROM dashboard_updates WHERE task_id = ? ORDER BY at, rowid"),
   inboxOpen: stmt<InboxRow>("SELECT * FROM dashboard_inbox WHERE handled_at IS NULL ORDER BY at, rowid"),
@@ -30,7 +30,7 @@ export const dashboardRepo = {
   insInbox: stmt("INSERT INTO dashboard_inbox (id,kind,item,at) VALUES (?,?,?,?)"),
   setInbox: stmt("UPDATE dashboard_inbox SET kind=?, item=? WHERE id = ? AND handled_at IS NULL"),
   handleInbox: stmt("UPDATE dashboard_inbox SET handled_at=?, outcome=?, result_id=? WHERE id = ? AND handled_at IS NULL"),
-  setStage: stmt("UPDATE dashboard_tasks SET stage = ?, state = ?, morning_at = NULL, pinned_at = NULL, cleared_at = ?, updated_at = ? WHERE id = ?"),
+  setStage: stmt("UPDATE dashboard_tasks SET stage = ?, state = ?, cleared_at = ?, updated_at = ? WHERE id = ?"),
   // Dispatch: versions and presses; a version whose source was removed from its board is skipped.
   versions: stmt<VersionRow>("SELECT v.* FROM dashboard_versions v JOIN resources r ON r.id = v.resource_id ORDER BY v.task_id, v.n"),
   versionsOf: stmt<VersionRow>("SELECT v.* FROM dashboard_versions v JOIN resources r ON r.id = v.resource_id WHERE v.task_id = ? ORDER BY v.n"),

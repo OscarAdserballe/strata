@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { store } from "../../data/store.ts";
 import { DASH_KEY, DISPATCH_KEY, useDashBoard, useDispatch } from "../../data/entities/dashboard.ts";
-import { subscribeToast, toastNow } from "../../shell/layers.ts";
+import { subscribeToast, toast, toastAct, toastNow } from "../../shell/layers.ts";
 import { go, useNav, type Mode, type View } from "./nav.ts";
 import Triage from "./Triage.tsx";
 import Thinking from "./Thinking.tsx";
@@ -45,7 +45,7 @@ function Header() {
   const tasks = board?.tasks ?? [], threads = pane?.threads ?? [];
   const inbox = board?.inbox.length ?? 0;
   const count = (v: View): string => {
-    if (v === "thinking") return String(tasks.filter((t) => t.stage === "thinking" || (t.stage === "todo" && t.morningAt)).length || "");
+    if (v === "thinking") return String(tasks.filter((t) => t.stage === "thinking").length || "");
     if (v === "review") return String(tasks.filter((t) => t.stage === "review" && !t.dispatched).length || "");
     const n = threads.filter((t) => t.stage === (v === "built" ? "review" : v)).length;
     return !n ? "" : v === "implementing" ? `(${n})` : String(n);
@@ -107,5 +107,6 @@ function Poller() {
 
 function Toast() {
   const said = useSyncExternalStore(subscribeToast, toastNow, () => "");
-  return said ? <div className="dash-toast" role="status">{said}</div> : null;
+  const act = useSyncExternalStore(subscribeToast, toastAct, () => null);
+  return said ? <div className="dash-toast" role="status">{said}{act ? <> · <button className="dash-toast-act" onClick={() => { toast(""); act.run(); }}>{act.label}</button></> : null}</div> : null;
 }

@@ -367,11 +367,11 @@ CREATE TABLE IF NOT EXISTS dashboard_tasks (
   prompt TEXT,                            -- your edited prompt; null = built from the task
   created_from TEXT,                      -- JSON { source, url?, quote? }
   created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL,
-  pinned_at INTEGER,                      -- set: on Today
+  pinned_at INTEGER,                      -- unused: was on Today, cleared and no longer read
   area TEXT,                              -- work | personal: which board it shows on
   cleared_at INTEGER,                     -- set: off the board, in the archive; never deleted
-  stage TEXT,                             -- backlog | todo | thinking | decide | implementing | review | done | dropped; state mirrors it
-  morning_at INTEGER                      -- set: picked for tomorrow morning (pinned_at mirrors it)
+  stage TEXT,                             -- todo | thinking | decide | implementing | review | done | dropped; state mirrors it
+  morning_at INTEGER                      -- unused: the tomorrow-morning pick, cleared and no longer read
 );
 CREATE INDEX IF NOT EXISTS idx_dashboard_tasks_parent ON dashboard_tasks(parent_id);
 CREATE TABLE IF NOT EXISTS dashboard_updates (
@@ -408,7 +408,7 @@ CREATE TABLE IF NOT EXISTS dashboard_versions (
 CREATE TABLE IF NOT EXISTS dashboard_presses (
   id TEXT PRIMARY KEY, task_id TEXT NOT NULL,
   kind TEXT NOT NULL,                     -- send | go | back
-  stage TEXT NOT NULL,                    -- where it was pressed: backlog | todo | decide | review
+  stage TEXT NOT NULL,                    -- where it was pressed: todo | decide | review (older rows: backlog)
   version INTEGER,                        -- the version it was pressed on; null for send
   at INTEGER NOT NULL, session_url TEXT   -- the routine session it woke, or the one already running
 );

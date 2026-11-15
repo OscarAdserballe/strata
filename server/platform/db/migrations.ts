@@ -201,6 +201,13 @@ function dashboardStages(): void {
     WHERE stage IS NULL`);
 }
 
+// Backlog and to-do did one job, so backlog folds into to-do, and the morning pick is gone; morning_at stays, unread.
+function dashboardOneTodo(): void {
+  db.exec(`UPDATE dashboard_tasks SET stage = CASE WHEN stage IS NULL AND state IN ('done','dropped') THEN state ELSE 'todo' END
+    WHERE stage = 'backlog' OR stage IS NULL`);
+  db.exec("UPDATE dashboard_tasks SET morning_at = NULL, pinned_at = NULL WHERE morning_at IS NOT NULL OR pinned_at IS NOT NULL");
+}
+
 const MIGRATIONS: [name: string, run: () => void][] = [
   ["resource-columns", resourceColumns],
   ["bytes-move-out", bytesMoveOut],
@@ -279,6 +286,7 @@ const MIGRATIONS: [name: string, run: () => void][] = [
     }
   }],
   ["dashboard-stages", dashboardStages],
+  ["dashboard-one-todo", dashboardOneTodo],
   // A note can sit on a page's labelled box (data-strata-id) rather than on words.
   ["marks-box", () => addColumn("marks", "box", "TEXT")],
   ["comments-to-notes", commentsToNotes],

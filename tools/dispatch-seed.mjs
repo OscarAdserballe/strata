@@ -48,7 +48,7 @@ const reviewPage = (h, added, left) => page("built", `<h1>${h}</h1>
 // ---------- the board ----------
 async function thread(title, body, links = []) {
   const id = `t_seed${Math.random().toString(36).slice(2, 12)}`;
-  await api("/api/dashboard/tasks", "POST", { id, title, body, links, area: "work", stage: "backlog" });
+  await api("/api/dashboard/tasks", "POST", { id, title, body, links, area: "work", stage: "todo" });
   return id;
 }
 const send = (id) => api(`/api/dashboard/tasks/${id}/send`, "POST", {});
@@ -72,7 +72,7 @@ for (const it of [
   { title: "The shopping list is hard to read", context: "People went straight for the photos; the quantities were too faint to see.", from: { source: "Slack · #product" } },
 ].slice(0, Math.max(0, room))) await api("/api/dashboard/inbox", "POST", it);
 
-// Backlog · 4
+// To-do · 4
 await thread("Units switch back to cups after a reload", "The metric setting doesn't survive a reload. Find where it is dropped.", [{ kind: "linear", ref: "RCP-109" }]);
 await thread("Design the sharing path for family cookbooks", "Who can edit a shared cookbook, and how is that asked?");
 await thread("Drop the per-step oven presets", "One oven setting per recipe is enough. Remove the per-step ones.", [{ kind: "linear", ref: "RCP-096" }]);
