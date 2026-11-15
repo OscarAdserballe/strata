@@ -36,7 +36,7 @@ export default function FocusReview() {
         {!list.length ? <p className="ws-none">Nothing waiting. A thread comes here from Thinking when Claude has made something for it.</p> : null}
         {board && board.archived + ended.length ? <button className="ws-fold" aria-expanded={doneOpen} onClick={() => setDoneOpen(!doneOpen)}>{doneOpen ? "Hide what’s done" : `Done · ${board.archived + ended.length}`}</button> : null}
         {doneOpen ? ended.map((x) => <div key={x.id} className="ws-done"><span>{x.title}</span><i>{x.stage === "dropped" ? "dropped" : "done"}</i>
-          <button className="btn quiet small" onClick={() => dash.patch(x.id, { cleared: false, stage: "backlog" }, (y) => ({ ...y, stage: "backlog", clearedAt: null })).then(() => toast("Back in the backlog"), (e) => toast(StrataWhy(e, "not restored"), 4200))}>Back</button></div>) : null}
+          <button className="btn quiet small" onClick={() => dash.patch(x.id, { cleared: false, stage: "todo" }, (y) => ({ ...y, stage: "todo", clearedAt: null })).then(() => toast("Back in to-do"), (e) => toast(StrataWhy(e, "not restored"), 4200))}>Back</button></div>) : null}
       </aside>
       <div className="ws-room">
         <div className="ws-caption">{t ? <span>Ready for you · since {hm(t.updatedAt)}</span> : <span />}</div>
@@ -74,8 +74,8 @@ function Panel({ t }: { t: DashTask }) {
         <button className="btn" onClick={() => {
           const id = newThreadId();
           dash.create({ id, title: `Follow-up: ${t.title}`, area: t.area, links: [{ kind: "strata", ref: t.id, title: t.title }] })
-            .then(() => toast("A follow-up is in the backlog"), (e) => toast(StrataWhy(e, "not added"), 4200));
-          go({ view: "triage", sub: "backlog" });
+            .then(() => toast("A follow-up is in to-do"), (e) => toast(StrataWhy(e, "not added"), 4200));
+          go({ view: "triage", sub: "todo" });
         }}>New thread from this…</button>
         <span className="grow" />
         <button className="btn quiet danger" onClick={() => move(t, "dropped")}>Drop</button>
