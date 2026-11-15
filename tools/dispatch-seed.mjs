@@ -48,7 +48,7 @@ const reviewPage = (h, added, left) => page("built", `<h1>${h}</h1>
 // ---------- the board ----------
 async function thread(title, body, links = []) {
   const id = `t_seed${Math.random().toString(36).slice(2, 12)}`;
-  await api("/api/dashboard/tasks", "POST", { id, title, body, links, area: "work", stage: "backlog" });
+  await api("/api/dashboard/tasks", "POST", { id, title, body, links, area: "work", stage: "todo" });
   return id;
 }
 const send = (id) => api(`/api/dashboard/tasks/${id}/send`, "POST", {});

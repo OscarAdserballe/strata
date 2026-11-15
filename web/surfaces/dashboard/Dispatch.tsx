@@ -41,7 +41,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   }
 
   const blank = !pane ? "Loading…"
-    : !t ? (stage === "implementing" ? "Nothing with Claude right now." : stage === "review" ? "Nothing to review. Built pages come here." : "Nothing to decide. Send a thread from the backlog in Inbox.")
+    : !t ? (stage === "implementing" ? "Nothing with Claude right now." : stage === "review" ? "Nothing to review. Built pages come here." : "Nothing to decide. Send a thread from to-do in Triage.")
     : !v ? "Claude is preparing the first page. It shows up in Decide when it is ready."
     : null;
 
