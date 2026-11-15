@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { readFileSync } from "node:fs";
 // node tools/dispatch-seed.mjs [http://127.0.0.1:8804]: fills a room's dashboard for Dispatch with synthetic threads, through its own routes and tools.
 const BASE = (process.argv[2] ?? "http://127.0.0.1:8804").replace(/\/$/, "");
 let k = 0, rpc = 0, token = "";
@@ -19,36 +20,9 @@ async function tool(name, args) {
 }
 
 // ---------- pages: plain synthetic HTML, the way Claude would post them ----------
-const STYLE = `<style>
-body{margin:0;background:#fff;color:#141414;font:16px/1.5 Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
-main{padding:44px 52px 64px;display:flex;flex-direction:column;gap:22px}
-.ref{font-size:12px;color:#777} .ref::before{content:"■ ";font-size:10px}
-h1{font-size:30px;line-height:1.18;letter-spacing:-.015em;margin:0} h3{font-size:13.5px;margin:0}
-p{margin:0} p.lede{font-size:16px;line-height:24px;color:#333}
-.cap{font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#9a9a9a}
-.box{border:1px solid #e3e0e7;border-radius:10px;background:#fff;padding:12px 14px;display:flex;flex-direction:column;gap:5px;font-size:13px;line-height:19px;color:#333}
-.box h3{font-size:14.5px}
-.today{background:#fbfbfc;border:1px solid #ebe9ee;border-radius:12px;padding:18px;display:flex;flex-direction:column;gap:12px}
-.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:14px}
-.col{background:#fff;border:1px solid #dedbe3;border-radius:9px;padding:10px;display:flex;flex-direction:column;gap:6px}
-.col small{font-size:10px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:#9a9a9a}
-.step{font-size:11.5px;background:#fdfcf9;border:1px solid #e3e0e7;border-radius:7px;padding:5px 7px;color:#555}
-.step.dim{opacity:.5} .step.new{border-color:#e3a99b}
-.step.bad{border:1px dashed #e3a99b;color:#b8563f;text-align:center;background:#fdf3f0;padding:9px}
-.code{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-pre{margin:0;background:#1c1c1e;color:#e8e6e1;border-radius:9px;padding:11px 13px;font:11.5px/18.4px ui-monospace,Menlo,monospace;white-space:pre-wrap}
-pre .c{color:#8a8a84} pre .r{color:#f0a090} pre .g{color:#a8d0a8} pre mark{background:#fdecb0;color:#1c1c1e;border-radius:3px;padding:0 2px}
-.opts{display:grid;grid-template-columns:1.25fr 1fr 1fr;gap:10px}
-.opt{border:1px solid #e3e0e7;border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:5px;font-size:12.5px;line-height:18px;color:#555}
-.opt.pick{background:#fffbee;border:2px solid #1a1a1a;color:#222}
-.opt small{font:600 10.5px ui-monospace,Menlo,monospace;color:#9a9a9a} .opt b{font-size:13.5px;color:#141414}
-.opt .no{color:#a8432a;font-weight:600}
-.facts{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;border-top:1px solid #e3e0e7;padding-top:14px;font-size:12.5px;color:#333}
-.facts small{display:block;font-size:11px;font-weight:600;letter-spacing:.07em;text-transform:uppercase;color:#9a9a9a;padding-bottom:3px}
-.res{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
-.red{color:#a8432a} .green{color:#2d6a3e}
-ol{margin:0;padding-left:18px}
-</style>`;
+// the routine's exemplars (get_guide topics proposal and built) are the pages seeded here, so the two never drift
+const exemplar = (name) => readFileSync(new URL(`../server/features/agent/pages/${name}.html`, import.meta.url), "utf8");
+const STYLE = exemplar("proposal").match(/<style>[\s\S]*?<\/style>/)[0];
 const page = (title, body) => `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${STYLE}</head><body><main>${body}</main></body></html>`;
 
 const decideV1 = page("v1", `<div class="ref">RCP-128</div><h1>Steps the assistant adds never get a photo</h1>
@@ -57,24 +31,7 @@ const decideV1 = page("v1", `<div class="ref">RCP-128</div><h1>Steps the assista
 <div class="opt"><small>B</small><b>Ask which photo</b>One question per new step.</div><div class="opt"><small>C</small><b>Leave it blank</b>The page shows a gap.</div></div>
 <div class="facts"><div><small>Size</small>1 PR · about 120 lines</div><div><small>Touches</small>Step editor</div><div><small>Proof</small>One new test</div><div><small>Unsure about</small>Whether anyone notices</div></div>`);
 
-const decideV2 = page("v2", `<div class="ref">RCP-128</div><h1>Steps the assistant adds never get a photo</h1>
-<p class="lede">I'd make the assistant name a photo for every step it saves, and refuse an edit that leaves one out.</p>
-<div class="today"><div class="cap">What happens today</div><div class="cols">
- <div class="col"><small>1 · Recorded</small><div class="step">whisk the eggs</div><div class="step dim">rest 10 minutes (timer only)</div><div class="step">fold in flour</div></div>
- <div class="col"><small>2 · Assistant's draft</small><div class="step">step_1</div><div class="step new">step_2 · new step</div><div class="step">step_3</div></div>
- <div class="col"><small>3 · Recipe page</small><div class="step">Step 1</div><div class="step bad">Step 2 · no photo</div><div class="step">Step 3</div></div>
-</div></div>
-<div class="code"><pre><span class="c">// today</span>
-save_recipe({ recipe })
-<span class="r">photos = filter(old, ids)</span></pre><pre><span class="c">// proposed</span>
-save_recipe({ steps: [{ id, <span class="g">photo: 12</span> }] })
-no photo → <mark>E_STEP_PHOTO_MISSING</mark></pre></div>
-<div class="opts">
- <div class="opt pick"><small>A · WHAT I'D DO</small><b>Assistant picks a photo per step</b>The photo lives in the recipe page, not in the saved steps.</div>
- <div class="opt"><small>B</small><b>Copy the previous photo</b><span class="no">You turned this down in v1.</span></div>
- <div class="opt"><small>C</small><b>Server matches it</b>A guess by timestamp.</div>
-</div>
-<div class="facts"><div><small>Size</small>1 PR · about 370 lines</div><div><small>Touches</small>Recipe tool input, prompt</div><div><small>Proof</small>Test red first · eval grader</div><div><small>Unsure about</small>The sample recipe is made up</div></div>`);
+const decideV2 = exemplar("proposal");
 
 const shortDecide = (h, lede, a, b) => page("v1", `<h1>${h}</h1><p class="lede">${lede}</p>
 <div class="opts" style="grid-template-columns:1fr 1fr"><div class="opt pick"><small>A · WHAT I'D DO</small><b>${a}</b>The smaller change.</div><div class="opt"><small>B</small><b>${b}</b>More to build.</div></div>
@@ -151,7 +108,7 @@ await post(r1, { page: shortDecide("Short recipes print a blank page (v2)", "Onl
 await note(r1, 2, "Measure, then break", "Yes, this.");
 await note(r1, 2, "Never break", "Long recipes would run into the footer.");
 await press(r1, "go");
-await post(r1, { page: reviewPage("Built as you picked in v2. Two things were added.", ["A recipe with a photo on its last step keeps the photo on that page.", "A step named <code>__proto__</code> prints like any other."], "Photos stay in the separate gallery, not on the step itself.") });
+await post(r1, { page: exemplar("built") });
 await note(r1, 3, "Photos stay in the separate gallery", "File an issue to put photos on the steps. Not in this PR.");
 // Decide · 4: the one with two versions is created last, so it sits on top
 for (const [title, body, h, lede, a, b, links] of [

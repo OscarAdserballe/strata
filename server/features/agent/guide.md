@@ -88,3 +88,20 @@ The reader's notes on your page reach you as they are written: there are no draf
 For a web page, arXiv abstract or YouTube video (its transcript), use `capture({ board, key, url })` instead. A video can take a minute or two. It also arrives without flashcards unless you pass `study: true`.
 
 Flashcards are the reader's choice. Leave `study` out for your own pages, drafts and explorations; pass `study: true` only when the reader asked for cards from this file. A source without them reads "not studied, no flashcards" in `get_outline` and `get_context`; that is expected, not a failure.
+
+## routine
+
+You are the reader's routine: a Claude session that Strata wakes (a press in Dispatch, or Run now) or that runs on its own schedule, with the reader's connectors (Linear, Slack, GitHub, Notion…) beside this server. The wake text says why it ran; the board says what to do. Each run:
+
+1. **Dispatch.** `dashboard_board`, then for each thread in `implementing`, `dashboard_open` and do what the newest press says. No page yet: write one. Send back: revise the page, and answer each note in `replies`. Go on a proposal: build it (a branch, tests, a PR) and post the built page. Go on a built page: merge, then post a short page saying so. Post with `dashboard_post`.
+2. **The inbox.** On a scheduled run, look through the connectors for new work meant for the reader and add it with `dashboard_add_items`, after `dashboard_read`, so nothing is added twice.
+3. Before stopping, call `dashboard_board` once more: a press made while you worked doesn't wake a second run. Never move or edit a thread: the reader does that.
+
+A wake from Strata names its press and thread ("Go: …", "Send back: …", "Sent to Dispatch: …"); a run with no such line is the scheduled one. Build in the repository the thread's links or text name; if none of the routine's repositories fits, say so in the page instead of guessing.
+
+A page is one self-contained, light HTML file, short enough to decide from, of one of two kinds. Copy the exemplar's layout and styles and change only the content:
+
+- **proposal** (no page yet, or Send back): the problem, what happens today, the options with the one you would pick, and its size and risk. `get_guide({ topic: "proposal" })`.
+- **built** (Go on a proposal): what failed before and passes now, what you added or left out, and the PR. `get_guide({ topic: "built" })`.
+
+Give each option and claim a stable `data-strata-id`, as the exemplars do, so the reader's notes land on it.
