@@ -201,6 +201,12 @@ function dashboardStages(): void {
     WHERE stage IS NULL`);
 }
 
+// Backlog folds into to-do and tomorrow morning's picks go: one place for a kept thread to wait. The columns stay, unread.
+function dashboardOneTodo(): void {
+  db.exec(`UPDATE dashboard_tasks SET stage = 'todo' WHERE stage = 'backlog';
+    UPDATE dashboard_tasks SET morning_at = NULL, pinned_at = NULL WHERE morning_at IS NOT NULL OR pinned_at IS NOT NULL`);
+}
+
 const MIGRATIONS: [name: string, run: () => void][] = [
   ["resource-columns", resourceColumns],
   ["bytes-move-out", bytesMoveOut],
@@ -290,6 +296,7 @@ const MIGRATIONS: [name: string, run: () => void][] = [
     addColumn("boards", "archived_at", "INTEGER");
     addColumn("board_groups", "by_date", "TEXT");
   }],
+  ["dashboard-one-todo", dashboardOneTodo],
 ];
 
 // A comment thread is now a note with replies: the reader's first words are the note, everything after a reply.

@@ -39,7 +39,7 @@ revokes them.
 | `apply` | A batch of typed operations, all or nothing; each op's fields are in its input schema |
 | `create_board` | A new board, with a handle and a purpose |
 | `dashboard_add_items` | Tasks into the dashboard's inbox: a title, a line of context and where it came from, for the reader to send on or drop |
-| `dashboard_read` | The dashboard as Markdown: every thread by stage (backlog, to-do, thinking, decide, implementing, review) with notes and links, then the inbox |
+| `dashboard_read` | The dashboard as Markdown: every thread by stage (to-do, thinking, decide, implementing, review) with notes and links, then the inbox |
 | `dashboard_board` | Dispatch: every open thread as JSON `[{ id, title, stage }]`, implementing first |
 | `dashboard_open` | Dispatch: one thread `{ id, title, text, stage, page, notes: [{ id, on, text }] }`, the newest version's page and the notes on it |
 | `dashboard_post` | Dispatch: `{ page?, replies? }`, the next version and replies under the reader's notes |
@@ -59,10 +59,10 @@ a new one is a new entry there, and both apply's schema and the guide list it au
 
 The dashboard (`server/features/dashboard`, page at `<room>/dashboard`) is a separate app the room only
 hosts: no board owns it, so it has its own tools instead of `apply` ops. A thread moves by the reader's
-hand through four stages, backlog → to-do → thinking → review, then done or dropped (`stage`); a to-do
-thread may carry `morning_at`, the pick for tomorrow morning, and picking a backlog thread lifts it into
-to-do. New work goes through the inbox: `dashboard_add_items` only fills it, with a title, a line of
-`context` and where it came from, and the reader sends each item to the backlog or to-do, or drops it.
+hand through three stages, to-do → thinking → review, then done or dropped (`stage`). To-do is the one
+place a kept thread waits; `backlog`, which an older caller may still send, is read as to-do, and
+`morning_at` is no longer written. New work goes through the inbox: `dashboard_add_items` only fills it,
+with a title, a line of `context` and where it came from, and the reader keeps each item in to-do, or drops it.
 The notes on a thread (`body`) are the reader's own, written in Thinking; no tool edits or moves a
 thread. Run now on the board wakes the reader's own scheduled routine through its API trigger
 (`server/features/dashboard/routine.ts`): the Fire URL and token are set on the board and never sent
@@ -74,7 +74,7 @@ get_guide({ topic: "routine" }) on the Strata server and follow it.`; its connec
 Dispatch threads build in; it runs on a schedule (weekday mornings fill the inbox) and has an API trigger,
 whose Fire URL and token go into Connect on the dashboard.
 Dispatch (`server/features/dashboard/dispatch.ts`, page at `<room>/dispatch`) is the dashboard's second
-mode: the room's own reader with a pane of threads on its left. A thread sent from the backlog or to-do
+mode: the room's own reader with a pane of threads on its left. A thread sent from to-do
 goes to `implementing`; each page Claude posts with `dashboard_post` becomes a new version, an HTML source
 on the board with the `dispatch` handle (`dashboard_versions`), so every version is kept and the reader's
 notes on it are that version's notes, with agent replies under them as `reply_note` writes them. Where a
@@ -83,8 +83,8 @@ Go in Decide → Review; sent back in Review → Review; Go in Review → done. 
 agent as the newest note, on nothing. Sending and both presses wake the routine as Run now does, and the
 session it answered with is kept on the press; `STRATA_ROUTINE_STUB=1` (the preview sets it) logs the wake
 instead. Decide and Implementing are reached only this way; Focus leaves Dispatch threads out of its Review.
-Every thread is work or personal (`area`): the page shows one backlog at a time, and an item that names
-no area goes where its source suggests. The older `state` and `pinned_at` columns, the updates,
+Every thread is work or personal (`area`): the page shows one area at a time, and an item that names
+no area goes where its source suggests. The older `state`, `pinned_at` and `morning_at` columns, the updates,
 sources and pad tables stay in the database; nothing writes them but the mirror of `stage`.
 
 `<board>/chat` reads both chat tables, the board's and per-source thread (`messages`) and Ask on a card

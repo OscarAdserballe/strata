@@ -1,4 +1,4 @@
-// The dashboard: threads you move through backlog, to-do, thinking and review, fed by an inbox you triage.
+// The dashboard: threads you move through to-do, thinking and review, fed by an inbox you triage.
 // Every write here runs inside a caller's commit, so nothing awaits.
 import { genId, now, parseJson } from "../../platform/db/sql.ts";
 import { dashboardRepo as q, type InboxRow, type TaskRow, type UpdateRow } from "./repo.ts";
@@ -6,14 +6,16 @@ import { dashboardRepo as q, type InboxRow, type TaskRow, type UpdateRow } from 
 export class DashError extends Error { httpStatus = 400; }
 const fail = (msg: string): never => { throw new DashError(msg); };
 
-export const STAGES = ["backlog", "todo", "thinking", "decide", "implementing", "review", "done", "dropped"] as const;
+export const STAGES = ["todo", "thinking", "decide", "implementing", "review", "done", "dropped"] as const;
 // Dispatch moves a thread into these itself, when it is sent, pressed or posted to.
 const DISPATCH_ONLY = ["decide", "implementing"];
-export const OPEN_STAGES = ["backlog", "todo", "thinking", "review"];
+export const OPEN_STAGES = ["todo", "thinking", "review"];
+// Backlog was folded into to-do; an older caller that still names it means to-do.
+export const stageName = (s: string): string => (s === "backlog" ? "todo" : s);
 const isEnded = (s: string): boolean => s === "done" || s === "dropped";
 // state and pinned_at predate stages; they are written in step so the rows read the same from either side.
 const stateOf = (stage: string): string => (isEnded(stage) ? stage : "you");
-export const stageOf = (t: TaskRow): string => t.stage ?? (isEnded(t.state) ? t.state : "backlog");
+export const stageOf = (t: TaskRow): string => stageName(t.stage ?? (isEnded(t.state) ? t.state : "todo"));
 export const LINK_KINDS = ["linear", "github", "slack", "notion", "strata", "claude", "web"] as const;
 export const AREAS = ["work", "personal"] as const;
 const WORK = /slack|linear|github|engineering|1:1|design review|standup|sync\b|meeting|#/i;
@@ -83,12 +85,12 @@ export function addItems(items: Item[]): string[] {
 function insertTask(f: { id?: string; title: string; body: string; links: Link[]; from?: From | null; area?: string; stage?: string }): string {
   const id = f.id ?? genId("t_");
   const t = now();
-  const stage = f.stage ?? "backlog";
+  const stage = f.stage ?? "todo";
   q.insTask.run(id, f.title, f.body, stateOf(stage), null, null, JSON.stringify(f.links), null, f.from ? JSON.stringify(f.from) : null, t, t, f.area ?? guessArea(f.from?.source), stage);
   return id;
 }
 const checkOpenStage = (v: unknown, fallback: string): string => {
-  const stage = v === undefined || v === null ? fallback : String(v);
+  const stage = v === undefined || v === null ? fallback : stageName(String(v));
   if (!OPEN_STAGES.includes(stage)) fail(`stage is one of ${OPEN_STAGES.join(", ")}.`);
   return stage;
 };
@@ -106,12 +108,12 @@ export function editItem(id: string, b: Record<string, unknown>): Record<string,
   return { ...out, id, at: row.at };
 }
 
-/** Keeps an inbox item as a thread in the backlog, or the open stage asked for. Edits from triage apply first. */
+/** Keeps an inbox item as a thread in to-do, or the open stage asked for. Edits from triage apply first. */
 export function keepItem(id: string, edits: Record<string, unknown> = {}): { outcome: string; result: string } {
   const row = q.inboxItem.get(id) ?? fail(`No inbox item ${id}.`);
   if (row.handled_at) return { outcome: row.outcome ?? "kept", result: row.result_id ?? "" };
   const { stage: to, ...fields } = edits;
-  const stage = checkOpenStage(to, "backlog");
+  const stage = checkOpenStage(to, "todo");
   const it = checkItem({ ...stored(row), ...fields }, "item");
   const result = insertTask({ title: it.title, body: it.body, links: it.links, from: it.from, area: it.area, stage });
   q.handleInbox.run(now(), "kept", result, id);
@@ -129,7 +131,7 @@ export function createTask(b: Record<string, unknown>): string {
   if (!/^t_[A-Za-z0-9]{4,40}$/.test(id)) fail("id is t_ and 4–40 letters or digits.");
   if (q.task.get(id)) return id;
   if (b.area !== undefined && !(AREAS as readonly string[]).includes(String(b.area))) fail("area is work or personal.");
-  return insertTask({ id, title: str(b.title, "title", MAX.title, true)!, body: str(b.body, "body", MAX.body) ?? "", links: checkLinks(b.links), from: { source: "You" }, area: b.area === undefined ? "personal" : String(b.area), stage: checkOpenStage(b.stage, "backlog") });
+  return insertTask({ id, title: str(b.title, "title", MAX.title, true)!, body: str(b.body, "body", MAX.body) ?? "", links: checkLinks(b.links), from: { source: "You" }, area: b.area === undefined ? "personal" : String(b.area), stage: checkOpenStage(b.stage, "todo") });
 }
 
 const flag = (v: unknown, field: string): boolean => (typeof v === "boolean" ? v : fail(`${field} is true or false.`));
@@ -139,20 +141,15 @@ export function patchTask(id: string, b: Record<string, unknown>): TaskRow {
   const cur = q.task.get(id) ?? fail(`No task ${id}.`);
   let stage = stageOf(cur);
   if (b.stage !== undefined) {
-    stage = String(b.stage);
+    stage = stageName(String(b.stage));
     if (!(STAGES as readonly string[]).includes(stage)) fail(`stage is one of ${STAGES.join(", ")}.`);
     if (DISPATCH_ONLY.includes(stage) && stage !== stageOf(cur)) fail(`A thread goes to ${stage} through Dispatch, not by hand.`);
   }
   const t = now();
-  // morning: picked for tomorrow, which lifts a backlog thread into to-do.
-  const pick = b.morning === undefined ? undefined : flag(b.morning, "morning");
-  let morning = pick === undefined ? cur.morning_at : pick ? (cur.morning_at ?? t) : null;
-  if (pick && stage === "backlog") stage = "todo";
-  if (isEnded(stage)) morning = null;
   const cleared = b.cleared === undefined ? cur.cleared_at : flag(b.cleared, "cleared") ? (cur.cleared_at ?? t) : null;
   const links = b.links === undefined ? cur.links : JSON.stringify(checkLinks(b.links));
   q.setTask.run(str(b.title, "title", MAX.title) ?? cur.title, b.body === undefined ? cur.body : (str(b.body, "body", MAX.body) ?? ""),
-    stateOf(stage), cur.waiting_on, cur.parent_id, links, cur.prompt, morning, cleared, t, stage, morning, id);
+    stateOf(stage), cur.waiting_on, cur.parent_id, links, cur.prompt, null, cleared, t, stage, null, id);
   if (b.area !== undefined) {
     if (!(AREAS as readonly string[]).includes(String(b.area))) fail("area is work or personal.");
     q.setArea.run(String(b.area), t, id);
@@ -163,14 +160,14 @@ export function patchTask(id: string, b: Record<string, unknown>): TaskRow {
 // ---------- reading ----------
 
 export interface TaskView {
-  id: string; title: string; body: string; stage: string; morningAt: number | null;
+  id: string; title: string; body: string; stage: string;
   links: Link[]; createdFrom: From | null; createdAt: number; updatedAt: number; clearedAt: number | null; area: string;
   dispatched: boolean;
   updates: { id: string; at: number; text: string; from: From | null; links: Link[] }[];
 }
 const updateView = (u: UpdateRow) => ({ id: u.id, at: u.at, text: u.text, from: parseJson<From | null>(u.from_json, null), links: parseJson<Link[]>(u.links, []) });
 export function taskView(t: TaskRow, ups: UpdateRow[], dispatched = false): TaskView {
-  return { id: t.id, title: t.title, body: t.body, stage: stageOf(t), morningAt: t.morning_at,
+  return { id: t.id, title: t.title, body: t.body, stage: stageOf(t),
     links: parseJson<Link[]>(t.links, []), createdFrom: parseJson<From | null>(t.created_from, null),
     createdAt: t.created_at, updatedAt: t.updated_at, clearedAt: t.cleared_at, area: t.area ?? "personal", dispatched, updates: ups.map(updateView) };
 }
