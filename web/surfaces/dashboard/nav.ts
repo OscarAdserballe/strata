@@ -4,11 +4,11 @@ import { StrataPath } from "../../data/api.ts";
 // Where you are on the dashboard: the mode is the path (/dashboard or /dispatch), the view and tab are the query.
 export type Mode = "focus" | "dispatch";
 export type View = "triage" | "thinking" | "review" | "decide" | "implementing" | "built";
-export type Sub = "inbox" | "backlog" | "todo";
+export type Sub = "inbox" | "todo";
 export interface Nav { mode: Mode; view: View; sub: Sub }
 
 const VIEWS: Record<Mode, View[]> = { focus: ["triage", "thinking", "review"], dispatch: ["triage", "decide", "implementing", "built"] };
-const SUBS: Sub[] = ["inbox", "backlog", "todo"];
+const SUBS: Sub[] = ["inbox", "todo"];
 // Focus opens where the hour puts you, as it always has; Dispatch opens on what waits for you
 const byHour = (): View => { const h = new Date().getHours(); return h < 11 ? "thinking" : h >= 13 && h < 16 ? "review" : "triage"; };
 
@@ -18,7 +18,8 @@ function read(): Nav {
   const inbox = location.hash === "#inbox";
   const v = p.get("view") as View | null;
   const view: View = inbox ? "triage" : v && VIEWS[mode].includes(v) ? v : mode === "focus" ? byHour() : "decide";
-  const s = p.get("sub") as Sub | null;
+  // An old link to the backlog opens to-do, which took it in.
+  const s = (p.get("sub") === "backlog" ? "todo" : p.get("sub")) as Sub | null;
   return { mode, view, sub: inbox ? "inbox" : s && SUBS.includes(s) ? s : "inbox" };
 }
 

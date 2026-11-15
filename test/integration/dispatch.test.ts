@@ -38,14 +38,14 @@ test("sending a thread hands it to Claude: Implementing, a press stored, the rou
   const b = await newThread("Process overview is unintuitive");
   const sent = await send(`/api/dashboard/tasks/${a}/send`, "POST", {});
   assert.equal(sent.status, 200, JSON.stringify(sent.body));
-  assert.deepEqual([sent.body.press.kind, sent.body.press.stage], ["send", "backlog"]);
+  assert.deepEqual([sent.body.press.kind, sent.body.press.stage], ["send", "todo"]);
   assert.match(sent.body.press.session_url, /^https:\/\/example\.invalid\/stub-session\/\d+$/, "the stub makes up a session and logs the call");
   const again = await send(`/api/dashboard/tasks/${b}/send`, "POST", {});
   assert.equal(again.body.press.session_url, sent.body.press.session_url, "within the cooldown the running session is the one linked");
 
   const t = await thread(a);
   assert.deepEqual([t.stage, t.lands, t.versions.length, t.press.sessionUrl], ["implementing", "decide", 0, sent.body.press.session_url]);
-  assert.equal((await send(`/api/dashboard/tasks/${a}/send`, "POST", {})).status, 400, "only a backlog or to-do thread is sent");
+  assert.equal((await send(`/api/dashboard/tasks/${a}/send`, "POST", {})).status, 400, "only a to-do thread is sent");
   assert.equal((await send(`/api/dashboard/tasks/${a}`, "PATCH", { stage: "decide" })).status, 400, "Decide is reached through Dispatch, not by hand");
   const focus = (await server.api("/api/dashboard")).body.tasks.find((x: any) => x.id === a);
   assert.equal(focus.dispatched, true, "Focus can tell a Dispatch thread from its own");
@@ -127,7 +127,7 @@ test("Go in Decide lands in Review; Send back in Review stays in Review as the n
 
 test("a press needs a page on you, and a resent post writes one version", async () => {
   const id = await newThread("Get rid of per-step configurable timeouts");
-  assert.equal((await send(`/api/dashboard/tasks/${id}/press`, "POST", { kind: "go" })).status, 400, "nothing to press on in the backlog");
+  assert.equal((await send(`/api/dashboard/tasks/${id}/press`, "POST", { kind: "go" })).status, 400, "nothing to press on in to-do");
   await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
   const args = { key: "post-resent-000001", id, page: page("Timeouts", "One timeout for the run.") };
   const once = await call("dashboard_post", args);

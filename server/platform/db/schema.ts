@@ -370,8 +370,8 @@ CREATE TABLE IF NOT EXISTS dashboard_tasks (
   pinned_at INTEGER,                      -- set: on Today
   area TEXT,                              -- work | personal: which board it shows on
   cleared_at INTEGER,                     -- set: off the board, in the archive; never deleted
-  stage TEXT,                             -- backlog | todo | thinking | decide | implementing | review | done | dropped; state mirrors it
-  morning_at INTEGER                      -- set: picked for tomorrow morning (pinned_at mirrors it)
+  stage TEXT,                             -- todo | thinking | decide | implementing | review | done | dropped; state mirrors it
+  morning_at INTEGER                      -- unread since to-do took in tomorrow morning's picks
 );
 CREATE INDEX IF NOT EXISTS idx_dashboard_tasks_parent ON dashboard_tasks(parent_id);
 CREATE TABLE IF NOT EXISTS dashboard_updates (

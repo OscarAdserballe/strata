@@ -30,7 +30,7 @@ test("the page is served at /dashboard and starts empty", async () => {
   assert.deepEqual(await dash(), { rev: 0, tasks: [], inbox: [], archived: 0, links: [] });
 });
 
-test("an agent adds tasks with a line of context; you send each to the backlog or to-do, and the thread holds what was asked", async () => {
+test("an agent adds tasks with a line of context; you keep each in to-do, and the thread holds what was asked", async () => {
   const items = [
     { title: "Fix the sticking gate on \"#12\"", context: "The latch jams on \"#12\" after rain. Two people hit it this week.", from: { source: "Notion · Garden committee sync · 23 Oct" },
       links: [{ kind: "slack", ref: "#north-beds", url: "https://example.slack.com/archives/C1/p1" }, { kind: "linear", ref: "GD-247", title: "Earlier latch repair" }] },
@@ -53,7 +53,7 @@ test("an agent adds tasks with a line of context; you send each to the backlog o
   const after = await dash();
   assert.equal(after.inbox.length, 0);
   const gate = after.tasks.find((t) => t.title.startsWith("Fix the sticking"));
-  assert.deepEqual([gate.stage, gate.body, gate.links.length, gate.createdFrom.source], ["backlog", "The latch jams on \"#12\" after rain. Two people hit it this week.", 2, "Notion · Garden committee sync · 23 Oct"], "the context becomes the thread's notes");
+  assert.deepEqual([gate.stage, gate.body, gate.links.length, gate.createdFrom.source], ["todo", "The latch jams on \"#12\" after rain. Two people hit it this week.", 2, "Notion · Garden committee sync · 23 Oct"], "the context becomes the thread's notes");
   assert.equal(after.tasks.find((t) => t.title.startsWith("Reset")).stage, "todo");
   assert.equal(after.tasks.find((t) => t.title.startsWith("Reset")).createdFrom.quote, FROM.quote);
 });
@@ -74,20 +74,17 @@ test("dashboard_add_items takes tasks only, refuses a bad item and writes none o
   assert.equal((await dash()).inbox.length, before);
 });
 
-test("threads move between stages by hand; a pick for tomorrow morning lifts a backlog thread into to-do", async () => {
+test("threads move between stages by hand; an old client that still says backlog means to-do", async () => {
   const { tasks } = await dash();
   const gate = tasks.find((t) => t.title.startsWith("Fix the sticking"));
-  const picked = await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { morning: true }, "dash-move-00001");
-  assert.equal(picked.status, 200);
-  assert.deepEqual([picked.body.stage, picked.body.morningAt > 0], ["todo", true]);
+  const old = await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { stage: "backlog", morning: true }, "dash-move-00001");
+  assert.equal(old.status, 200);
+  assert.deepEqual([old.body.stage, "morningAt" in old.body], ["todo", false], "backlog is read as to-do and the morning pick is gone");
   assert.equal((await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { stage: "thinking" }, "dash-move-00002")).body.stage, "thinking");
   const reviewed = await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { stage: "review", links: [{ kind: "github", ref: "trynolan/nolan#1438", url: "https://github.com/trynolan/nolan/pull/1438" }] }, "dash-move-00003");
   assert.deepEqual([reviewed.body.stage, reviewed.body.links.length], ["review", 1], "links are replaced, so Review's artifacts are whatever you pasted last");
   assert.equal((await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { stage: "nowhere" }, "dash-move-00004")).status, 400);
-  assert.equal((await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { morning: "yes" }, "dash-move-00005")).status, 400);
   assert.equal((await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { state: "claude" }, "dash-move-00006")).body.stage, "review", "the old state field is ignored, not an error");
-  const unpicked = await send(`/api/dashboard/tasks/${gate.id}`, "PATCH", { morning: false }, "dash-move-00007");
-  assert.equal(unpicked.body.morningAt, null);
 
   const own = await send("/api/dashboard/inbox", "POST", { title: "Seed catalogue order" }, "dash-own-000001");
   assert.equal(own.status, 201);
@@ -101,7 +98,7 @@ test("dashboard_read gives the board by stage as Markdown, and one thread in ful
   const all = await call("dashboard_read");
   assert.equal(all.isError, false, all.text);
   assert.match(all.text, /^# Dashboard · /);
-  assert.match(all.text, /Inbox 1 · Backlog \d+ · To-do \d+ · Thinking \d+ · Decide \d+ · Implementing \d+ · Review 1/);
+  assert.match(all.text, /Inbox 1 · To-do \d+ · Thinking \d+ · Decide \d+ · Implementing \d+ · Review 1/);
   assert.match(all.text, /## Review\n### Fix the sticking gate on "#12" · t_\w+ · work\nLinks: github trynolan\/nolan#1438 <https:\/\/github\.com\/trynolan\/nolan\/pull\/1438>\nFrom: Notion · Garden committee sync · 23 Oct\n\nThe latch jams/);
   assert.match(all.text, /## Inbox\n- in_\w+ · "Rain gauge reading" · from Notion · Garden committee sync · 23 Oct\n  Mara asked for last week's numbers\./);
   assert.doesNotMatch(all.text, /Scratch pad|## Sources/);
@@ -121,7 +118,7 @@ test("an inbox item is edited before it is kept, and an item from before of anot
   assert.equal((await send(`/api/dashboard/inbox/${own.body.id}`, "PATCH", { kind: "fragment" }, "dash-edit-0003")).body.kind, "task", "there is only one kind of item now");
   const kept = await send(`/api/dashboard/inbox/${own.body.id}/keep`, "POST", {}, "dash-edit-keep-1");
   const t = (await dash()).tasks.find((x) => x.id === kept.body.result);
-  assert.deepEqual([t.title, t.body, t.stage, t.area], ["Investigate late compost deliveries", "Deliveries land hours late.", "backlog", "work"]);
+  assert.deepEqual([t.title, t.body, t.stage, t.area], ["Investigate late compost deliveries", "Deliveries land hours late.", "todo", "work"]);
   assert.equal((await send(`/api/dashboard/inbox/${own.body.id}`, "PATCH", { title: "too late" }, "dash-edit-0004")).status, 400, "a triaged item can't be edited");
   const odd = await send("/api/dashboard/inbox", "POST", { title: "Odd stage" }, "dash-edit-own-002");
   assert.equal((await send(`/api/dashboard/inbox/${odd.body.id}/keep`, "POST", { stage: "done" }, "dash-edit-keep-2")).status, 400, "an item can only be kept into an open stage");
@@ -140,12 +137,12 @@ test("an inbox item is edited before it is kept, and an item from before of anot
   assert.deepEqual([made.title, made.body], ["Mara wants the seed count first.", "Mara wants the seed count first.\nThen the rota."]);
 });
 
-test("done and dropped threads go to the archive and come back to the backlog", async () => {
+test("done and dropped threads go to the archive and come back to to-do", async () => {
   const { tasks } = await dash();
   const a = tasks.find((t) => t.title.startsWith("Investigate late"));
   const b = tasks.find((t) => t.title.startsWith("Mara wants"));
   const done = await send(`/api/dashboard/tasks/${a.id}`, "PATCH", { stage: "done", cleared: true }, "dash-done-00001");
-  assert.deepEqual([done.body.stage, done.body.morningAt, done.body.clearedAt > 0], ["done", null, true]);
+  assert.deepEqual([done.body.stage, done.body.clearedAt > 0], ["done", true]);
   await send(`/api/dashboard/tasks/${b.id}`, "PATCH", { stage: "dropped", cleared: true }, "dash-done-00002");
   const board = await dash();
   assert.equal(board.tasks.some((t) => t.id === a.id || t.id === b.id), false, "cleared threads leave the board");
@@ -153,8 +150,8 @@ test("done and dropped threads go to the archive and come back to the backlog", 
   assert.doesNotMatch((await call("dashboard_read")).text, /Investigate late/);
   assert.match((await call("dashboard_read", { done_since: "2020-01-01" })).text, /## Done\n### Investigate late compost deliveries · t_\w+ · work · archived/);
   assert.deepEqual((await archive()).tasks.map((t) => t.id).sort(), [a.id, b.id].sort());
-  const back = await send(`/api/dashboard/tasks/${a.id}`, "PATCH", { cleared: false, stage: "backlog" }, "dash-done-00003");
-  assert.deepEqual([back.body.clearedAt, back.body.stage], [null, "backlog"]);
+  const back = await send(`/api/dashboard/tasks/${a.id}`, "PATCH", { cleared: false, stage: "todo" }, "dash-done-00003");
+  assert.deepEqual([back.body.clearedAt, back.body.stage], [null, "todo"]);
   assert.ok((await dash()).tasks.some((t) => t.id === a.id), "a restored thread is back on the board");
 });
 
@@ -181,7 +178,7 @@ test("every thread is work or personal: guessed from its source, set by the agen
   assert.equal((await send("/api/dashboard/tasks", "POST", { id: "t_areawork2", title: "Nowhere", stage: "done" }, "dash-area-make-02")).status, 400, "a new thread starts in an open stage");
   const work = (await call("dashboard_read", { area: "work" })).text;
   assert.match(work, /^# Dashboard · work · /);
-  assert.match(work, /## To-do\n(### [^\n]*\n[^#][^\n]*\n\n)*### Made on the work board · t_areawork1 · work/);
+  assert.match(work, /## To-do\n(?:(?!\n## )[\s\S])*### Made on the work board · t_areawork1 · work/);
   assert.doesNotMatch(work, /Area from Slack/, "a thread moved to personal leaves the work read");
 });
 

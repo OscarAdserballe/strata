@@ -19,7 +19,7 @@ export const useDispatch = (): DispatchPane | undefined => useQuery<DispatchPane
 export interface DashLink { kind: string; ref: string; title?: string; url?: string }
 export interface DashFrom { source: string; url?: string; quote?: string }
 export interface DashTask {
-  id: string; title: string; body: string; stage: string; morningAt: number | null;
+  id: string; title: string; body: string; stage: string;
   links: DashLink[]; createdFrom: DashFrom | null; createdAt: number; updatedAt: number; clearedAt: number | null;
   area: string; dispatched: boolean;
   updates: { id: string; at: number; text: string; from: DashFrom | null; links: DashLink[] }[];
@@ -56,7 +56,7 @@ const onTasks = (id: string, fn: (t: DashTask) => DashTask | null) => (v: DashBo
 const lane = (id: string) => `dash:${id}`;
 
 export const dashOps = {
-  keep(id: string, stage: "backlog" | "todo", area: string, s: Store = roomStore): Op<DashAnswer> {
+  keep(id: string, stage: "todo", area: string, s: Store = roomStore): Op<DashAnswer> {
     return { label: "keep that item", lanes: [lane(id)], method: "POST", path: `/api/dashboard/inbox/${id}/keep`, body: { stage, area },
       optimistic: [{ key: DASH_KEY, apply: (v: DashBoard | undefined) => v && { ...v, inbox: v.inbox.filter((i) => i.id !== id) } }],
       confirm: (res, meta) => takeState(res, meta, s) };
@@ -72,7 +72,7 @@ export const dashOps = {
       confirm: (res, meta) => takeState(res, meta, s) };
   },
   create(task: { id: string; title: string; area: string; stage?: string; links?: DashLink[] }, now = Date.now(), s: Store = roomStore): Op<DashAnswer> {
-    const t: DashTask = { id: task.id, title: task.title, body: "", stage: task.stage ?? "backlog", morningAt: null, links: task.links ?? [],
+    const t: DashTask = { id: task.id, title: task.title, body: "", stage: task.stage ?? "todo", links: task.links ?? [],
       createdFrom: { source: "You" }, createdAt: now, updatedAt: now, clearedAt: null, area: task.area, dispatched: false, updates: [] };
     return { label: "add that thread", lanes: [lane(task.id)], method: "POST", path: "/api/dashboard/tasks", body: { ...task, stage: t.stage },
       optimistic: [{ key: DASH_KEY, apply: (v: DashBoard | undefined) => v && { ...v, tasks: [...v.tasks.filter((x) => x.id !== t.id), t] } }],
@@ -92,7 +92,7 @@ export const dashOps = {
   },
   send(id: string, s: Store = roomStore): Op<DashAnswer> {
     return { label: "send that to Dispatch", lanes: [lane(id)], method: "POST", path: `/api/dashboard/tasks/${id}/send`, body: {},
-      optimistic: [{ key: DASH_KEY, apply: onTasks(id, (t) => ({ ...t, stage: "implementing", dispatched: true, morningAt: null })) }],
+      optimistic: [{ key: DASH_KEY, apply: onTasks(id, (t) => ({ ...t, stage: "implementing", dispatched: true })) }],
       confirm: (res, meta) => takeState(res, meta, s) };
   },
   routine(body: Record<string, unknown>, s: Store = roomStore): Op<RoutineView> {
@@ -121,7 +121,7 @@ export const dashOps = {
 };
 
 export const dash = {
-  keep: (id: string, stage: "backlog" | "todo", area: string) => mutate(dashOps.keep(id, stage, area)),
+  keep: (id: string, stage: "todo", area: string) => mutate(dashOps.keep(id, stage, area)),
   drop: (id: string) => mutate(dashOps.drop(id)),
   itemArea: (id: string, area: string) => mutate(dashOps.itemArea(id, area)),
   create: (t: Parameters<typeof dashOps.create>[0]) => mutate(dashOps.create(t)),
