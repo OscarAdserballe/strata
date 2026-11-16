@@ -196,3 +196,10 @@ test("every write answers with the board and the Dispatch pane as they now are, 
   assert.ok(moved.body.board.rev >= made.body.board.rev);
   assert.equal(moved.body.board.tasks.find((t: { id: string }) => t.id === "t_revcheck01").stage, "todo");
 });
+
+test("a thread's notes are kept as typed: a save mid-sentence keeps its trailing space and newline", async () => {
+  const typed = "- buy tape\n- fetch poster \n- ";
+  await send("/api/dashboard/tasks", "POST", { id: "t_0123456789abcdef", title: "Notes as typed", area: "work", stage: "thinking" }, "dash-text-00000");
+  assert.equal((await send("/api/dashboard/tasks/t_0123456789abcdef", "PATCH", { body: typed }, "dash-text-00001")).body.body, typed, "notes are kept as typed, trailing spaces and newlines too");
+  assert.equal((await send("/api/dashboard/tasks/t_0123456789abcdef", "PATCH", { body: 7 }, "dash-text-00002")).status, 400);
+});

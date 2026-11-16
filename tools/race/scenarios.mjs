@@ -1924,5 +1924,50 @@ const selectionCard = {
   },
 };
 
+const dashboardTyping = {
+  name: "dashboard-typing",
+  what: "type a list into a Thinking doc with pauses that each save, while the saves answer late and out of order and one answer is lost; the field never loses a key, and the server ends with exactly what was typed",
+  checks: {
+    field: "after every pause the field holds exactly what was typed so far",
+    focus: "the notes keep focus through every save",
+    server: "the server holds exactly what was typed, spaces and newlines included",
+  },
+  async run(t) {
+    const tag = `${t.seed}-${Date.now().toString(36)}`;
+    const id = `t_typ${t.seed}${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_]/g, "");
+    await t.api("/api/dashboard/tasks", "POST", { id, title: `Race typing ${tag}`, body: "", area: "work", stage: "thinking" });
+    const isSave = (e) => e.write && e.method === "PATCH" && e.path === `/api/dashboard/tasks/${id}`;
+    const page = await t.open({ latency: true, reorder: { writes: true }, lostAck: { match: isSave, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    await page.goto(`${t.base}/dashboard?view=thinking`);
+    await page.locator(".ws-list").getByText(`Race typing ${tag}`).click();
+    await page.getByRole("textbox", { name: "Notes" }).click();
+    const field = page.locator("textarea.dbody");
+    const parts = ["- buy tape", "\n", "- fetch poster ", "\n", "- ", "glue", "\n\n", "Then ", "hang it."];
+    const pause = t.rng("pause");
+    let typed = "", fieldOk = true, focusOk = true, at = "";
+    for (const part of parts) {
+      await page.keyboard.type(part, { delay: 10 });
+      typed += part;
+      await sleep(750 + Math.floor(pause() * 900));
+      const now = await field.inputValue().catch(() => null);
+      if (fieldOk && now !== typed) { fieldOk = false; at = JSON.stringify(now); }
+      if (focusOk && !(await page.evaluate(() => document.activeElement?.classList.contains("dbody")))) focusOk = false;
+    }
+    await page.keyboard.press("Tab");
+    const until = performance.now() + GRACE_MS * 2;
+    let body = null;
+    for (;;) {
+      body = t.sql("SELECT body FROM dashboard_tasks WHERE id = ?", id)[0]?.body ?? null;
+      if (body === typed || performance.now() > until) break;
+      await sleep(250);
+    }
+    await t.net.idle(500);
+    if (!t.net.entries.filter(isSave).some((e) => e.outcome === "lost-ack")) throw new Error("no save answer was lost: the race this scenario is about did not happen");
+    t.check("field", fieldOk, fieldOk ? undefined : `the field held ${at}`);
+    t.check("focus", focusOk);
+    t.check("server", body === typed, `the server holds ${JSON.stringify(body)}`);
+  },
+};
+
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dispatchPress];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress];

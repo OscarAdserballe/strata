@@ -192,7 +192,7 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .ws-sheet{flex:1;min-height:0;position:relative;display:flex;margin-bottom:24px;background:#fff;border-radius:10px;box-shadow:var(--d-sheet);overflow:hidden}
 .ws-sheet .livepage{border-radius:inherit}
 .ws-sheet .htmlsrc-body{border-radius:inherit;overflow:hidden}
-.ws-sheet.fit{flex:0 1 auto;align-self:stretch;max-height:calc(100% - 24px);overflow-y:auto}
+.ws-sheet.fit{flex:0 1 auto;align-self:stretch;max-height:calc(100% - 24px);overflow-y:auto;scroll-padding-bottom:96px}
 .ws-sheet.fit .doc{overflow:visible;min-height:0}
 .ws-sheet.fit .doc-foot{margin-top:12px}
 .ws-sheet.fit .doc-foot{position:sticky;bottom:0;background:linear-gradient(rgba(255,255,255,0),#fff 14px);padding-bottom:24px;margin-bottom:-32px}
