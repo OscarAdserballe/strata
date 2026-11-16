@@ -1979,5 +1979,66 @@ const dashboardTyping = {
   },
 };
 
+// Two tabs write the notepad at once, one on the dashboard and one in the room: the second save is a 409, and
+// the merge it sends instead must keep both lines, each once.
+const padTwoTabs = {
+  name: "pad-two-tabs",
+  checks: {
+    both: "the notepad keeps the line each tab wrote",
+    once: "no line is saved twice",
+    shown: "opened again, each tab shows every line",
+  },
+  async run(t) {
+    const tag = `${t.seed}-${Date.now().toString(36)}`;
+    await t.api("/api/dashboard/pad", "PUT", { text: `- seeded ${tag}\n` });
+    const isPad = (e) => e.write && e.path === "/api/dashboard/pad";
+    const page = await t.open({ latency: true, reorder: { writes: true } });
+    const { page: other, net: otherNet } = await t.tab({ latency: true });
+    const openPad = async (p) => {
+      await p.getByRole("button", { name: "Notepad", exact: true }).click();
+      const ed = p.locator(".pad-text[contenteditable=true]");
+      await ed.waitFor();
+      await p.waitForFunction(() => document.activeElement?.classList.contains("pad-text"));
+      return ed;
+    };
+    await page.goto(`${t.base}/dashboard`);
+    await other.goto(`${t.base}/`);
+    await openPad(page);
+    await openPad(other);
+    await page.keyboard.press("Enter");
+    await page.keyboard.type(`from the dashboard ${tag}`, { delay: 10 });
+    await other.keyboard.press("Enter");
+    await other.keyboard.type(`from the room ${tag}`, { delay: 10 });
+    await page.keyboard.press("Escape");
+    await other.locator(".pad-x").click();
+    const lines = [`seeded ${tag}`, `from the dashboard ${tag}`, `from the room ${tag}`];
+    const until = performance.now() + GRACE_MS * 2;
+    let text = "";
+    for (;;) {
+      text = t.sql("SELECT text FROM dashboard_pad WHERE id = 1")[0]?.text ?? "";
+      if (lines.every((l) => text.includes(l)) || performance.now() > until) break;
+      await sleep(250);
+    }
+    await t.net.idle(500);
+    const writes = [...t.net.entries, ...otherNet.entries].filter(isPad);
+    t.say(`pad writes: ${writes.map((e) => e.status ?? e.outcome).join(", ")}`);
+    if (!writes.some((e) => e.status === 409)) throw new Error("no notepad write was refused: the race this scenario is about did not happen");
+    const count = (l) => text.split(l).length - 1;
+    t.check("both", lines.every((l) => count(l) >= 1), `the notepad holds ${JSON.stringify(text.slice(0, 200))}`);
+    t.check("once", lines.every((l) => count(l) <= 1), `the notepad holds ${JSON.stringify(text.slice(0, 200))}`);
+    const seen = [];
+    for (const p of [page, other]) {
+      await p.getByRole("button", { name: "Notepad", exact: true }).click();
+      const ed = p.locator(".pad-text[contenteditable=true]");
+      await ed.waitFor();
+      const by = performance.now() + GRACE_MS;
+      let now = "";
+      while (!lines.every((l) => now.includes(l)) && performance.now() < by) { now = await ed.innerText(); await sleep(200); }
+      seen.push(now);
+    }
+    t.check("shown", seen.every((now) => lines.every((l) => now.includes(l))), `the tabs show ${JSON.stringify(seen)}`);
+  },
+};
+
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, padTwoTabs];

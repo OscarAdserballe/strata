@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
-// node tools/writing-smoke.mjs [base]: the dashboard's Writer keeps what you type through a save, keeps focus and the caret, keeps the last line in view, and stores bold, italics, lists and pasted images as Markdown that survives a reload.
+// node tools/writing-smoke.mjs [base]: the dashboard's Writer keeps what you type through a save, keeps focus and the caret, keeps the last line in view, and stores bold, italics, lists and pasted images as Markdown that survives a reload; the notepad opens in both apps.
 const base = (process.argv[2] || "http://127.0.0.1:8804").replace(/\/+$/, "");
 let n = 0;
 const run = Date.now().toString(36);
@@ -112,5 +112,31 @@ try {
   assert.ok(await img.evaluate((el) => el.decode().then(() => el.naturalWidth === 2, () => false)), "the image draws after a reload");
   assert.equal(await bodyOf(rich), stored, "the reload changed nothing on the server");
   console.log("✓ bold, italics, a list and a pasted image survive a reload");
+
+  // the notepad: opened by its chip on the dashboard, by ⌘; in the reader; what one wrote, the other shows
+  const line = `friction ${run}`;
+  await page.goto(`${base}/dashboard`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: "Notepad", exact: true }).click();
+  await page.locator(".pad-text[contenteditable=true]").waitFor();
+  await page.waitForFunction(() => document.activeElement?.classList.contains("pad-text"));
+  await page.keyboard.press("Enter");
+  await page.keyboard.type(line, { delay: 10 });
+  await page.keyboard.press("Escape");
+  assert.equal(await page.locator(".pad-sheet").count(), 0, "esc closes the notepad");
+  let pad = "";
+  for (let i = 0; i < 20 && !pad.includes(line); i++) { await page.waitForTimeout(250); pad = (await api("/api/dashboard/pad")).text; }
+  assert.ok(pad.includes(line), `the notepad saved: ${JSON.stringify(pad)}`);
+  const boards = await api("/api/boards");
+  const reader = (boards.boards ?? boards)[0]?.id;
+  await page.goto(`${base}/${reader ? `?board=${reader}` : ""}`, { waitUntil: "networkidle" });
+  await page.keyboard.press("ControlOrMeta+Semicolon");
+  const there = page.locator(".pad-text[contenteditable=true]");
+  await there.waitFor();
+  assert.ok((await there.innerText()).includes(line), "the reader's notepad shows the dashboard's line");
+  await page.keyboard.type(" and r o h b", { delay: 10 });
+  assert.ok((await there.innerText()).includes(`${line} and r o h b`), "letters typed in the notepad stay out of the room's shortcuts");
+  await page.keyboard.press("ControlOrMeta+Semicolon");
+  assert.equal(await page.locator(".pad-sheet").count(), 0, "⌘; closes it again");
+  console.log("✓ the notepad opens on the dashboard and in the reader, and keeps what either wrote");
   assert.deepEqual(errors, []);
 } finally { await browser.close(); }
