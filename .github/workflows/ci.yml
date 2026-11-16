@@ -156,7 +156,8 @@ jobs:
   # The image the production box pulls: named after the repository, so a fork publishes its own.
   publish:
     name: publish image
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # Without a status function, a red perf job upstream skips this even though test passed.
+    if: ${{ !cancelled() && needs.test.result == 'success' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -174,3 +175,30 @@ jobs:
           docker build --build-arg STRATA_COMMIT="$GITHUB_SHA" -t "$repo:$GITHUB_SHA" -t "$repo:latest" .
           docker push "$repo:$GITHUB_SHA"
           docker push "$repo:latest"
+
+  # Red when production isn't running this revision (or a later one) ten minutes after its image was published.
+  deployed:
+    name: production runs this revision
+    if: ${{ !cancelled() && needs.publish.result == 'success' && vars.STRATA_HEALTH_URL != '' }}
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - name: Wait for the updater to pick up the image
+        env:
+          HEALTH_URL: ${{ vars.STRATA_HEALTH_URL }}
+        run: |
+          for _ in $(seq 1 60); do
+            body="$(curl -fsS --max-time 10 "$HEALTH_URL" || true)"
+            build="$(echo "$body" | jq -r '.build // empty' 2>/dev/null || true)"
+            if [ "$build" = "$GITHUB_SHA" ]; then echo "production runs $build"; exit 0; fi
+            # a later push can overtake this one: its image is what the updater pulls
+            if [ -n "$build" ] && git fetch -q origin main && git merge-base --is-ancestor "$GITHUB_SHA" "$build" 2>/dev/null; then
+              echo "production runs $build, which contains $GITHUB_SHA"; exit 0
+            fi
+            sleep 10
+          done
+          echo "production still answers: ${body:-nothing}"; exit 1

@@ -42,6 +42,10 @@ recreates the container, waits up to four minutes for it to be healthy, and roll
 isn't. `GET /api/health` reports the running `build`. Its logic is `ops/update.sh`, which ships inside the image, so
 it updates along with Strata. The data lives in the Docker volume `strata-rooms`; no update touches it.
 
+To be told when a deploy doesn't land, set the repository variable `STRATA_HEALTH_URL` to your room's
+`https://…/api/health`: CI then fails a push whose revision production isn't running ten minutes after its image
+was published, and a scheduled workflow fails when the room stops answering healthy.
+
 `ops/restore.sh ROOM BACKUP.db`, run from the same directory, seeds an empty room from a backup.
 
 ## How it's built
