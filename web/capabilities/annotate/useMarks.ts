@@ -283,6 +283,8 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
     if (hit && hit.dataset.mark) {
       const mid = hit.dataset.mark;
       const m = markNow(mid);
+      // a said note on prose opens from its words to be read, in the fold; only a bare highlight opens to write
+      if (!slide && m && m.note) return;
       setOpenMark((cur) => (cur && cur.id === mid ? cur : { id: mid, draft: (m && m.note) || "" }));
       return;
     }

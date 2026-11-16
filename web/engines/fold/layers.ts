@@ -14,7 +14,7 @@ export interface LayerAnchor {
 }
 export type LayerItem = (FoldNote | FoldCard | FoldDraft | FoldAsk) & { anchor: LayerAnchor };
 /** A passage layers hang on; `key` is stable while the passage is. `words`: the item's own words (its `tint`) are its
- *  place: no tick; a card's or a question's open when they are clicked, a note's through the reader's own mark. */
+ *  place and its handle: no tick, it opens when they are clicked. */
 export interface Spot { key: string; block: HTMLElement; hidden?: boolean; tint?: Range | null; words?: boolean }
 /** The words cards and questions sit on, by layer, to be washed in its colour: a card answered, and one open or under the
  *  pointer, have their own wash. */
@@ -69,8 +69,8 @@ export const THREADS = "~threads";
 const SHEET_W = 460, INSET = 40, GAP = 8, BRACKET = 13, PUSH = 180, CARET = 7;
 
 const said = (it: LayerItem) => it.kind === "note" && !!it.text.trim();
-// a note's words are the reader's own mark, which opens it; the drawer answers clicks only on what it washed
-const handled = (it: LayerItem) => it.kind !== "note";
+// a click on a said note's words opens it to read, like a card's; a bare highlight's opens it to write, in the reader
+const handled = (it: LayerItem) => it.kind !== "note" || said(it);
 const asking = (it: LayerItem) => it.kind === "card" && it.state !== "done";
 const markOf = (it: LayerItem): TickMark => (it.kind === "note" ? "note" : it.kind === "ask" ? "ask" : it.kind === "card" && it.state === "done" ? "card-done" : "card");
 // an ask with nothing said yet is being asked; one being answered stays open while the answer comes
