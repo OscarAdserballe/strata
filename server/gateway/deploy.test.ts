@@ -14,6 +14,8 @@ test("the deploy dot is green on main's head, orange when behind or unwatched, r
   assert.equal(deployStatus(build, fresh, { sha: other, at: now - 5 * 60_000 }, now).level, "green");
   const behind = deployStatus(build, fresh, { sha: other, at: now - 45 * 60_000 }, now);
   assert.equal(behind.level, "orange"); assert.match(behind.line, /main is at bbbbbbb, merged 45 min ago; still running aaaaaaa/);
+  assert.match(deployStatus(build, fresh, { sha: build, at: 0 }, now, now - 3 * 3_600_000).line, /^running aaaaaaa for 3 h, the head of main/);
+  assert.match(deployStatus(build, null, null, now, now - 4 * 86_400_000).line, /^running aaaaaaa for 4 d$/);
   assert.equal(deployStatus(build, { ...fresh, at: now / 1000 - 3600 }, { sha: build, at: 0 }, now).level, "orange");
   assert.equal(deployStatus(build, { ...fresh, state: "pull-failed" }, null, now).level, "orange");
   assert.equal(deployStatus(build, { ...fresh, state: "refused" }, { sha: other, at: now }, now).level, "red");

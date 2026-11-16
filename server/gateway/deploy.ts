@@ -6,13 +6,15 @@ export interface DeployStatus { level: "green" | "orange" | "red"; line: string;
 
 const QUIET_MS = 10 * 60_000;
 const BEHIND_MS = 20 * 60_000;
-const ago = (ms: number): string => ms < 90_000 ? "just now" : ms < 90 * 60_000 ? `${Math.round(ms / 60_000)} min ago` : `${Math.round(ms / 3_600_000)} h ago`;
+const span = (ms: number): string => ms < 90 * 60_000 ? `${Math.max(1, Math.round(ms / 60_000))} min` : ms < 36 * 3_600_000 ? `${Math.round(ms / 3_600_000)} h` : `${Math.round(ms / 86_400_000)} d`;
+const ago = (ms: number): string => ms < 90_000 ? "just now" : `${span(ms)} ago`;
 
 /** The dot an admin sees: red for what the updater gave up on, orange for what may still mend itself. */
-export function deployStatus(build: string, updater: UpdaterReport | null, head: MainHead | null, now: number): DeployStatus {
-  const short = build.slice(0, 7);
+export function deployStatus(build: string, updater: UpdaterReport | null, head: MainHead | null, now: number, since = now): DeployStatus {
+  // The gateway starts with the container, so its uptime is how long this build has run.
+  const short = `${build.slice(0, 7)} for ${span(now - since)}`;
   const say = (level: DeployStatus["level"], line: string): DeployStatus => ({ level, line, build });
-  if (updater?.state === "refused") return say("red", `the newest image did not start; rolled back to ${short}`);
+  if (updater?.state === "refused") return say("red", `the newest image did not start; rolled back to ${build.slice(0, 7)}`);
   if (updater?.backup === "failed") return say("red", `the last backup failed; running ${short}`);
   if (updater?.state === "pull-failed") return say("orange", `the updater cannot pull the image; running ${short}`);
   if (updater && now - updater.at * 1000 > QUIET_MS) return say("orange", `the updater last checked ${ago(now - updater.at * 1000)}; running ${short}`);
@@ -32,6 +34,7 @@ export function readUpdater(path: string): UpdaterReport | null {
 export function watchDeploy(build: string | undefined, repo: string | undefined, updaterPath = "/tmp/strata-updater.json"): (() => DeployStatus) | undefined {
   if (!build || build === "dev") return undefined;
   let head: MainHead | null = null, asked = 0;
+  const since = Date.now();
   const ask = async (): Promise<void> => {
     try {
       const r = await fetch(`https://api.github.com/repos/${repo}/commits/main`, { headers: { Accept: "application/vnd.github+json", "User-Agent": "strata" }, signal: AbortSignal.timeout(5000) });
@@ -44,6 +47,6 @@ export function watchDeploy(build: string | undefined, repo: string | undefined,
   return () => {
     const now = Date.now();
     if (repo && now - asked > 10 * 60_000) { asked = now; void ask(); }
-    return deployStatus(build, readUpdater(updaterPath), head, now);
+    return deployStatus(build, readUpdater(updaterPath), head, now, since);
   };
 }
