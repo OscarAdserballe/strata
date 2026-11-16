@@ -68,5 +68,24 @@ try {
   assert.ok(!laid.overlap, "no sheet covers another: " + JSON.stringify(laid));
   assert.match(await page.locator(".rbar-keep").textContent(), /0\/2/, "the reader's bar counts the deck");
   assert.deepEqual(errors, []);
-  console.log("✓ a live page's cards open from their words, over the page, neither covering the other");
+  console.log("✓ a live page's cards still to answer lie open under their words, over the page, neither covering the other");
+
+  // a note's words sit in a grid's cell, where the nearest block that stacks is the whole grid: its sheet still hangs under them
+  const GRID = `<!doctype html><html><head><title>Grid</title></head><body><h1>Grid</h1>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px"><div>The left cell opens with a line worth a note. More of the left cell follows here.</div><div style="height:1400px">A tall right cell.</div></div></body></html>`;
+  const g = await api(`/api/boards/${board.id}/resources`, "POST", { filename: "grid.html", base64: Buffer.from(GRID).toString("base64"), pair: true });
+  await api(`/api/boards/${board.id}/marks`, "POST", { resourceId: g.id, start: 0, end: 0, quote: "a line worth a note", note: "Under its words." });
+  await page.goto(`${base}/?board=${board.id}&pair=${g.state.pairs.find((p) => p.resourceId === g.id).id}`, { waitUntil: "networkidle" });
+  const grid = await (await page.waitForSelector("iframe.html-frame", { timeout: 15000 })).contentFrame();
+  await grid.waitForFunction(() => CSS.highlights.get("strata-noted")?.size === 1, null, { timeout: 15000 });
+  await grid.locator(".ftick:has(.fmk.note)").first().click({ timeout: 10000 });
+  await grid.waitForFunction(() => [...document.querySelectorAll("strata-fold")].some((h) => h.shadowRoot?.querySelector(".fi-note")), null, { timeout: 5000 });
+  const hung = await grid.evaluate(() => {
+    const words = [...(CSS.highlights.get("strata-noted") ?? []), ...(CSS.highlights.get("strata-open") ?? [])][0].getClientRects(), bottom = Math.max(...[...words].map((r) => r.bottom));
+    const sheet = [...document.querySelectorAll("strata-fold")].find((h) => h.shadowRoot?.querySelector(".fi-note")).getBoundingClientRect();
+    return { bottom, top: sheet.top };
+  });
+  assert.ok(hung.top > hung.bottom && hung.top - hung.bottom < 40, "the note's sheet hangs just under its words, not under the grid: " + JSON.stringify(hung));
+  assert.deepEqual(errors, []);
+  console.log("✓ a note in a grid's cell hangs its sheet under its words");
 } finally { await browser.close(); await api(`/api/boards/${board.id}`, "DELETE"); }

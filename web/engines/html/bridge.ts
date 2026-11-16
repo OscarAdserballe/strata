@@ -268,6 +268,13 @@ function planeEl(): HTMLElement {
   return plane;
 }
 
+function lastLine(r: Range): { top: number; bottom: number } | null {
+  const rs = [...r.getClientRects()].filter((x) => x.width > 0 && x.height > 0);
+  if (!rs.length) return null;
+  const bottom = Math.max(...rs.map((x) => x.bottom));
+  return { top: Math.min(...rs.filter((x) => x.bottom > bottom - 2).map((x) => x.top)), bottom };
+}
+
 const pageDom: LayerDom = {
   spotOf(it: LayerItem): PageSpot | null {
     let r: Range | null = null;
@@ -290,13 +297,16 @@ const pageDom: LayerDom = {
     const at = boundary(r);
     // a card lives on its own words: they are its place and open it
     if (at && it.kind === "card") return { ...at, key: "w:" + it.id, tint, words: true };
+    // a note's sheet hangs under its words: the block around them can be half a grid
+    if (at && it.kind === "note") return { ...at, key: "n:" + it.id, tint, hang: r };
     return at ? { ...at, tint } : null;
   },
   place(s: Spot) {
     const spot = s as PageSpot, z = scale || 1, X = scrollX, Y = scrollY;
     const b = spot.block.getBoundingClientRect();
-    if (spot.words && spot.tint) {
-      const rs = [...spot.tint.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
+    const words = spot.words && spot.tint ? spot.tint : spot.hang;
+    if (words) {
+      const rs = [...words.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
       if (!rs.length) return null;
       const bottom = Math.max(...rs.map((r) => r.bottom)), last = rs.filter((r) => r.bottom > bottom - 2);
       const wide = b.width >= 320 * z ? b : (spot.block.parentElement ?? spot.block).getBoundingClientRect();
@@ -350,12 +360,15 @@ const pageDom: LayerDom = {
     const spot = s as PageSpot, root = ticksRoot(), z = scale || 1;
     root.style.zoom = String(z);
     const b = spot.block.getBoundingClientRect();
+    // a note's tick sits by its words' last line, so two notes in one block don't share a tick's place
+    const line = spot.hang ? lastLine(spot.hang) : null;
+    const top = line ? line.top : b.top, high = line ? line.bottom - line.top : b.height;
     const wrap = document.createElement("div");
     root.append(wrap);
     drawTick(wrap, spot.key, kinds, peek, () => { if (spot.kind === "tab") spot.block.click(); openIt(); });
     // a passage's tick hangs off its column's edge; a tab's or a box's sits on its corner
     const edge = spot.kind === "tab" || spot.kind === "app" ? b.right + 30 : Math.max(b.right, spot.block.parentElement?.getBoundingClientRect().right ?? b.right);
-    wrap.style.cssText = `position:absolute;left:${(b.left + scrollX) / z}px;top:${(b.top + scrollY) / z}px;width:${Math.max(1, edge - b.left) / z}px;height:${b.height / z}px;pointer-events:none;`;
+    wrap.style.cssText = `position:absolute;left:${(b.left + scrollX) / z}px;top:${(top + scrollY) / z}px;width:${Math.max(1, edge - b.left) / z}px;height:${high / z}px;pointer-events:none;`;
     for (const t of wrap.querySelectorAll<HTMLElement>(".ftick")) {
       t.style.pointerEvents = "auto";
       if (spot.kind === "tab" || spot.kind === "app") { t.style.bottom = "auto"; t.style.top = "-6px"; }

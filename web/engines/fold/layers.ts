@@ -15,7 +15,11 @@ export interface LayerAnchor {
 export type LayerItem = (FoldNote | FoldCard | FoldDraft | FoldAsk) & { anchor: LayerAnchor };
 /** A passage layers hang on; `key` is stable while the passage is. `words`: a card's own words (its `tint`) are its
  *  place and its handle: no tick, it opens when they are clicked. */
-export interface Spot { key: string; block: HTMLElement; hidden?: boolean; tint?: Range | null; words?: boolean }
+export interface Spot {
+  key: string; block: HTMLElement; hidden?: boolean; tint?: Range | null; words?: boolean;
+  /** words the sheet hangs under and nothing more: a note's, lit and clicked by its mark, not by the drawer */
+  hang?: Range | null;
+}
 /** The words cards and questions sit on, by layer, to be washed in its colour: a card answered, and one open or under the
  *  pointer, have their own wash. */
 export interface Tints { card: Range[]; ask: Range[]; "card-done"?: Range[]; "card-on"?: Range[] }
@@ -256,9 +260,8 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
       if (hand !== null && held !== null && Date.now() - bySheet > 1500) wanted.add(held);
       hand = held;
     }
-    const groups = new Map<string, { spot: Spot; items: LayerItem[] }>();
-    // what shows: a card the reader opened from its words or turned over, what is being written or asked, and what the
-    // reader opened; a sheet holds only what shows
+    const groups = new Map<string, { spot: Spot; items: LayerItem[]; spots: Spot[] }>();
+    // what shows: a card still to answer, what is being written or asked, and what the reader opened; a sheet holds only what shows
     const open = new Set<string>(), shows = new Set<string>(), was = new Set(shown.map((s) => s.key));
     const wash: Tints = { card: [], ask: [], "card-done": [], "card-on": [] };
     for (const it of items) {
@@ -267,15 +270,15 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
       if (spot.tint && it.kind === "ask") wash.ask.push(spot.tint);
       if (spot.tint && it.kind === "card") (it.state === "done" ? wash["card-done"]! : wash.card).push(spot.tint);
       let g = groups.get(spot.key);
-      if (!g) groups.set(spot.key, g = { spot, items: [] });
-      g.items.push(it);
+      if (!g) groups.set(spot.key, g = { spot, items: [], spots: [] });
+      g.items.push(it); g.spots.push(spot);
     }
     // cards whose words overlap are one place: a click on the shared words opens them together
     const byWords = [...groups.values()].filter((g) => g.spot.words && g.spot.tint);
     for (let a = 0; a < byWords.length; a++) for (let b = a + 1; b < byWords.length; b++) {
       const x = byWords[a], y = byWords[b];
       if (!groups.has(y.spot.key) || !groups.has(x.spot.key) || !overlaps(x.spot.tint!, y.spot.tint!)) continue;
-      x.items.push(...y.items);
+      x.items.push(...y.items); x.spots.push(...y.spots);
       groups.delete(y.spot.key);
     }
     targets = [];
@@ -294,7 +297,8 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
     for (const [key, g] of groups) if (open.has(key) && g.spot.words && g.spot.tint) wash["card-on"]!.push(g.spot.tint);
     // read every place before anything is drawn, so drawing one sheet never makes the next read wait on layout
     const places = new Map<string, Place | null>();
-    for (const [key, g] of groups) if (open.has(key) && !g.spot.hidden) places.set(key, dom.place(g.spot));
+    // a sheet hangs under the words of the first item it shows, where its passage hangs sheets under words
+    for (const [key, g] of groups) if (open.has(key) && !g.spot.hidden) places.set(key, dom.place(g.spots[Math.max(0, g.items.findIndex((it) => shows.has(it.id)))] ?? g.spot));
     dom.clearTicks();
     const now: typeof shown = [];
     for (const [key, g] of groups) {

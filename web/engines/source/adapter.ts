@@ -79,6 +79,15 @@ function wordsBox(f: PlaneFrame, words: Range): { passage: Box; hang: { x: numbe
   };
 }
 
+/** A note's words in the prose: from its mark's first piece to its last. */
+function markWords(col: HTMLElement, id: string): Range | null {
+  const ms = col.querySelectorAll(`[data-mark="${CSS.escape(id)}"]`);
+  if (!ms.length) return null;
+  const r = col.ownerDocument.createRange();
+  r.setStartBefore(ms[0]); r.setEndAfter(ms[ms.length - 1]);
+  return r;
+}
+
 interface PlaneFrame { width: number; perClient: number; box(b: { top: number; bottom: number; left: number; right: number }): Box }
 
 // A PDF's passage is a page, or lines of a book's page as fractions of it: nothing cuts the page, the sheet lies over it.
@@ -176,15 +185,16 @@ function pageAdapter(kind: string, host: AdapterHost): SourceAdapter {
         : it.anchor.legacy ? anchorEl(col, kind, it.anchor.legacy, q) : null;
       const block = at?.closest<HTMLElement>("[data-b]");
       const tint = it.kind === "ask" && doc && it.anchor.end > it.anchor.start ? proseRange(col, doc.maps, it.anchor.start, it.anchor.end)?.range ?? null : null;
-      return block ? { key: "b" + block.dataset.b, block, tint } : null;
+      return block ? { key: "b" + block.dataset.b, block, tint, hang: it.kind === "note" ? markWords(col, it.id) : null } : null;
     },
     place(spot) {
       const col = column(), f = plane.frame();
       if (!col || !f) return null;
       const c = f.box(col.getBoundingClientRect()), cs = getComputedStyle(col);
       const inner = { left: c.left + parseFloat(cs.paddingLeft || "0"), right: c.right - parseFloat(cs.paddingRight || "0") };
-      if (spot.words && spot.tint) {
-        const w = wordsBox(f, spot.tint);
+      const words = spot.words && spot.tint ? spot.tint : spot.hang;
+      if (words) {
+        const w = wordsBox(f, words);
         return w ? { ...w, column: inner, width: f.width, unit: 1, perClient: f.perClient } : null;
       }
       // a card on a heading asks about the section under it: its sheet lies after that text, not over it
