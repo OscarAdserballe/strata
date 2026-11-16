@@ -33,6 +33,8 @@ export function liveEngine(at: () => LiveAt, marks: () => LiveMarks | null, onHe
     onSelect: (sel, box) => marks()?.offerLive(sel, box),
     onMark: (id) => {
       const a = at(), m = marksOn(a.bid, a.src).find((x) => x.id === id);
+      // a said note opens from its words to be read, in the fold; only a bare highlight opens to write
+      if (m && m.note && !m.box) return;
       marks()?.setOpenMark({ id, draft: (m && m.note) || "" });
     },
     onPress: () => marks()?.offerLive(null, null),

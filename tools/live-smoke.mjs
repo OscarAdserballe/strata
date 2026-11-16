@@ -38,8 +38,8 @@ try {
   await tab.close();
   console.log("✓ a link in a live page opens in a new tab, not inside the frame");
 
-  // cards land on the page by their quotes: one inside a list item, one in a paragraph. Each lies shut on its words until
-  // they are clicked; the page draws the sheets over itself, never inside it, and no sheet covers another.
+  // cards land on the page by their quotes: one inside a list item, one in a paragraph. Each still to answer opens on its
+  // words by itself; the page draws the sheets over itself, never inside it, and no sheet covers another.
   const tree = { title: "Delegation-loss curve", question: "?", nodes: [{ label: "hops lose", kind: "claim", anchor: "#delegation-loss-curve", children: [] }] };
   await api(`/api/boards/${board.id}/resources/${r.id}/tree`, "PUT", { tree, cards: [
     { node: "n1", type: "flashcard", source: `quote: ${JSON.stringify("The first hop drops the brief's constraints.")}`, front: "What does the first hop drop?", back: "The constraints." },
@@ -50,16 +50,6 @@ try {
   await again.waitForFunction(() => CSS.highlights.get("strata-card")?.size === 2, null, { timeout: 15000 });
   await again.waitForTimeout(400);
   const sheetsNow = () => again.evaluate(() => [...document.querySelectorAll("strata-fold")].filter((h) => h.shadowRoot?.querySelector(".fi.card")).length);
-  assert.equal(await sheetsNow(), 0, "no card's sheet opens by itself");
-  // the list item's words first: the paragraph's lie above them, where the first sheet can't cover them
-  for (const quote of ["The first hop", "Each hop loses"]) {
-    await again.evaluate((q) => {
-      const r = [...CSS.highlights.get("strata-card")].find((x) => x.toString().startsWith(q)), at = r.getClientRects()[0];
-      const x = at.left + 4, y = at.top + at.height / 2;
-      document.elementFromPoint(x, y).dispatchEvent(new MouseEvent("click", { clientX: x, clientY: y, bubbles: true, composed: true, button: 0 }));
-    }, quote);
-    await again.waitForTimeout(300);
-  }
   await again.waitForFunction(() => [...document.querySelectorAll("strata-fold")].filter((h) => h.shadowRoot?.querySelector(".fi.card")).length === 2, null, { timeout: 5000 });
   const laid = await again.evaluate(() => {
     const hosts = [...document.querySelectorAll("strata-fold")].filter((h) => h.shadowRoot?.querySelector(".fold"));
@@ -75,5 +65,32 @@ try {
   assert.ok(!laid.overlap, "no sheet covers another: " + JSON.stringify(laid));
   assert.match(await page.locator(".rbar-keep").textContent(), /0\/2/, "the reader's bar counts the deck");
   assert.deepEqual(errors, []);
-  console.log("✓ a live page's cards open from their words, over the page, neither covering the other");
+  console.log("✓ a live page's cards open on their words by themselves, over the page, neither covering the other");
+
+  // a note hangs off its own words, like a card: in a grid's cell, the box around them is the whole grid, far below
+  const filler = Array.from({ length: 40 }, (_, i) => `Filler sentence ${i} keeps this cell tall.`).join(" ");
+  const GRID = `<!doctype html><html><head><title>Grid fixture</title><script>window.x = 1</script></head><body><div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+<div>The grid note sits on these words. ${filler}</div><div>A narrow side column.</div></div></body></html>`;
+  const g = await api(`/api/boards/${board.id}/resources`, "POST", { filename: "grid.html", base64: Buffer.from(GRID).toString("base64"), pair: true });
+  const gPair = g.state.pairs.find((p) => p.resourceId === g.id);
+  await page.goto(`${base}/?board=${board.id}&pair=${gPair.id}`, { waitUntil: "networkidle" });
+  const gf = await (await page.waitForSelector("iframe.html-frame", { timeout: 15000 })).contentFrame();
+  await gf.waitForSelector("div");
+  const quote = "The grid note sits on these words.", start = await gf.evaluate((q) => document.body.textContent.indexOf(q), quote);
+  assert.ok(start >= 0);
+  await api(`/api/boards/${board.id}/marks`, "POST", { resourceId: g.id, start, end: start + quote.length, quote, note: "a note on the grid's words" });
+  await page.reload({ waitUntil: "networkidle" });
+  const gf2 = await (await page.waitForSelector("iframe.html-frame", { timeout: 15000 })).contentFrame();
+  await gf2.waitForFunction(() => CSS.highlights.get("strata-noted")?.size === 1, null, { timeout: 15000 });
+  const at = await gf2.evaluate(() => {
+    const r = [...CSS.highlights.get("strata-noted")][0], rs = [...r.getClientRects()], x = rs[0].left + 4, y = rs[0].top + rs[0].height / 2;
+    document.elementFromPoint(x, y).dispatchEvent(new MouseEvent("click", { clientX: x, clientY: y, bubbles: true, composed: true, button: 0 }));
+    return { bottom: Math.max(...rs.map((b) => b.bottom)), grid: document.body.firstElementChild.getBoundingClientRect().bottom };
+  });
+  await gf2.waitForFunction(() => [...document.querySelectorAll("strata-fold")].some((h) => h.shadowRoot?.querySelector(".fi.note")), null, { timeout: 5000 });
+  const sheetTop = await gf2.evaluate(() => [...document.querySelectorAll("strata-fold")].find((h) => h.shadowRoot?.querySelector(".fi.note")).getBoundingClientRect().top);
+  assert.ok(at.grid - at.bottom > 200, "the fixture's grid reaches far below the words: " + JSON.stringify(at));
+  assert.ok(sheetTop > at.bottom && sheetTop - at.bottom < 40, `the note's sheet hangs just under its words, not under the grid: ${JSON.stringify({ ...at, sheetTop })}`);
+  assert.deepEqual(errors, []);
+  console.log("✓ a note in a grid's cell hangs just under its words, as a card does");
 } finally { await browser.close(); await api(`/api/boards/${board.id}`, "DELETE"); }

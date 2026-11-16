@@ -64,9 +64,20 @@ async function askAt(page, words) {
   await line.waitFor();
   return line;
 }
-// the fold of the one question on the page, opened from its tick if a reload or a return shut it
+// clicks the first words washed in one of the reader's highlights, in a page or a live page's frame
+async function clickWords(target, mouse, name) {
+  const at = await target.evaluate((name) => {
+    const r = [...(CSS.highlights.get(name) ?? [])][0], b = r && [...r.getClientRects()].find((x) => x.width > 0);
+    return b ? { x: b.left + 4, y: b.top + b.height / 2 } : null;
+  }, name);
+  if (!at) throw new Error(`no words washed as ${name}`);
+  if (mouse) { await mouse.click(at.x, at.y); return; }
+  await target.evaluate(({ x, y }) => document.elementFromPoint(x, y).dispatchEvent(new MouseEvent("click", { clientX: x, clientY: y, bubbles: true, composed: true, button: 0 })), at);
+}
+
+// the fold of the one question on the page, opened from its words if a reload or a return shut it
 async function askFold(page) {
-  if (!(await page.locator(".fold .fi.asked").count())) await page.locator(".ftick:has(.fmk.ask)").first().click();
+  if (!(await page.locator(".fold .fi.asked").count())) await clickWords(page, page.mouse, "strata-ask");
   await page.locator(".fold .fi.asked").first().waitFor({ timeout: 5000 });
 }
 
@@ -765,6 +776,7 @@ const markNoteDelete = {
     const id = await page.evaluate(() => document.querySelector(".page-col.prose .mk[data-mark]")?.dataset.mark ?? null);
     if (!id) throw new Error("the highlight was never painted");
     await page.locator(`.page-col.prose .mk[data-mark="${id}"]`).first().click();
+    await page.locator(".fold .fi-note").click();
     await page.locator(".fold .fi-rm").dispatchEvent("mousedown");
     const actedIn = Math.round(performance.now() - startedAt);
     await created.arrived(1);
@@ -939,9 +951,11 @@ const liveNotes = {
     const where = rows.map((r) => (r.box ? `box ${r.box}` : "words")).sort().join(", ");
     t.check("notes", rows.length === 2 && where === "box S3, words", `${rows.length} note(s): ${where}`);
     t.check("said", rows.map((r) => r.note).sort().join("|") === [...said].sort().join("|"), rows.map((r) => r.note).join(" · "));
-    // a note written from a selection shuts to its tick when saved: each is opened to be read
+    // a note written from a selection shuts when saved: each is opened to be read, from its words or its box's tick
     const ticks = frame.locator(".ftick:has(.fmk.note)");
     for (let i = 0; i < 4 && await ticks.count(); i++) { await ticks.first().click(); await sleep(200); }
+    const live = page.frames().find((f) => f.url().includes("/live"));
+    if (live) { await clickWords(live, null, "strata-noted"); await sleep(300); }
     const shown = await frame.locator(".fi-note").allTextContents();
     t.check("shown", shown.length === 2 && said.every((s) => shown.includes(s)), `page: ${shown.join(" · ")}`);
   },
@@ -966,7 +980,9 @@ const liveNoteRemove = {
     await page.goto(readerUrl(t, b.id, { rid: up.id, pair: pair.id }));
     const frame = page.frameLocator("iframe.html-frame");
     await frame.locator("body[data-ready]").waitFor({ timeout: 30_000 });
+    // a said note opens from its words to be read; its text opens it to be written, where it can be removed
     await frame.locator("#cost").click({ position: { x: 6, y: 8 } });
+    await frame.locator(".fi-note").click({ timeout: 10_000 });
     await frame.locator(".fi-rm").dispatchEvent("mousedown", {}, { timeout: 10_000 });
     const until = performance.now() + GRACE_MS;
     let rows = [];
@@ -1861,7 +1877,7 @@ const noteReplies = {
     const page = await t.open({ latency: true, lostAck: { match: isReply, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(readerUrl(t, b.id, s));
     await proseShown(page, unique);
-    await page.locator(".ftick").first().click();
+    await page.locator(".mk.said").first().click();
     const field = page.locator(".fold .fi-field").first();
     const said = [`first, seed ${t.seed}`, `second, seed ${t.seed}`];
     for (const line of said) { await field.fill(line); await field.press("Enter"); }

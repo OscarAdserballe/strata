@@ -13,7 +13,7 @@ export interface LayerAnchor {
   block?: number | null;
 }
 export type LayerItem = (FoldNote | FoldCard | FoldDraft | FoldAsk) & { anchor: LayerAnchor };
-/** A passage layers hang on; `key` is stable while the passage is. `words`: a card's own words (its `tint`) are its
+/** A passage layers hang on; `key` is stable while the passage is. `words`: the item's own words (its `tint`) are its
  *  place and its handle: no tick, it opens when they are clicked. */
 export interface Spot { key: string; block: HTMLElement; hidden?: boolean; tint?: Range | null; words?: boolean }
 /** The words cards and questions sit on, by layer, to be washed in its colour: a card answered, and one open or under the
@@ -69,6 +69,8 @@ export const THREADS = "~threads";
 const SHEET_W = 460, INSET = 40, GAP = 8, BRACKET = 13, PUSH = 180, CARET = 7;
 
 const said = (it: LayerItem) => it.kind === "note" && !!it.text.trim();
+// a click on a said note's words opens it to read, like a card's; a bare highlight's opens it to write, in the reader
+const handled = (it: LayerItem) => it.kind !== "note" || said(it);
 const asking = (it: LayerItem) => it.kind === "card" && it.state !== "done";
 const markOf = (it: LayerItem): TickMark => (it.kind === "note" ? "note" : it.kind === "ask" ? "ask" : it.kind === "card" && it.state === "done" ? "card-done" : "card");
 // an ask with nothing said yet is being asked; one being answered stays open while the answer comes
@@ -269,7 +271,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
       g.items.push(it);
     }
     // cards whose words overlap are one place: a click on the shared words opens them together
-    const byWords = [...groups.values()].filter((g) => g.spot.words && g.spot.tint);
+    const byWords = [...groups.values()].filter((g) => g.spot.words && g.spot.tint && g.items.every(handled));
     for (let a = 0; a < byWords.length; a++) for (let b = a + 1; b < byWords.length; b++) {
       const x = byWords[a], y = byWords[b];
       if (!groups.has(y.spot.key) || !groups.has(x.spot.key) || !overlaps(x.spot.tint!, y.spot.tint!)) continue;
@@ -278,10 +280,11 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
     }
     targets = [];
     for (const [key, g] of groups) {
-      if (g.spot.words && g.spot.tint && !g.spot.hidden) targets.push({ key, range: g.spot.tint, ids: g.items.map((it) => it.id) });
+      if (g.spot.words && g.spot.tint && !g.spot.hidden && g.items.some(handled)) targets.push({ key, range: g.spot.tint, ids: g.items.filter(handled).map((it) => it.id) });
       for (const it of g.items) {
         if (it.kind === "card" && it.state === "done" && asked.has(it.id)) { asked.delete(it.id); pinned.delete(it.id); }
-        const turned = it.kind === "card" && it.state === "revealed" && !shut.has(it.id);
+        // a card is open until it is graded, unless the reader closed it or put it off
+        const turned = it.kind === "card" && it.state !== "done" && !shut.has(it.id);
         // an ask stays open once asked, so its answer and the next question have somewhere to be
         if (it.kind === "ask" && it.writing !== null && !shut.has(it.id) && !g.spot.hidden) pinned.add(it.id);
         const writing = (it.kind === "note" && it.editing) || it.kind === "draft" || (asking_(it) && !shut.has(it.id));
@@ -289,7 +292,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
         if (!g.spot.hidden && (turned || writing || pinned.has(it.id))) { open.add(key); shows.add(it.id); }
       }
     }
-    for (const [key, g] of groups) if (open.has(key) && g.spot.words && g.spot.tint) wash["card-on"]!.push(g.spot.tint);
+    for (const [key, g] of groups) if (open.has(key) && g.spot.words && g.spot.tint && g.items.some((it) => it.kind === "card")) wash["card-on"]!.push(g.spot.tint);
     // read every place before anything is drawn, so drawing one sheet never makes the next read wait on layout
     const places = new Map<string, Place | null>();
     for (const [key, g] of groups) if (open.has(key) && !g.spot.hidden) places.set(key, dom.place(g.spot));
@@ -299,7 +302,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
       const place = places.get(key) ?? null;
       const sheet = place ? dom.sheet(key) : null;
       if (!place || !sheet) {
-        // a card's words are its own handle: nothing is added beside them
+        // words are their own handle: nothing is added beside them
         if (g.spot.words) continue;
         const first = g.items[0];
         dom.tick(g.spot, g.items.map(markOf), peekOf(first), () => {
@@ -377,8 +380,8 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
   function hitAt(x: number, y: number): typeof targets {
     return targets.filter((t) => onWords(t.range.getClientRects(), x, y));
   }
-  // a click on a card's words opens it, the way a reader's highlight does; a click on the page shuts the card sheets
-  // that were opened that way and not moved; Esc does the same
+  // a click on a card's words opens it, the way a reader's highlight does; a click on the page shuts the sheets that
+  // were opened that way and not moved, never one open because its card is still to answer; Esc does the same
   function listen(): void {
     const at = dom.surface?.();
     if (!at || heard.has(at)) return;
@@ -419,7 +422,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
   function shutWords(): boolean {
     if (!last) return false;
     const words = new Set(targets.map((t) => t.key)), ids = new Set<string>();
-    for (const s of shown) if (words.has(s.key) && !moved.has(s.key)) for (const t of targets) if (t.key === s.key) t.ids.forEach((id) => ids.add(id));
+    for (const s of shown) if (words.has(s.key) && !moved.has(s.key)) for (const t of targets) if (t.key === s.key) t.ids.forEach((id) => { if (pinned.has(id)) ids.add(id); });
     for (const id of ids) { pinned.delete(id); shut.add(id); }
     return ids.size > 0;
   }

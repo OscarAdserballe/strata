@@ -68,6 +68,15 @@ function readerPlane(host: AdapterHost): Pick<LayerDom, "sheet" | "closeExcept" 
   };
 }
 
+/** A note's words in the prose column: its painted mark, from its first piece to its last. */
+function markRange(col: HTMLElement, id: string): { block: HTMLElement; range: Range } | null {
+  const parts = col.querySelectorAll<HTMLElement>(`[data-mark="${CSS.escape(id)}"]`), block = parts[0]?.closest<HTMLElement>("[data-b]");
+  if (!block) return null;
+  const range = col.ownerDocument.createRange();
+  range.setStartBefore(parts[0]); range.setEndAfter(parts[parts.length - 1]);
+  return { block, range };
+}
+
 /** Where a card's words are on the plane, and the start of their last line, where its sheet hangs. */
 function wordsBox(f: PlaneFrame, words: Range): { passage: Box; hang: { x: number; y: number } } | null {
   const rs = [...words.getClientRects()].filter((r) => r.width > 0 && r.height > 0).map((r) => f.box(r));
@@ -171,12 +180,15 @@ function pageAdapter(kind: string, host: AdapterHost): SourceAdapter {
         const at = r?.ok && doc ? proseRange(col, doc.maps, r.at.start, r.at.end) : null;
         return at ? { key: "w:" + it.id, block: at.block, tint: at.range, words: true } : null;
       }
+      // a note, a question or a card being written hangs off its own words, like a card
+      const words = it.kind === "note" ? markRange(col, it.id)
+        : doc && it.anchor.end > it.anchor.start ? proseRange(col, doc.maps, it.anchor.start, it.anchor.end) : null;
+      if (words) return { key: "w:" + it.id, block: words.block, tint: words.range, words: true };
       const at = it.anchor.block != null ? col.querySelector(`[data-b="${it.anchor.block}"]`)
         : it.kind === "note" ? col.querySelector(`[data-mark="${it.id}"]`)
         : it.anchor.legacy ? anchorEl(col, kind, it.anchor.legacy, q) : null;
       const block = at?.closest<HTMLElement>("[data-b]");
-      const tint = it.kind === "ask" && doc && it.anchor.end > it.anchor.start ? proseRange(col, doc.maps, it.anchor.start, it.anchor.end)?.range ?? null : null;
-      return block ? { key: "b" + block.dataset.b, block, tint } : null;
+      return block ? { key: "b" + block.dataset.b, block } : null;
     },
     place(spot) {
       const col = column(), f = plane.frame();
