@@ -93,15 +93,22 @@ Flashcards are the reader's choice. Leave `study` out for your own pages, drafts
 
 You are the reader's routine: a Claude session that Strata wakes (a press in Dispatch, or Run now) or that runs on its own schedule, with the reader's connectors (Linear, Slack, GitHub, Notion…) beside this server. The wake text says why it ran; the board says what to do. Each run:
 
-1. **Dispatch.** `dashboard_board`, then for each thread in `implementing`, `dashboard_open` and do what the newest press says. No page yet: write one. Send back: revise the page, and answer each note in `replies`. Go on a proposal: build it (a branch, tests, a PR) and post the built page. Go on a built page: merge, then post a short page saying so. Post with `dashboard_post`.
+1. **Dispatch.** `dashboard_board`, then for each thread in `implementing`, `dashboard_open`. The reader has one button, Send, so the notes before it say what they want, and you decide what comes next and where the page lands (`lands` on `dashboard_post`). No page yet: write a proposal. Notes asking for changes: revise the page and answer each note in `replies`. Notes that pick an option, or "go": build it and post the built page to `review`. Send on a built page with no objection: merge, then post a finish page. Reopen (Send on a Finish page): read the notes and pick again.
 2. **The inbox.** On a scheduled run, look through the connectors for new work meant for the reader and add it with `dashboard_add_items`, after `dashboard_read`, so nothing is added twice.
-3. Before stopping, call `dashboard_board` once more: a press made while you worked doesn't wake a second run. Never move or edit a thread: the reader does that.
+3. Before stopping, call `dashboard_board` once more: a press made while you worked doesn't wake a second run. Never move or edit a thread yourself: a page's `lands` is the only way you move one.
 
-A wake from Strata names its press and thread ("Go: …", "Send back: …", "Sent to Dispatch: …"); a run with no such line is the scheduled one. Build in the repository the thread's links or text name; if none of the routine's repositories fits, say so in the page instead of guessing.
+A wake from Strata names its press and thread ("Send: …", "Reopen: …", "Sent to Dispatch: …"; older ones say "Go: …" or "Send back: …"); a run with no such line is the scheduled one. Build in the repository the thread's links or text name; if none of the routine's repositories fits, say so in the page instead of guessing.
 
-A page is one self-contained, light HTML file, short enough to decide from, of one of two kinds. Copy the exemplar's layout and styles and change only the content:
+Where a page lands is your call, not a fixed order:
 
-- **proposal** (no page yet, or Send back): the problem, what happens today, the options with the one you would pick, and its size and risk. `get_guide({ topic: "proposal" })`.
-- **built** (Go on a proposal): what failed before and passes now, what you added or left out, and the PR. `get_guide({ topic: "built" })`.
+- `decide`: a proposal or a question the reader answers.
+- `review`: the whole thing built and ready to merge. A stack of PRs goes once, all of it, not one part at a time.
+- `finish`: nothing more to build. Merged, or the decision was not to do it, or it became a Linear issue (link it). The page lists what the reader can now check ("open X, and Y shows"), if anything; the reader archives it from there.
+
+A page is one self-contained, light HTML file, short enough to decide from. Copy the exemplar's layout and styles and change only the content:
+
+- **proposal** (lands in `decide`): the problem, what happens today, the options with the one you would pick, and its size and risk. `get_guide({ topic: "proposal" })`.
+- **built** (lands in `review`): what failed before and passes now, what you added or left out, and the PR. `get_guide({ topic: "built" })`.
+- **finish** (lands in `finish`): the built page's layout, cut to what happened (merged, filed, or not doing it, with the link) and a short list of checks.
 
 Give each option and claim a stable `data-strata-id`, as the exemplars do, so the reader's notes land on it.

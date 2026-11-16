@@ -2,7 +2,7 @@
 import { paged, pagedText, when } from "../agent/render.ts";
 import { archive, OPEN_STAGES, snapshot, type TaskView } from "./dashboard.ts";
 
-const HEADS: [string, string][] = [["todo", "To-do"], ["thinking", "Thinking"], ["decide", "Decide"], ["implementing", "Implementing"], ["review", "Review"], ["done", "Done"], ["dropped", "Dropped"]];
+const HEADS: [string, string][] = [["todo", "To-do"], ["thinking", "Thinking"], ["decide", "Decide"], ["implementing", "Implementing"], ["review", "Review"], ["finish", "Finish"], ["done", "Done"], ["dropped", "Dropped"]];
 const linkLine = (ls: TaskView["links"]): string => ls.map((l) => `${l.kind} ${l.ref}${l.title ? ` (${l.title})` : ""}${l.url ? ` <${l.url}>` : ""}`).join(" · ");
 const ended = (t: TaskView): boolean => t.stage === "done" || t.stage === "dropped";
 
@@ -31,12 +31,12 @@ export function renderDashboard(args: { task?: unknown; stages?: unknown; done_s
     return pagedText("", block(t), args.cursor, budget, (c) => `dashboard_read({ task: "${t.id}", cursor: "${c}" })`);
   }
   const filtered = Array.isArray(args.stages) && args.stages.length > 0;
-  const stages = filtered ? (args.stages as unknown[]).map((x) => (String(x) === "backlog" ? "todo" : String(x))) : [...OPEN_STAGES, "decide", "implementing"];
+  const stages = filtered ? (args.stages as unknown[]).map((x) => (String(x) === "backlog" ? "todo" : String(x))) : [...OPEN_STAGES, "decide", "implementing", "finish"];
   if (!Number.isNaN(since)) for (const s of ["done", "dropped"]) if (!stages.includes(s)) stages.push(s);
   const area = args.area === "work" || args.area === "personal" ? args.area : null;
   const shown = tasks.filter((t) => (!area || t.area === area) && stages.includes(t.stage) && (!ended(t) || Number.isNaN(since) || t.updatedAt >= since));
   const count = (s: string) => live.filter((t) => t.stage === s && (!area || t.area === area)).length;
-  const head = `# Dashboard${area ? ` · ${area}` : ""} · ${when.minute(Date.now())}\nWork ${live.filter((t) => t.area === "work" && !ended(t)).length} open · Personal ${live.filter((t) => t.area === "personal" && !ended(t)).length} open\nInbox ${inbox.length} · To-do ${count("todo")} · Thinking ${count("thinking")} · Decide ${count("decide")} · Implementing ${count("implementing")} · Review ${count("review")}`;
+  const head = `# Dashboard${area ? ` · ${area}` : ""} · ${when.minute(Date.now())}\nWork ${live.filter((t) => t.area === "work" && !ended(t)).length} open · Personal ${live.filter((t) => t.area === "personal" && !ended(t)).length} open\nInbox ${inbox.length} · To-do ${count("todo")} · Thinking ${count("thinking")} · Decide ${count("decide")} · Implementing ${count("implementing")} · Review ${count("review")} · Finish ${count("finish")}`;
   const items: string[] = [];
   for (const [s, name] of HEADS) {
     const list = shown.filter((t) => t.stage === s);

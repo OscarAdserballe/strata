@@ -401,14 +401,14 @@ CREATE TABLE IF NOT EXISTS dashboard_routine (
 -- dispatch handle, so the reader opens it and the reader's notes on it are that version's notes.
 CREATE TABLE IF NOT EXISTS dashboard_versions (
   task_id TEXT NOT NULL, n INTEGER NOT NULL, resource_id TEXT NOT NULL,
-  landed TEXT NOT NULL,                   -- decide | review | done: where posting it put the thread
+  landed TEXT NOT NULL,                   -- decide | review | finish (done in older rows): where posting it put the thread
   at INTEGER NOT NULL, PRIMARY KEY (task_id, n)
 );
--- Sending a thread, Go and Send back. The newest press on a thread decides where its next page lands.
+-- Sending a thread, and Send on its page (Go and Send back in older rows). The newest press on a thread decides where its next page lands.
 CREATE TABLE IF NOT EXISTS dashboard_presses (
   id TEXT PRIMARY KEY, task_id TEXT NOT NULL,
-  kind TEXT NOT NULL,                     -- send | go | back
-  stage TEXT NOT NULL,                    -- where it was pressed: todo | decide | review (backlog in older rows)
+  kind TEXT NOT NULL,                     -- send (go | back in older rows)
+  stage TEXT NOT NULL,                    -- where it was pressed: todo | decide | review | finish (backlog in older rows)
   version INTEGER,                        -- the version it was pressed on; null for send
   at INTEGER NOT NULL, session_url TEXT   -- the routine session it woke, or the one already running
 );

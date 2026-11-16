@@ -84,9 +84,9 @@ export const dashOps = {
       optimistic: [{ key: DASH_KEY, apply: onTasks(id, local) }],
       confirm: (res, meta) => takeState(res, meta, s) };
   },
-  /** Dropped from Decide, Review or Thinking: off the board and out of Dispatch at once, into the archive. */
-  end(id: string, s: Store = roomStore): Op<DashAnswer> {
-    return { label: "drop that thread", lanes: [lane(id)], method: "PATCH", path: `/api/dashboard/tasks/${id}`, body: { stage: "dropped", cleared: true },
+  /** Dropped from Decide, Review or Thinking, or archived from Finish: off the board and out of Dispatch at once, into the archive. */
+  end(id: string, stage: "dropped" | "done" = "dropped", s: Store = roomStore): Op<DashAnswer> {
+    return { label: stage === "done" ? "archive that thread" : "drop that thread", lanes: [lane(id)], method: "PATCH", path: `/api/dashboard/tasks/${id}`, body: { stage, cleared: true },
       optimistic: [{ key: DASH_KEY, apply: onTasks(id, () => null) },
         { key: DISPATCH_KEY, apply: (v: DispatchPane | undefined) => v && { ...v, threads: v.threads.filter((t) => t.id !== id) } }],
       confirm: (res, meta) => takeState(res, meta, s) };
@@ -110,16 +110,16 @@ export const dashOps = {
     return { label: "run the routine", lanes: [ROUTINE_KEY], method: "POST", path: "/api/dashboard/routine/run", body: {},
       confirm: (res) => { s.apply(ROUTINE_KEY, Date.now(), res, "wire", {}); } };
   },
-  /** Go or Send back: the card leaves Decide or Review at once and waits in Implementing. */
-  press(id: string, kind: "go" | "back", now: () => number = Date.now, s: Store = roomStore): Op<DashAnswer & { press: unknown }> {
+  /** Send: the card leaves Decide, Review or Finish at once and waits with Claude, who picks where the next page lands. */
+  press(id: string, kind: "send" | "go" | "back" = "send", now: () => number = Date.now, s: Store = roomStore): Op<DashAnswer & { press: unknown }> {
     return {
-      label: kind === "go" ? "send Go" : "send it back",
+      label: kind === "go" ? "send Go" : kind === "back" ? "send it back" : "send that to Claude",
       lanes: [`dispatch:${id}`],
       method: "POST",
       path: `/api/dashboard/tasks/${id}/press`,
       body: { kind },
       optimistic: [{ key: DISPATCH_KEY, apply: (v: DispatchPane | undefined) => v && { ...v, threads: v.threads.map((t) => t.id !== id ? t : {
-        ...t, stage: "implementing", lands: kind === "back" ? t.stage : t.stage === "review" ? "done" : "review",
+        ...t, stage: "implementing", lands: kind === "go" ? (t.stage === "review" ? "finish" : "review") : t.stage === "review" ? "review" : "decide",
         press: { kind, stage: t.stage, version: t.versions.length ? t.versions[t.versions.length - 1].n : null, at: now(), sessionUrl: t.press?.sessionUrl ?? null } }) } }],
       // a replayed answer to a resent press is older than a later press's, and its revision says so
       confirm: (res, meta) => takeState(res, meta, s),
@@ -135,8 +135,8 @@ export const dash = {
   patch: (id: string, body: Record<string, unknown>, local: (t: DashTask) => DashTask | null) => mutate(dashOps.patch(id, body, local)),
   text: (id: string, field: "title" | "body", value: string) => mutate(dashOps.text(id, field, value)),
   send: (id: string) => mutate(dashOps.send(id)),
-  end: (id: string) => mutate(dashOps.end(id)),
+  end: (id: string, stage: "dropped" | "done" = "dropped") => mutate(dashOps.end(id, stage)),
   routine: (body: Record<string, unknown>) => mutate(dashOps.routine(body)),
   runRoutine: () => mutate(dashOps.runRoutine()),
-  press: (id: string, kind: "go" | "back") => mutate(dashOps.press(id, kind)),
+  press: (id: string) => mutate(dashOps.press(id)),
 };
