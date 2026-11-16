@@ -55,3 +55,17 @@ test("main.js and the lazy chunks share no module: the only chunk loaded at boot
     }
   }
 });
+
+test("the dashboard paints without the editor: Tiptap is a chunk it fetches by import(), never in dashboard.js", async () => {
+  const { metafile: dm } = await esbuild.build({
+    entryPoints: ["web/dashboard.tsx"], bundle: true, outdir: "dist", format: "esm", splitting: true, minify: true,
+    chunkNames: "chunks/[name]-[hash]", jsx: "automatic", write: false, metafile: true, logLevel: "silent",
+    loader: { ".woff": "file", ".woff2": "file", ".ttf": "file" }, assetNames: "[name]",
+  });
+  const dash = dm.outputs["dist/dashboard.js"];
+  const [path] = Object.entries(dm.outputs).find(([, o]) => o.entryPoint === "web/capabilities/write/editor.tsx") ?? [];
+  assert.ok(path, "the editor has a chunk of its own");
+  assert.ok(dash.imports.some((i) => i.path === path && i.kind === "dynamic-import"), "dashboard.js reaches the editor by import()");
+  const boot = [dash, ...dash.imports.filter((i) => i.kind === "import-statement").map((i) => dm.outputs[i.path])];
+  for (const o of boot) assert.ok(!carried(o).some((p) => p.includes("node_modules/@tiptap/") || p.includes("node_modules/prosemirror-")), "no Tiptap or ProseMirror loads at boot");
+});

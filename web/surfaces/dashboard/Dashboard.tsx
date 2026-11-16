@@ -8,6 +8,7 @@ import Thinking from "./Thinking.tsx";
 import FocusReview from "./FocusReview.tsx";
 import Dispatch from "./Dispatch.tsx";
 import { hm } from "./parts.tsx";
+import { preloadWriter } from "../../capabilities/write/Writer.tsx";
 
 // what waits on you carries an orange count; the rest is information
 const WAITS: View[] = ["review", "decide", "built"];
@@ -18,6 +19,11 @@ const RAIL: Record<Mode, [View, string][]> = {
 
 export default function Dashboard() {
   const nav = useNav();
+  // the editor is the biggest chunk the dashboard has: fetch it once the first paint is done, not on the first click
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((f: () => void) => window.setTimeout(f, 300));
+    idle(preloadWriter);
+  }, []);
   return <>
     <Sky />
     <Poller />

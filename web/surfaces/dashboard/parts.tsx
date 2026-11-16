@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Markdown from "markdown-to-jsx";
 import type { DashFrom } from "../../data/entities/dashboard.ts";
+import { imagesInMarkdown, imgProps } from "../../engines/prose/images.tsx";
 
 export const hm = (at: number): string => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 export function age(at: number): string {
@@ -19,10 +20,10 @@ export function Src({ from }: { from: DashFrom | null | undefined }) {
   return from?.url ? <a className={`src ${kindOf(s)}`} href={from.url} target="_blank" rel="noopener">{inner}</a> : <span className={`src ${kindOf(s)}`}>{inner}</span>;
 }
 
-/** A thread's notes as Markdown, links opening elsewhere. */
+/** A thread's notes as Markdown, links opening elsewhere and pasted images shown. */
 export function Notes({ text }: { text: string }) {
   return <div className="md"><Markdown options={{ forceBlock: true, disableParsingRawHTML: true,
-    overrides: { a: { props: { target: "_blank", rel: "noopener" } } } }}>{text}</Markdown></div>;
+    overrides: { a: { props: { target: "_blank", rel: "noopener" } }, img: { props: imgProps } } }}>{imagesInMarkdown(text)}</Markdown></div>;
 }
 
 /**
@@ -43,18 +44,7 @@ export function useTyped(value: string, save: (v: string) => void, wait = 700): 
   return [typed ?? value, set, flush, held];
 }
 
-/** A textarea as tall as what it holds. */
-export function Grow(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  const ref = useRef<HTMLTextAreaElement | null>(null);
-  useLayoutEffect(() => {
-    const t = ref.current;
-    if (!t) return;
-    // collapsing to measure shortens the page under the scroller, which clamps its scroll and jumps the caret away
-    const kept: [Element, number][] = [];
-    for (let p = t.parentElement; p; p = p.parentElement) if (p.scrollTop) kept.push([p, p.scrollTop]);
-    t.style.height = "auto";
-    t.style.height = `${t.scrollHeight}px`;
-    for (const [p, top] of kept) p.scrollTop = top;
-  }, [props.value]);
-  return <textarea ref={ref} rows={1} {...props} />;
+/** Enter in a title goes on to the notes under it. */
+export function focusBody(): void {
+  (document.activeElement?.closest("article")?.querySelector(".dbody") as HTMLElement | null)?.focus();
 }

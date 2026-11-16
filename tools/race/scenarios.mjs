@@ -1735,13 +1735,13 @@ const dashboardWrites = {
     let rowDb = null;
     for (;;) {
       rowDb = t.sql("SELECT stage, title, body FROM dashboard_tasks WHERE id = ?", id)[0] ?? null;
-      if ((rowDb && rowDb.stage === "thinking" && rowDb.title === `Race pin ${tag} edited` && rowDb.body === `Picked under loss.\nNotes ${tag}`) || performance.now() > until) break;
+      if ((rowDb && rowDb.stage === "thinking" && rowDb.title === `Race pin ${tag} edited` && rowDb.body === `Picked under loss.\n\nNotes ${tag}`) || performance.now() > until) break;
       await sleep(250);
     }
     await t.net.idle(500);
     t.check("moved", rowDb?.stage === "thinking", `stage ${rowDb?.stage}`);
     t.check("title", rowDb?.title === `Race pin ${tag} edited`, `the title is ${JSON.stringify(rowDb?.title)}`);
-    t.check("notes", rowDb?.body === `Picked under loss.\nNotes ${tag}`, `the notes are ${JSON.stringify(rowDb?.body?.slice(0, 120))}`);
+    t.check("notes", rowDb?.body === `Picked under loss.\n\nNotes ${tag}`, `the notes are ${JSON.stringify(rowDb?.body?.slice(0, 120))}`);
   },
 };
 
@@ -1917,11 +1917,11 @@ const selectionCard = {
 
 const dashboardTyping = {
   name: "dashboard-typing",
-  what: "type a list into a Thinking doc with pauses that each save, while the saves answer late and out of order and one answer is lost; the field never loses a key, and the server ends with exactly what was typed",
+  what: "type a list into a Thinking doc with pauses that each save, while the saves answer late and out of order and one answer is lost; the field never loses a key, and the server ends with what was typed, as Markdown",
   checks: {
-    field: "after every pause the field holds exactly what was typed so far",
+    field: "after every pause the field holds every key typed so far",
     focus: "the notes keep focus through every save",
-    server: "the server holds exactly what was typed, spaces and newlines included",
+    server: "the server holds the typed list and paragraph as Markdown, the trailing space included",
   },
   async run(t) {
     const tag = `${t.seed}-${Date.now().toString(36)}`;
@@ -1932,16 +1932,18 @@ const dashboardTyping = {
     await page.goto(`${t.base}/dashboard?view=thinking`);
     await page.locator(".ws-list").getByText(`Race typing ${tag}`).click();
     await page.getByRole("textbox", { name: "Notes" }).click();
-    const field = page.locator("textarea.dbody");
-    const parts = ["- buy tape", "\n", "- fetch poster ", "\n", "- ", "glue", "\n\n", "Then ", "hang it."];
+    const field = page.locator(".dbody");
+    // typed into the Writer: "- " makes a list, Enter a new item, Enter twice leaves the list; Markdown is what is stored
+    const parts = ["- buy tape", "\n", "fetch poster ", "\n", "glue", "\n\n", "Then ", "hang it."];
+    const typed = "- buy tape\n- fetch poster \n- glue\n\nThen hang it.";
     const pause = t.rng("pause");
-    let typed = "", fieldOk = true, focusOk = true, at = "";
+    let shown = "", fieldOk = true, focusOk = true, at = "";
     for (const part of parts) {
       await page.keyboard.type(part, { delay: 10 });
-      typed += part;
+      shown += part.replace(/^- /, "").replace(/\n/g, "");
       await sleep(750 + Math.floor(pause() * 900));
-      const now = await field.inputValue().catch(() => null);
-      if (fieldOk && now !== typed) { fieldOk = false; at = JSON.stringify(now); }
+      const now = await field.textContent().catch(() => null);
+      if (fieldOk && now !== shown) { fieldOk = false; at = JSON.stringify(now); }
       if (focusOk && !(await page.evaluate(() => document.activeElement?.classList.contains("dbody")))) focusOk = false;
     }
     await page.keyboard.press("Tab");
