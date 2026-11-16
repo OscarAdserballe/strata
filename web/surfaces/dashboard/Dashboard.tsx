@@ -45,7 +45,7 @@ function Header() {
   const tasks = board?.tasks ?? [], threads = pane?.threads ?? [];
   const inbox = board?.inbox.length ?? 0;
   const count = (v: View): string => {
-    if (v === "thinking") return String(tasks.filter((t) => t.stage === "thinking" || (t.stage === "todo" && t.morningAt)).length || "");
+    if (v === "thinking") return String(tasks.filter((t) => t.stage === "thinking").length || "");
     if (v === "review") return String(tasks.filter((t) => t.stage === "review" && !t.dispatched).length || "");
     const n = threads.filter((t) => t.stage === (v === "built" ? "review" : v)).length;
     return !n ? "" : v === "implementing" ? `(${n})` : String(n);
