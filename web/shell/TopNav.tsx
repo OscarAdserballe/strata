@@ -12,6 +12,7 @@ import { foldDays } from "../capabilities/today/days.ts";
 import { begin as journey } from "../platform/rum.ts";
 import { openTab, setReviewing } from "./screens.ts";
 import { room } from "./room.ts";
+import { useDeploy } from "./session.ts";
 import "./topnav.css";
 
 export type NavHere = "today" | "projects" | "review" | null;
@@ -55,6 +56,7 @@ export default function TopNav(p: TopNavProps) {
   const days = useMemo(() => (reg && reg.hours ? foldDays(reg.hours, reg.daysBefore ?? 0) : null), [reg && reg.hours]);
   const [menu, setMenu] = useState<"add" | "more" | null>(null);
   const [study, setStudy] = useState(true);
+  const deploy = useDeploy();
   useEffect(() => {
     if (!jumpKeys++) document.addEventListener("keydown", onJumpKey, true);
     return () => { if (!--jumpKeys) document.removeEventListener("keydown", onJumpKey, true); };
@@ -94,11 +96,13 @@ export default function TopNav(p: TopNavProps) {
         </span>
       </>}
       <span className="tn-pop">
-        <button className="tn-more" aria-label="More" aria-expanded={menu === "more"} onClick={(e) => { e.stopPropagation(); setMenu(menu === "more" ? null : "more"); }}>···</button>
+        <button className="tn-more" aria-label="More" aria-expanded={menu === "more"} onClick={(e) => { e.stopPropagation(); setMenu(menu === "more" ? null : "more"); }}>···{deploy
+          ? <span className={"tn-deploy " + deploy.level} role="img" aria-label={"Deploy: " + deploy.line} title={"Deploy: " + deploy.line} /> : null}</button>
         {menu === "more" ? <span className="addmenu tn-menu right" onClick={(e) => e.stopPropagation()}>
           <button onClick={() => { setMenu(null); openKeysSheet(); }}><b>Shortcuts</b>?</button>
           {p.adminPath ? <button onClick={() => location.assign(p.adminPath!)}><b>Admin</b></button> : null}
           <button onClick={() => { setMenu(null); p.onSignOut(); }}><b>Log out</b></button>
+          {deploy ? <span className={"tn-deploy-line " + deploy.level}><b>Deploy</b>{deploy.line}</span> : null}
         </span> : null}
       </span>
       <Suggest />

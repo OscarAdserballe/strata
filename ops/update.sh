@@ -38,26 +38,33 @@ wait_healthy() {
   return 1
 }
 
+# What this pass came to, left in the room's /tmp, where the gateway reads it for the admin's deploy dot.
+backup=ok
+report() {
+  docker exec "$(container)" sh -c "printf '%s' '{\"at\":$(date +%s),\"state\":\"$1\",\"backup\":\"$backup\"}' > /tmp/strata-updater.tmp && mv /tmp/strata-updater.tmp /tmp/strata-updater.json" 2>/dev/null || true
+}
+
 today="$(date -u +%F)"
 if [ "$(cat "$state/backed-up" 2>/dev/null || true)" != "$today" ]; then
-  backup_all && echo "$today" > "$state/backed-up"
+  if backup_all; then echo "$today" > "$state/backed-up"; else backup=failed; fi
 fi
 
 image="$(docker compose config --images | head -n1)"
-docker pull -q "$image" >/dev/null 2>&1 || { echo "update: could not pull $image; staying on the running image"; exit 0; }
+docker pull -q "$image" >/dev/null 2>&1 || { echo "update: could not pull $image; staying on the running image"; report pull-failed; exit 0; }
 new="$(docker image inspect --format '{{.Id}}' "$image")"
 old="$(docker inspect --format '{{.Image}}' "$(container)")"
-[ "$new" != "$old" ] || exit 0
-[ "$new" != "$(cat "$state/refused" 2>/dev/null || true)" ] || exit 0
+[ "$new" != "$old" ] || { report current; exit 0; }
+[ "$new" != "$(cat "$state/refused" 2>/dev/null || true)" ] || { report refused; exit 0; }
 
 echo "update: $image changed, $old -> $new"
-backup_all || { echo "update: not updating without a backup" >&2; exit 1; }
+backup_all || { echo "update: not updating without a backup" >&2; backup=failed; report current; exit 1; }
 echo "$today" > "$state/backed-up"
 docker tag "$old" strata-previous:rollback
 docker compose up -d --no-deps strata
 if wait_healthy; then
   docker image prune -f >/dev/null 2>&1 || true
   echo "update: running $new"
+  report current
   exit 0
 fi
 
@@ -65,4 +72,5 @@ echo "update: $new did not become healthy; rolling back to $old" >&2
 echo "$new" > "$state/refused"
 STRATA_IMAGE=strata-previous:rollback docker compose up -d --no-deps strata
 wait_healthy || echo "update: the previous image is not healthy either" >&2
+report refused
 exit 1

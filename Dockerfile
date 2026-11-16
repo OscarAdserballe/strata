@@ -9,7 +9,9 @@ RUN npm run build
 FROM node:24.19.0-bookworm-slim
 
 ARG STRATA_COMMIT=dev
+ARG STRATA_REPO=
 ENV STRATA_COMMIT=$STRATA_COMMIT \
+    STRATA_REPO=$STRATA_REPO \
     NODE_ENV=production \
     STRATA_HOST=0.0.0.0 \
     STRATA_PORT=8080 \
