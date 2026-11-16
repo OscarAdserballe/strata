@@ -241,7 +241,7 @@ function surfaceSteps({ page, open, shot, phone, R }) {
         await page.getByRole("tab", { name: /^Board/ }).click(); await page.getByRole("tab", { name: /^Work/ }).click();
         await page.getByText("Show the review ladder on the strip").first().click(); await shot("dashboard--task");
       }],
-      ["scratch pad", async () => { await open("/dashboard"); await button("Open the scratch pad").click(); await shot("dashboard--pad"); }],
+      ["scratch pad", async () => { await open("/dashboard"); await button("Notepad").click(); await shot("dashboard--pad"); }],
     ]),
   };
 }

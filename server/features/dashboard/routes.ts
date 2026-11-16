@@ -1,6 +1,6 @@
 import { sendJson } from "../../platform/http/http.ts";
 import { route, type Route } from "../../platform/router/router.ts";
-import { addItems, archive, checkItem, createTask, dropItem, editItem, keepItem, patchTask, snapshot, taskView } from "./dashboard.ts";
+import { addItems, archive, checkItem, createTask, dropItem, editItem, keepItem, padOf, patchTask, snapshot, taskView, writePad } from "./dashboard.ts";
 import { dashboardRepo as q } from "./repo.ts";
 import { fireRoutine, recordRun, routineView, setRoutine, wake } from "./routine.ts";
 import { checkPress, checkSend, pane, pressLabel, pressThread, sendThread } from "./dispatch.ts";
@@ -47,6 +47,16 @@ export const dashboardRoutes: Route[] = [
     commit(() => {
       const t = patchTask(params[0], b);
       return { status: 200, body: { ...taskView(t, q.updatesOf.all(t.id)), ...state() } };
+    });
+  }, { receipt: "atomic" }),
+
+  // The notepad is one document written whole: a write based on an older rev is a 409 carrying the current text.
+  route("GET", "/api/dashboard/pad", ({ res }) => { sendJson(res, 200, padOf()); }),
+  route("PUT", "/api/dashboard/pad", async ({ body, commit, ifMatch }) => {
+    const b = await body<{ text?: unknown }>();
+    commit(() => {
+      ifMatch(padOf().rev, padOf);
+      return { status: 200, body: writePad(b.text) };
     });
   }, { receipt: "atomic" }),
 

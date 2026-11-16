@@ -37,6 +37,7 @@ export const ROOM: readonly KeyGroup[] = [
     ["b", "all boards"],
   ]],
   ["the room", [
+    ["⌘;", "the notepad — jot a stray friction and stay where you are (esc closes it)"],
     ["-  /  =", "smaller / larger — now {ui}%"],
     ["↓ / ↑", "in the board picker: move (j / k too) — ↵ picks, esc leaves"],
     ["← / →", "in the tour: the previous / next scene"],

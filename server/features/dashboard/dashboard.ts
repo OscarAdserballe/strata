@@ -21,7 +21,7 @@ export const AREAS = ["work", "personal"] as const;
 const WORK = /slack|linear|github|engineering|1:1|design review|standup|sync\b|meeting|#/i;
 /** An item that names no area goes where its source suggests. */
 export const guessArea = (source: string | undefined): string => (WORK.test(source ?? "") ? "work" : "personal");
-const MAX = { title: 300, body: 20000, context: 400, source: 300, quote: 2000, ref: 200, url: 2000, links: 20 };
+const MAX = { title: 300, body: 20000, context: 400, source: 300, quote: 2000, ref: 200, url: 2000, links: 20, pad: 200000 };
 
 export interface Link { kind: string; ref: string; title?: string; url?: string }
 export interface From { source: string; url?: string; quote?: string }
@@ -171,6 +171,19 @@ export interface TaskView {
   updates: { id: string; at: number; text: string; from: From | null; links: Link[] }[];
 }
 const updateView = (u: UpdateRow) => ({ id: u.id, at: u.at, text: u.text, from: parseJson<From | null>(u.from_json, null), links: parseJson<Link[]>(u.links, []) });
+/** The notepad: what you jot between runs, whatever screen you are on. */
+export function padOf(): { text: string; rev: number } {
+  const p = q.pad.get();
+  return { text: p?.text ?? "", rev: p?.rev ?? 0 };
+}
+export function writePad(text: unknown): { text: string; rev: number } {
+  if (typeof text !== "string") return fail("text is text.");
+  // refused rather than cut: a cut pad would lose its tail without saying so
+  if (text.length > MAX.pad) fail(`text is at most ${MAX.pad} characters.`);
+  q.putPad.run(text, now());
+  return padOf();
+}
+
 export function taskView(t: TaskRow, ups: UpdateRow[], dispatched = false): TaskView {
   return { id: t.id, title: t.title, body: t.body, stage: stageOf(t),
     links: parseJson<Link[]>(t.links, []), createdFrom: parseJson<From | null>(t.created_from, null),

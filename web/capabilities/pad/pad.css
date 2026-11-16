@@ -1,0 +1,12 @@
+/* a tab on the left edge, clear of both apps' footers and bars */
+.pad-chip{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:var(--layer-pad);writing-mode:vertical-rl;rotate:180deg;border:1px solid #dedbe3;border-left:none;border-radius:8px 0 0 8px;padding:10px 4px;background:#fffdf7;color:#8a8693;font:500 11px/1 var(--sans,system-ui);letter-spacing:.04em;cursor:pointer;opacity:.75}
+.pad-chip:hover,.pad-chip.on{color:#141414;border-color:#bdb9c6;opacity:1}
+.pad-sheet{position:fixed;left:30px;top:50%;transform:translateY(-50%);z-index:var(--layer-pad);width:min(380px,calc(100vw - 28px));max-height:min(60vh,520px);display:flex;flex-direction:column;background:#fffdf7;border:1px solid #e6e1d2;border-radius:12px;box-shadow:0 10px 30px rgba(20,20,30,.14)}
+.pad-sheet header{display:flex;align-items:baseline;gap:8px;padding:10px 12px 6px 14px;font:13px var(--sans,system-ui)}
+.pad-sheet header span{color:#9a96a3;font-size:12px;flex:1}
+.pad-x{border:none;background:none;font-size:18px;line-height:1;color:#9a96a3;cursor:pointer;padding:0 4px}
+.pad-x:hover{color:#141414}
+.pad-sheet .wr-box,.pad-sheet .wr-still,.pad-sheet textarea.wr{overflow:auto;padding:2px 14px 14px;min-height:140px}
+.pad-text{font:14px/1.5 var(--sans,system-ui);color:#222;min-height:130px}
+textarea.wr.pad-text{border:none;resize:none;background:none;width:100%;box-sizing:border-box}
+.pad-wait{padding:6px 14px 14px;margin:0;color:#9a96a3;font:13px var(--sans,system-ui)}
