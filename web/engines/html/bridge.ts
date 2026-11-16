@@ -276,7 +276,7 @@ const pageDom: LayerDom = {
     else if (it.kind === "card") r = cardRange(it.anchor.quote);
     else r = wordsAt(walk(), it.anchor.start, it.anchor.end, it.anchor.quote);
     if (!r) return null;
-    const tint = (it.kind === "card" || it.kind === "ask") && !boxEl ? r : null;
+    const tint = boxEl ? null : r;
     const hp = hiddenPanel(r.startContainer.nodeType === 1 && boxEl ? boxEl : r.startContainer);
     if (hp) {
       const tab = hp.id ? document.querySelector<HTMLElement>(`[aria-controls="${CSS.escape(hp.id)}"]`) : null;
@@ -287,10 +287,10 @@ const pageDom: LayerDom = {
       return { key: "app:" + keyFor(at), block: at as HTMLElement, kind: "app", anchor: at, tint };
     }
     if (boxEl) return { key: keyFor(boxEl), block: boxEl as HTMLElement, kind: "block", anchor: boxEl };
-    const at = boundary(r);
-    // a card lives on its own words: they are its place and open it
-    if (at && it.kind === "card") return { ...at, key: "w:" + it.id, tint, words: true };
-    return at ? { ...at, tint } : null;
+    // everything hangs off its own words; the block around them only says how wide the column is
+    const at = boundary(r), el = r.commonAncestorContainer.nodeType === 1 ? r.commonAncestorContainer as Element : r.commonAncestorContainer.parentElement;
+    if (at) return { ...at, key: "w:" + it.id, tint, words: true };
+    return el ? { key: "w:" + it.id, block: el as HTMLElement, kind: "block", anchor: el, tint, words: true } : null;
   },
   place(s: Spot) {
     const spot = s as PageSpot, z = scale || 1, X = scrollX, Y = scrollY;
