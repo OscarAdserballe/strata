@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import { registerKeys } from "./registry.ts";
+import { registerKeys, typing } from "./registry.ts";
 
 // the handler reads through handles, not values: it is bound once and must read the present
 
@@ -84,8 +84,8 @@ export function makeKeyHandler(ctx: RoomKeysCtx): (e: KeyboardEvent) => void {
       else if (k === "enter") { e.preventDefault(); const it = g.items[g.sel]; if (!it) return; if (!it.keepOpen) a.setGo(null); it.run(); }
       return;
     }
-    // typing beats every shortcut, including ?
-    if (el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA")) return;
+    // typing beats every shortcut, including ?, in a field or an editor such as the notepad
+    if (typing(el)) return;
     // the first key warms the lazy chunks r and x need
     a.warmKeyed();
     if (k === "escape" && b.composer) { e.preventDefault(); a.setComposer(null); return; }
