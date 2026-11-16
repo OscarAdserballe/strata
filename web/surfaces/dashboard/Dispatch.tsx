@@ -34,9 +34,10 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   const [tall, setTall] = useState<{ rid: string; h: number } | null>(null);
   const fit = v && tall?.rid === v.resourceId ? Math.max(tall.h, 240) : null;
 
-  function press(th: DispatchThread, kind: "go" | "back"): void {
+  function press(th: DispatchThread, kind: "go" | "back" | "drop"): void {
     const rest = here.filter((x) => x.id !== th.id);
     setSel(rest[0] ? { thread: rest[0].id, n: null } : null);
+    if (kind === "drop") { toast("Dropped"); dash.end(th.id).catch((e) => toast(StrataWhy(e, "not dropped"), 4200)); return; }
     dash.press(th.id, kind).catch((e) => toast(StrataWhy(e, kind === "go" ? "Go didn't reach Claude" : "Send back didn't reach Claude"), 4200));
   }
 
@@ -61,6 +62,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
                 <div className="acts">
                   <button className={"btn dark" + (stage === "review" ? " merge" : "")} onClick={() => press(x, "go")}>{stage === "review" ? "Go → merge" : "Go →"}</button>
                   <button className="btn" onClick={() => press(x, "back")}>Send back</button>
+                  {stage === "decide" ? <button className="btn quiet danger" onClick={() => press(x, "drop")}>Drop</button> : null}
                 </div>
               </section>
             : <button key={x.id} className="ws-card" onClick={() => setSel({ thread: x.id, n: null })}>

@@ -84,6 +84,13 @@ export const dashOps = {
       optimistic: [{ key: DASH_KEY, apply: onTasks(id, local) }],
       confirm: (res, meta) => takeState(res, meta, s) };
   },
+  /** Dropped from Decide, Review or Thinking: off the board and out of Dispatch at once, into the archive. */
+  end(id: string, s: Store = roomStore): Op<DashAnswer> {
+    return { label: "drop that thread", lanes: [lane(id)], method: "PATCH", path: `/api/dashboard/tasks/${id}`, body: { stage: "dropped", cleared: true },
+      optimistic: [{ key: DASH_KEY, apply: onTasks(id, () => null) },
+        { key: DISPATCH_KEY, apply: (v: DispatchPane | undefined) => v && { ...v, threads: v.threads.filter((t) => t.id !== id) } }],
+      confirm: (res, meta) => takeState(res, meta, s) };
+  },
   /** The doc's title and notes as typed: only the newest unsent text goes. */
   text(id: string, field: "title" | "body", value: string, s: Store = roomStore): Op<DashAnswer> {
     return { label: "save those notes", lanes: [lane(id)], coalesce: `dash:${id}:${field}`, method: "PATCH", path: `/api/dashboard/tasks/${id}`, body: { [field]: value },
@@ -128,6 +135,7 @@ export const dash = {
   patch: (id: string, body: Record<string, unknown>, local: (t: DashTask) => DashTask | null) => mutate(dashOps.patch(id, body, local)),
   text: (id: string, field: "title" | "body", value: string) => mutate(dashOps.text(id, field, value)),
   send: (id: string) => mutate(dashOps.send(id)),
+  end: (id: string) => mutate(dashOps.end(id)),
   routine: (body: Record<string, unknown>) => mutate(dashOps.routine(body)),
   runRoutine: () => mutate(dashOps.runRoutine()),
   press: (id: string, kind: "go" | "back") => mutate(dashOps.press(id, kind)),

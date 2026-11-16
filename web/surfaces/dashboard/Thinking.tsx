@@ -66,7 +66,8 @@ export function Doc({ t, where = "thinking" }: { t: DashTask; where?: "thinking"
               <button className="btn" onClick={() => { flush(); toast("Sent to Dispatch"); dash.send(t.id).catch((e) => toast(StrataWhy(e, "not sent"), 4200)); }}>Send to Dispatch</button>
               <button className="btn quiet" onClick={copy}>Copy for Claude</button>
               <span className="grow" />
-              <button className="btn quiet" onClick={() => { flush(); move(t, "todo"); }}>Back to to-do</button></>
+              <button className="btn quiet" onClick={() => { flush(); move(t, "todo"); }}>Back to to-do</button>
+              <button className="btn quiet danger" onClick={() => { flush(); move(t, "dropped"); }}>Drop</button></>
           : <button className="btn quiet" onClick={copy}>Copy for Claude</button>}
       </div>
     </article>
