@@ -2,18 +2,16 @@ import { useEffect, useState } from "react";
 import { StrataWhy } from "../../data/api.ts";
 import { dash, useDashBoard, type DashTask } from "../../data/entities/dashboard.ts";
 import { toast } from "../../shell/layers.ts";
-import { go } from "./nav.ts";
 import { Grow, Src, useTyped } from "./parts.tsx";
 import Writer from "../../capabilities/write/Writer.tsx";
 import { move, saveText } from "./moves.ts";
 
-/** Thinking: one thread's notes open on the sheet, the rest waiting on the left, morning picks first. */
+/** Thinking: one thread's notes open on the sheet, to-do waiting on the left. */
 export default function Thinking() {
   const board = useDashBoard();
   const tasks = board?.tasks ?? [];
   const open = tasks.filter((t) => t.stage === "thinking").sort((a, b) => b.updatedAt - a.updatedAt);
-  const picks = tasks.filter((t) => t.stage === "todo" && t.morningAt).sort((a, b) => (a.morningAt ?? 0) - (b.morningAt ?? 0));
-  const rest = tasks.filter((t) => t.stage === "todo" && !t.morningAt).sort((a, b) => b.updatedAt - a.updatedAt);
+  const rest = tasks.filter((t) => t.stage === "todo").sort((a, b) => b.updatedAt - a.updatedAt);
   const [sel, setSel] = useState<string | null>(null);
   const t = open.find((x) => x.id === sel) ?? open[0] ?? null;
   // hold the doc on the sheet: another thread's save would otherwise sort itself to the top and take its place
@@ -24,11 +22,9 @@ export default function Thinking() {
       <aside className="ws-list" aria-label="Threads">
         {open.map((x) => <button key={x.id} className={"ws-card" + (t?.id === x.id ? " on" : "")} onClick={() => setSel(x.id)}>
           <span className="t">{x.title}</span><span className="m">{x.links[0]?.ref ?? x.createdFrom?.source ?? ""}</span></button>)}
-        {picks.length ? <h3 className="ws-group">Tomorrow morning</h3> : null}
-        {picks.map((x) => <button key={x.id} className="ws-card wait" onClick={() => take(x)} title="Open in Thinking"><span className="t">{x.title}</span></button>)}
         {rest.length ? <h3 className="ws-group">To-do</h3> : null}
         {rest.map((x) => <button key={x.id} className="ws-card wait dim" onClick={() => take(x)} title="Open in Thinking"><span className="t">{x.title}</span></button>)}
-        {!open.length && !picks.length && !rest.length ? <p className="ws-none">Nothing to think about yet. Keep threads in Triage and pick them for to-do.</p> : null}
+        {!open.length && !rest.length ? <p className="ws-none">Nothing to think about yet. Keep threads from the inbox in to-do.</p> : null}
       </aside>
       <div className="ws-room">
         <div className="ws-caption">{t ? <span>Your notes · {t.area} · since {new Date(t.updatedAt).toLocaleDateString([], { day: "numeric", month: "short" })}</span> : <span />}</div>
@@ -59,7 +55,7 @@ export function Doc({ t, where = "thinking" }: { t: DashTask; where?: "thinking"
         placeholder="Write until you could hand it to Claude without being in the room." />
       <div className="doc-foot">
         {where === "thinking"
-          ? <><button className="btn dark" onClick={() => { flush(); move(t, "review"); go({ view: "review" }); }}>Ready for review</button>
+          ? <><button className="btn dark" onClick={() => { flush(); move(t, "review"); }}>Ready for review</button>
               <button className="btn" onClick={() => { flush(); toast("Sent to Dispatch"); dash.send(t.id).catch((e) => toast(StrataWhy(e, "not sent"), 4200)); }}>Send to Dispatch</button>
               <button className="btn quiet" onClick={copy}>Copy for Claude</button>
               <span className="grow" />
