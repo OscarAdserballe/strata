@@ -422,6 +422,16 @@ addEventListener("mouseup", (e) => { pressed = { x: e.clientX, y: e.clientY, tar
 let selT: ReturnType<typeof setTimeout> | undefined;
 // touch has no mouseup: follow the handles, and speak once they settle
 document.addEventListener("selectionchange", () => { clearTimeout(selT); selT = setTimeout(reportSelection, 320); });
+// a link loaded inside the frame meets the other site's frame-ancestors refusal, so it opens a tab instead
+addEventListener("click", (e) => {
+  const a = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>("a[href]") : null;
+  if (!a || e.defaultPrevented || a.closest(OURS) || a.hasAttribute("download")) return;
+  const to = new URL(a.href, location.href);
+  if (to.origin === location.origin && to.pathname === location.pathname && to.search === location.search) return;
+  if (!/^https?:$/.test(to.protocol)) return;
+  e.preventDefault();
+  window.open(to.href, "_blank", "noopener");
+});
 addEventListener("click", (e) => {
   if (e.target instanceof Element && e.target.closest(OURS)) return;
   const sel = getSelection();
