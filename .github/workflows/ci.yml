@@ -156,7 +156,8 @@ jobs:
   # The image the production box pulls: named after the repository, so a fork publishes its own.
   publish:
     name: publish image
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    # Without a status function, a red perf job upstream skips this even though test passed.
+    if: ${{ !cancelled() && needs.test.result == 'success' && github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
     needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -171,6 +172,6 @@ jobs:
         run: |
           repo="ghcr.io/${GITHUB_REPOSITORY,,}"
           echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
-          docker build --build-arg STRATA_COMMIT="$GITHUB_SHA" -t "$repo:$GITHUB_SHA" -t "$repo:latest" .
+          docker build --build-arg STRATA_COMMIT="$GITHUB_SHA" --build-arg STRATA_REPO="$GITHUB_REPOSITORY" -t "$repo:$GITHUB_SHA" -t "$repo:latest" .
           docker push "$repo:$GITHUB_SHA"
           docker push "$repo:latest"

@@ -48,7 +48,8 @@ test("only a signed admin account can discover and read admin usage", async (t) 
   let collections = 0;
   const gateway = createGateway({ sessionSecret: "x".repeat(64), accounts: ["Ada", "Cy", "ada2"].map((username) => ({
     username, password: "fixture", upstream: "http://127.0.0.1:1", basePath: `/u/${username.toLowerCase()}/`, admin: username === "Ada",
-  })), adminUsage: async () => { collections++; return { at: Date.now(), rooms: [] }; } });
+  })), adminUsage: async () => { collections++; return { at: Date.now(), rooms: [] }; },
+    deploy: () => ({ level: "green", line: "running abc", build: "abc" }) });
   const root = `http://127.0.0.1:${await listen(gateway.server)}`;
   t.after(() => gateway.server.close());
   const login = async (username: string) => {
@@ -73,7 +74,7 @@ test("only a signed admin account can discover and read admin usage", async (t) 
   assert.equal(collections, 0);
   const ada = await login("ADA");
   const headers = { Cookie: ada };
-  assert.deepEqual(await (await fetch(root+"/api/session", { headers })).json(), { username: "Ada", adminPath: "/admin" });
+  assert.deepEqual(await (await fetch(root+"/api/session", { headers })).json(), { username: "Ada", adminPath: "/admin", deploy: { level: "green", line: "running abc", build: "abc" } });
   const page = await fetch(root+"/admin?period=7", { headers });
   assert.equal(page.status, 200); assert.equal(page.headers.get("cache-control"), "no-store");
   assert.match(await page.text(), /href="\/u\/ada\/">← My library/);

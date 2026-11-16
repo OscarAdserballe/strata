@@ -323,7 +323,8 @@ export const StrataSourceText = (board: string, rid: string, gen?: number): Prom
   fetch(StrataPath(`/api/boards/${board}/resources/${rid}/raw${gen ? `?v=${gen}` : ""}`)).then((r) => r.text());
 
 /** The gateway's own /api/session, outside this room's mount point (so not under StrataPath). */
-export async function StrataGatewaySession(signal?: AbortSignal): Promise<{ adminPath?: string } | null> {
+export interface DeployStatus { level: "green" | "orange" | "red"; line: string }
+export async function StrataGatewaySession(signal?: AbortSignal): Promise<{ adminPath?: string; deploy?: DeployStatus } | null> {
   const r = await fetch("/api/session", { cache: "no-store", redirect: "error", signal });
   return r.ok ? r.json() : null;
 }

@@ -5,6 +5,7 @@ import { createServer, request as httpRequest, type IncomingHttpHeaders, type In
 import { request as httpsRequest } from "node:https";
 import { collectRooms, createUsageSnapshot } from "./admin/usage-collector.mjs";
 import { usagePage } from "./admin/usage-page.mjs";
+import { watchDeploy, type DeployStatus } from "./deploy.ts";
 import { startRooms } from "./rooms.ts";
 
 export interface GatewayAccount { username: string; password: string; upstream: string; basePath: string; admin?: boolean }
@@ -17,6 +18,7 @@ export interface GatewayConfig {
   sessionDays?: number;
   minFreeBytes?: number;
   adminUsage?: ReturnType<typeof createUsageSnapshot>;
+  deploy?: () => DeployStatus;
 }
 
 interface Account extends GatewayAccount { key: string; basePath: string; upstreamUrl: URL }
@@ -168,7 +170,7 @@ export function createGateway(config: GatewayConfig): { server: Server; listen()
       return;
     }
     if (req.method === "GET" && url.pathname === "/api/session") {
-      json(res, 200, { username: account.username, adminPath: account.admin === true && config.adminUsage ? "/admin" : null }, renewed ? { "Set-Cookie": renewed } : {}); return;
+      json(res, 200, { username: account.username, adminPath: account.admin === true && config.adminUsage ? "/admin" : null, ...(account.admin === true && config.deploy ? { deploy: config.deploy() } : {}) }, renewed ? { "Set-Cookie": renewed } : {}); return;
     }
     if (url.pathname === "/admin" || url.pathname.startsWith("/admin/") || url.pathname === "/api/usage") {
       if (account.admin !== true) { json(res, 403, { error: "admin access required" }); return; }
@@ -215,5 +217,6 @@ export function createGatewayFromEnv(): ReturnType<typeof createGateway> {
   const stop = startRooms(rooms);
   for (const signal of ["SIGTERM", "SIGINT"] as const) process.once(signal, () => { stop(); process.exit(0); });
   return createGateway({ ...raw, accounts, host: process.env.STRATA_HOST ?? raw.host, port: Number(process.env.STRATA_PORT ?? raw.port ?? 8080), origin: process.env.STRATA_ORIGIN ?? raw.origin,
+    deploy: watchDeploy(process.env.STRATA_COMMIT, process.env.STRATA_REPO),
     adminUsage: rooms.length ? createUsageSnapshot(() => collectRooms(rooms.map((r) => ({ reader: r.key, db: join(r.dataDir, "strata.db") })))) : undefined });
 }
