@@ -8,6 +8,7 @@ import Thinking from "./Thinking.tsx";
 import FocusReview from "./FocusReview.tsx";
 import Dispatch from "./Dispatch.tsx";
 import { hm } from "./parts.tsx";
+import { useDeploy } from "../../shell/session.ts";
 import { loadWriter } from "../../capabilities/write/Writer.tsx";
 import Pad from "../../capabilities/pad/Pad.tsx";
 
@@ -52,6 +53,8 @@ function Header() {
   const board = useDashBoard(), pane = useDispatch();
   const tasks = board?.tasks ?? [], threads = pane?.threads ?? [];
   const inbox = board?.inbox.length ?? 0;
+  const todo = tasks.filter((t) => t.stage === "todo").length;
+  const on = (sub: "inbox" | "todo") => nav.view === "triage" && nav.sub === sub;
   const count = (v: View): string => {
     if (v === "thinking") return String(tasks.filter((t) => t.stage === "thinking").length || "");
     if (v === "review") return String(tasks.filter((t) => t.stage === "review" && !t.dispatched).length || "");
@@ -66,9 +69,11 @@ function Header() {
           {(["focus", "dispatch"] as Mode[]).map((m) => <button key={m} role="tab" aria-selected={nav.mode === m} onClick={() => go({ mode: m })}>
             {m === "focus" ? "Focus" : "Dispatch"}</button>)}
         </div>
-        <button className={"dh-inbox" + (nav.view === "triage" && nav.sub === "inbox" ? " on" : "")} aria-pressed={nav.view === "triage" && nav.sub === "inbox"}
-          onClick={() => go({ view: "triage", sub: "inbox" })}>
+        <button className={"dh-inbox" + (on("inbox") ? " on" : "")} aria-pressed={on("inbox")} onClick={() => go({ view: "triage", sub: "inbox" })}>
           Inbox <i>{inbox || ""}</i>
+        </button>
+        <button className={"dh-inbox dh-todo" + (on("todo") ? " on" : "")} aria-pressed={on("todo")} onClick={() => go({ view: "triage", sub: "todo" })}>
+          To-do <i>{todo || ""}</i>
         </button>
       </div>
       <div className="dh-main">
@@ -78,7 +83,7 @@ function Header() {
           <button aria-current={nav.view === v ? "page" : undefined} onClick={() => go({ view: v })}>{name} <i className={WAITS.includes(v) ? "wait" : undefined}>{count(v)}</i></button>
         </span>)}
       </nav>
-      <div className="dh-side end"><Clock /></div>
+      <div className="dh-side end"><Deploy /><Clock /></div>
       </div>
     </header>
   );
@@ -89,6 +94,12 @@ function Clock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const h = window.setInterval(() => setNow(new Date()), 30_000); return () => clearInterval(h); }, []);
   return <span className="dh-clock">{hm(now.getTime())} · {now.toLocaleDateString([], { weekday: "long" })}</span>;
+}
+
+// The room's top bar shows the same dot, from the same session read.
+function Deploy() {
+  const d = useDeploy();
+  return d ? <span className={"dh-deploy " + d.level} role="img" aria-label={"Deploy: " + d.line} title={"Deploy: " + d.line} /> : null;
 }
 
 // Reads again every 20 s while something moves, backing off to two minutes when nothing has; never while hidden.
