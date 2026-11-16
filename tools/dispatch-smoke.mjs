@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
-// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, and drops threads from Decide and Thinking.
+// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, and drops threads from Decide and Thinking, and To-do opens from the header.
 const base = (process.argv[2] || "http://127.0.0.1:8804").replace(/\/+$/, "");
 let n = 0;
 const key = () => `smoke-${Date.now().toString(36)}-${++n}`;
@@ -50,5 +50,15 @@ try {
   for (let i = 0; i < 20 && (await stageOf(think)) !== null; i++) await page.waitForTimeout(250);
   assert.equal(await stageOf(think), null, "a dropped Thinking thread leaves the board");
   console.log("✓ Drop in a Thinking doc");
+
+  // To-do sits beside Inbox in the header and opens the list from any view
+  const kept = await thread(`Smoke ${run}: a thread kept in to-do`, "todo");
+  await page.goto(`${base}/dispatch?view=decide`, { waitUntil: "networkidle" });
+  await page.locator(".dh-todo").click();
+  await page.waitForSelector(`text=Smoke ${run}: a thread kept in to-do`, { timeout: 5000 });
+  assert.equal(await page.locator(".dh-todo").getAttribute("aria-pressed"), "true");
+  assert.match(page.url(), /view=triage&sub=todo/);
+  assert.ok(await stageOf(kept));
+  console.log("✓ To-do in the header opens the list");
   assert.deepEqual(errors, []);
 } finally { await browser.close(); }
