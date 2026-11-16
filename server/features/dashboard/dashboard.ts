@@ -202,6 +202,23 @@ export function snapshot(): { rev: number; tasks: TaskView[]; inbox: ReturnType<
   return { rev: q.dashRev.get()!.rev, tasks: withUpdates(live), inbox: q.inboxOpen.all().map(inboxView), archived: all.length - live.length, links: DASHBOARD_LINKS };
 }
 
+export interface Handled { outcome: string; at: number; title: string; source: string; link: Link | null }
+const firstLink = (links: unknown, from: From | null | undefined): Link | null =>
+  (Array.isArray(links) && links.length ? (links[0] as Link) : null) ?? (from?.url ? { kind: "web", ref: from.source, url: from.url } : null);
+
+/** What the reader dealt with since a time: inbox items dropped and threads done or dropped, so the routine doesn't add them again. */
+export function handledSince(at: number): Handled[] {
+  const items = q.inboxDroppedSince.all(at).map((r): Handled => {
+    const it = parseJson<{ title?: string; text?: string; links?: unknown; from?: From }>(r.item, {});
+    return { outcome: "dropped", at: r.handled_at!, title: String(it.title ?? it.text ?? ""), source: it.from?.source ?? "?", link: firstLink(it.links, it.from) };
+  });
+  const threads = q.allTasks.all().filter((t) => isEnded(stageOf(t)) && t.updated_at >= at).map((t): Handled => {
+    const from = parseJson<From | null>(t.created_from, null);
+    return { outcome: stageOf(t), at: t.updated_at, title: t.title, source: from?.source ?? "You", link: firstLink(parseJson<Link[]>(t.links, []), from) };
+  });
+  return [...items, ...threads].sort((x, y) => x.at - y.at);
+}
+
 /** The archive: threads you cleared off the board, newest first. */
 export function archive(): { tasks: TaskView[] } {
   return { tasks: withUpdates(q.cleared.all()) };
