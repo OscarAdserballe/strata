@@ -71,8 +71,8 @@ try {
   console.log("✓ a live page's cards still to answer lie open under their words, over the page, neither covering the other");
 
   // a note's words sit in a grid's cell, where the nearest block that stacks is the whole grid: its sheet still hangs under them
-  const GRID = `<!doctype html><html><head><title>Grid</title></head><body><h1>Grid</h1>
-<div style="display:grid;grid-template-columns:1fr 1fr;gap:20px"><div>The left cell opens with a line worth a note. More of the left cell follows here.</div><div style="height:1400px">A tall right cell.</div></div></body></html>`;
+  const GRID = `<!doctype html><html><head><title>Grid</title><style>.grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}</style></head><body><h1>Grid</h1>
+<div class="grid"><div>The left cell opens with a line worth a note. More of the left cell follows here.</div><div style="height:1400px">A tall right cell.</div></div></body></html>`;
   const g = await api(`/api/boards/${board.id}/resources`, "POST", { filename: "grid.html", base64: Buffer.from(GRID).toString("base64"), pair: true });
   await api(`/api/boards/${board.id}/marks`, "POST", { resourceId: g.id, start: 0, end: 0, quote: "a line worth a note", note: "Under its words." });
   await page.goto(`${base}/?board=${board.id}&pair=${g.state.pairs.find((p) => p.resourceId === g.id).id}`, { waitUntil: "networkidle" });
