@@ -61,3 +61,15 @@ test("the page's height reaches the host only from the frame that is open", () =
   hear({ source: f.contentWindow, data: { [STRATA]: { t: "height", h: 512 } } });
   assert.deepEqual(heights, [512]);
 });
+
+test("a jump carries where its words were picked, so the page can prefer them over a copy higher up", () => {
+  const engine = new HtmlEngine(hooks as never);
+  engine.open(host, "/live/six");
+  const f = frames[frames.length - 1];
+  ready(f);
+  void engine.reveal("Delegation loss", null, null, 412);
+  void engine.reveal("Delegation loss", null);
+  const asked = f.posted.filter((m) => m.t === "reveal").map((m) => (m as { near?: number | null }).near);
+  assert.deepEqual(asked, [412, null]);
+  engine.dispose();
+});

@@ -10,7 +10,7 @@ export type LayerIntent = "edit" | "leave" | "remove" | "reply" | "show" | "late
 export type ToPage =
   | { t: "marks"; marks: LiveMark[]; open: string | null }
   | { t: "layers"; items: LayerItem[]; scale: number; fresh?: boolean }
-  | { t: "reveal"; n: number; quote: string | null; slug: string | null; box?: string | null }
+  | { t: "reveal"; n: number; quote: string | null; slug: string | null; box?: string | null; near?: number | null }
   | { t: "clear" }
   | { t: "state"; n: number; value: string | null; why?: string }
   | { t: "saved"; n: number; ok: boolean; why?: string };

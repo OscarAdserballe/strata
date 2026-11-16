@@ -155,7 +155,7 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
   useEffect(() => () => live.dispose(), []);
   const adapterRef = useRef<ReturnType<typeof sourceAdapters> | null>(null);
   adapterRef.current ??= sourceAdapters({
-    scroller: () => pageRef.current, ensureDrawn, revealLive: (q, slug) => live.reveal(q, slug),
+    scroller: () => pageRef.current, ensureDrawn, revealLive: (q, slug, near) => live.reveal(q, slug, null, near ?? null),
     proseDoc: () => (docRef.current.text ? { text: docRef.current.text, maps: docRef.current.maps } : null),
     pdfText: (n) => engine().text?.get(n) ?? null,
     // the page draws at the browser's own scale, so its folds are scaled back up to the room's

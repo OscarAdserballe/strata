@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { findQuote, placeByQuote } from "./quote.ts";
+import { findQuote, placeByQuote, quoteNear } from "./quote.ts";
 
 test("a quote is found across whitespace and case, nearest where it was", () => {
   const text = "Odds rise.\n\nPrior odds × LR. Later: prior  odds × LR again.";
@@ -20,4 +20,14 @@ test("marks keep offsets that still read their quote, move when they don't, and 
   const placed = placeByQuote(twin, marks);
   assert.deepEqual(placed.map((m) => m.id), ["kept", "moved"]);
   assert.equal(twin.slice(placed[1].start, placed[1].end), "most positives");
+});
+
+test("words are found where they were picked, not at a copy of them in the page's title", () => {
+  const text = "Delegation loss · nav\nDelegation loss\n\nBody: each hop drops a little. Delegation loss grows per hop.";
+  const at = text.lastIndexOf("Delegation loss");
+  assert.deepEqual(quoteNear(text, "Delegation loss", at), [at, at + 15]);
+  assert.deepEqual(quoteNear(text, "delegation  LOSS", at - 3), findQuote(text, "delegation  LOSS", at - 3), "moved a little: the nearest copy");
+  assert.equal(quoteNear(text, "Delegation loss", at - 3)![0], at);
+  assert.deepEqual(quoteNear(text, "Delegation loss"), [0, 15], "with no place, the first");
+  assert.deepEqual(quoteNear(text, "Delegation loss", 9999), [at, at + 15], "a place past the end: the nearest");
 });

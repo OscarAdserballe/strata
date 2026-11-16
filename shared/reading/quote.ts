@@ -22,6 +22,12 @@ export function findQuote(text: string, quote: string, near = 0): [number, numbe
   return best < 0 ? null : [f.map[best], f.map[best + q.length - 1] + 1];
 }
 
+/** The quote where it was picked when it still reads there, else its occurrence nearest that, else its first. */
+export function quoteNear(text: string, quote: string, near: number | null = null): [number, number] | null {
+  if (near != null && near >= 0 && text.slice(near, near + quote.length) === quote) return [near, near + quote.length];
+  return findQuote(text, quote, near ?? 0);
+}
+
 /** Marks placed on text by their words: kept where their offsets still read their quote, moved where they don't, dropped when gone. */
 export function placeByQuote<M extends { start: number; end: number; quote: string }>(text: string, marks: readonly M[]): M[] {
   const out: M[] = [];

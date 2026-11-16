@@ -3,7 +3,7 @@
 
 import { STRATA, type Box, type FromPage, type LiveMark, type ToPage } from "./protocol.ts";
 import { slugOf } from "../../../shared/reading/prose-slugs.ts";
-import { findQuote } from "../../../shared/reading/quote.ts";
+import { findQuote, quoteNear } from "../../../shared/reading/quote.ts";
 import { pageApi } from "./page-state.ts";
 import { FOLD_CSS, clearTicks, drawTick } from "../fold/view.ts";
 import { type LayerDom, type LayerItem, type Spot, THREADS, layerDrawer, tintWords } from "../fold/layers.ts";
@@ -85,12 +85,12 @@ function paint() {
 }
 
 let litTimer: ReturnType<typeof setTimeout> | undefined;
-function reveal(n: number, quote: string | null, slug: string | null, box: string | null) {
+function reveal(n: number, quote: string | null, slug: string | null, box: string | null, near: number | null) {
   const wk = walk();
   let r: Range | null = null;
   const el = box ? boxNamed(box) : null;
   if (el) { r = document.createRange(); r.selectNodeContents(el); }
-  const hit = !r && quote ? findQuote(wk.text, quote) : null;
+  const hit = !r && quote ? quoteNear(wk.text, quote, near) : null;
   if (hit) r = rangeAt(wk, hit[0], hit[1]);
   if (!r && slug) {
     const h = [...document.querySelectorAll("h1,h2,h3,h4,h5,h6")].find((el) => el.id === slug || slugOf(el.textContent || "") === slug);
@@ -423,7 +423,7 @@ addEventListener("message", (e: MessageEvent) => {
   if (state.hear(m)) return;
   if (m.t === "marks") { marks = m.marks; open = m.open; paint(); drawLayers(); }
   else if (m.t === "layers") { layerItems = m.items; scale = m.scale || 1; if (m.fresh) drawer.forget(); drawLayers(); }
-  else if (m.t === "reveal") reveal(m.n, m.quote, m.slug, m.box ?? null);
+  else if (m.t === "reveal") reveal(m.n, m.quote, m.slug, m.box ?? null, m.near ?? null);
   else if (m.t === "clear") getSelection()?.removeAllRanges();
 });
 

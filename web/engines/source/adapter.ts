@@ -14,8 +14,8 @@ export interface SourceAdapter {
   readonly kind: string;
   /** the block an anchor sits in, or null when the source doesn't have it or keeps its blocks out of reach */
   blockOf(a: Anchor): Element | null;
-  /** brings an anchor into view and lights it; false when the source doesn't have it */
-  reveal(a: Anchor): Promise<boolean>;
+  /** brings an anchor into view and lights it; false when the source doesn't have it. `near`: where its words were picked */
+  reveal(a: Anchor, near?: number | null): Promise<boolean>;
   /** ticks on shut passages and sheets over open ones, wherever this source keeps its passages */
   drawLayers(items: readonly LayerItem[], on: LayerIntents): void;
   /** a new source starts with every sheet shut */
@@ -31,7 +31,7 @@ export interface AdapterHost {
   /** a PDF draws pages near the viewport only; a jump has to ask for the ones it lands on */
   ensureDrawn(): void;
   /** a live page answers from inside its sandbox */
-  revealLive(quote: string | null, slug: string | null): Promise<boolean>;
+  revealLive(quote: string | null, slug: string | null, near?: number | null): Promise<boolean>;
   /** a live page draws its own layers; what is done in them comes back through `on`. `fresh`: a new page, nothing kept */
   layersLive(items: readonly LayerItem[], on: LayerIntents, fresh?: boolean): void;
   /** the prose shown: its source text, which cards' quotes compile against, and where each block's words came from */
@@ -248,7 +248,7 @@ function liveAdapter(host: AdapterHost): SourceAdapter {
     drawLayers: (items, on) => host.layersLive(items, on),
     forgetLayers: () => host.layersLive([], { edit() {}, leave() {}, remove() {}, reply() {}, show() {}, later() {}, grade() {}, keep() {}, discard() {}, ask() {}, capture() {} }, true),
     blockOf: () => null,
-    reveal: (a) => host.revealLive(a.quote, a.slug),
+    reveal: (a, near) => host.revealLive(a.quote, a.slug, near),
   };
 }
 

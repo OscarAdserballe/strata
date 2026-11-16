@@ -72,12 +72,13 @@ export class HtmlEngine {
     this.post(this.drawn.layers = { t: "layers", items: [...items], scale, fresh });
   }
 
-  reveal(quote: string | null, slug: string | null, box: string | null = null): Promise<boolean> {
+  /** `near`: the offset the words were picked at, so a copy of them elsewhere on the page doesn't win */
+  reveal(quote: string | null, slug: string | null, box: string | null = null, near: number | null = null): Promise<boolean> {
     if (!this.frame) return Promise.resolve(false);
     const n = ++this.n;
     return new Promise((resolve) => {
       this.asks.set(n, resolve);
-      this.post({ t: "reveal", n, quote, slug, box });
+      this.post({ t: "reveal", n, quote, slug, box, near });
       setTimeout(() => { if (this.asks.delete(n)) resolve(false); }, 4000);
     });
   }

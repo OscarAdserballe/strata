@@ -59,7 +59,7 @@ export default function LivePage({ board, resource, scale = 1, onHeight }: LiveP
   hostRef.current ??= (() => {
     const adapter = sourceAdapters({
       scroller: () => pageRef.current, ensureDrawn: () => {}, proseDoc: () => null, pdfText: () => null,
-      revealLive: (q, slug) => engine.reveal(q, slug),
+      revealLive: (q, slug, near) => engine.reveal(q, slug, null, near ?? null),
       layersLive: (items, on, fresh) => engine.layers(items, on, scaleRef.current, fresh),
     })("html");
     return { ...NOTES_ONLY, ...noteFolds(() => at.current, () => marksRef.current), adapter: () => adapter, drawn: () => {} };
