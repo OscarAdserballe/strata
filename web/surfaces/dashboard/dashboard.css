@@ -217,9 +217,9 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .addlink{display:flex;gap:8px}
 .addlink input{flex:1;min-width:0;padding:8px 12px;border-radius:9px;border:1px solid var(--d-line);font-size:13.5px}
 .addlink input:focus{outline:none;border-color:#8b88a0}
-.doc .fold{border-top:1px solid #eeecf0;padding-top:12px;font:16px/1.6 var(--serif);color:var(--d-ink-2)}
-.doc .fold .cap{font-family:var(--sans)}
-.doc .fold > .cap{margin-bottom:8px}
+.doc-asked{border-top:1px solid #eeecf0;padding-top:12px;font:16px/1.6 var(--serif);color:var(--d-ink-2)}
+.doc-asked .cap{font-family:var(--sans)}
+.doc-asked > .cap{margin-bottom:8px}
 
 .dash-toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:var(--layer-toast);background:var(--d-dark);color:#fff;padding:10px 16px;border-radius:9px;font-size:13.5px;box-shadow:0 8px 24px rgba(0,0,0,.18);animation:rise .18s ease}
 
