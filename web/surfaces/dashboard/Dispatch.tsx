@@ -40,6 +40,13 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
     dash.press(th.id, kind).catch((e) => toast(StrataWhy(e, kind === "go" ? "Go didn't reach Claude" : "Send back didn't reach Claude"), 4200));
   }
 
+  function drop(th: DispatchThread): void {
+    const rest = here.filter((x) => x.id !== th.id);
+    setSel(rest[0] ? { thread: rest[0].id, n: null } : null);
+    toast("Dropped");
+    dash.patch(th.id, { stage: "dropped", cleared: true }, () => null).catch((e) => toast(StrataWhy(e, "not dropped"), 4200));
+  }
+
   const blank = !pane ? "Loading…"
     : !t ? (stage === "implementing" ? "Nothing with Claude right now." : stage === "review" ? "Nothing to review. Built pages come here." : "Nothing to decide. Send a thread from the backlog in Inbox.")
     : !v ? "Claude is preparing the first page. It shows up in Decide when it is ready."
@@ -62,6 +69,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
                   <button className={"btn dark" + (stage === "review" ? " merge" : "")} onClick={() => press(x, "go")}>{stage === "review" ? "Go → merge" : "Go →"}</button>
                   <button className="btn" onClick={() => press(x, "back")}>Send back</button>
                 </div>
+                {stage === "decide" ? <button className="btn quiet danger drop" onClick={() => drop(x)}>Drop</button> : null}
               </section>
             : <button key={x.id} className="ws-card" onClick={() => setSel({ thread: x.id, n: null })}>
                 <span className="t">{x.title}</span>

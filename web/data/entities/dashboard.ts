@@ -78,10 +78,11 @@ export const dashOps = {
       optimistic: [{ key: DASH_KEY, apply: (v: DashBoard | undefined) => v && { ...v, tasks: [...v.tasks.filter((x) => x.id !== t.id), t] } }],
       confirm: (res, meta) => takeState(res, meta, s) };
   },
-  /** Any change to a thread's fields; `local` is how it looks until the server answers. Done and dropped leave the board. */
+  /** Any change to a thread's fields; `local` is how it looks until the server answers. Done and dropped leave the board and Dispatch. */
   patch(id: string, body: Record<string, unknown>, local: (t: DashTask) => DashTask | null, s: Store = roomStore): Op<DashAnswer> {
     return { label: "save that thread", lanes: [lane(id)], method: "PATCH", path: `/api/dashboard/tasks/${id}`, body,
-      optimistic: [{ key: DASH_KEY, apply: onTasks(id, local) }],
+      optimistic: [{ key: DASH_KEY, apply: onTasks(id, local) },
+        ...(body.cleared === true ? [{ key: DISPATCH_KEY, apply: (v: DispatchPane | undefined) => v && { ...v, threads: v.threads.filter((t) => t.id !== id) } }] : [])],
       confirm: (res, meta) => takeState(res, meta, s) };
   },
   /** The doc's title and notes as typed: only the newest unsent text goes. */

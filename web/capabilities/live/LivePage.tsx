@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import { StrataAPI, StrataAnswer, StrataWhy } from "../../data/api.ts";
 import { store as roomStore } from "../../data/store.ts";
-import { applyBoardState, boardKey, marksKey, useBoardView } from "../../data/entities/boards.ts";
+import { applyBoardState, marksKey, useBoardView } from "../../data/entities/boards.ts";
 import type { HtmlEngine } from "../../engines/html/HtmlEngine.ts";
 import { sourceAdapters } from "../../engines/source/adapter.ts";
 import { toast } from "../../shell/layers.ts";
@@ -27,11 +27,12 @@ const NO_DOC = { current: { maps: [] as number[][], text: "" } };
 /** One live HTML source, read for its notes outside the room: the room's reader wiring with no deck, asks or chapters. */
 export default function LivePage({ board, resource, scale = 1, onHeight }: LivePageProps) {
   const view = useBoardView(board);
-  useEffect(() => {
-    if (roomStore.entry(boardKey(board))?.held) return;
-    StrataAPI.getBoard(board).then((st) => { applyBoardState(st, StrataAnswer(st) ?? {}); }).catch(() => {});
-  }, [board]);
   const src = view?.resources?.find((r) => r.id === resource) ?? null;
+  // a page posted after the board was read isn't in it: read the board again for it, once per page
+  useEffect(() => {
+    if (src) return;
+    StrataAPI.getBoard(board).then((st) => { applyBoardState(st, StrataAnswer(st) ?? {}); }).catch(() => {});
+  }, [board, resource, !!src]);
   const at = useRef<LiveAt>({ bid: null, src: null });
   at.current = { bid: board, src };
   const pageRef = useRef<HTMLDivElement | null>(null);
@@ -79,7 +80,7 @@ export default function LivePage({ board, resource, scale = 1, onHeight }: LiveP
 
   return (
     <div className="livepage" ref={pageRef} onMouseDown={marks.onReaderDown} onClick={marks.onReaderClick}>
-      {url && src ? <HtmlSource engine={engine} url={url} title={src.filename} scale={scale} bare /> : null}
+      {url && src ? <HtmlSource engine={engine} url={url} title={src.filename} scale={scale} bare /> : <p className="livepage-wait">Loading the page…</p>}
       {marks.selMenu ? <SelectionMenu at={marks.selMenu} onNote={() => void marks.markSelection(true)} /> : null}
     </div>
   );
