@@ -1,6 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Markdown from "markdown-to-jsx";
 import type { DashFrom } from "../../data/entities/dashboard.ts";
+import { imagesInMarkdown, imgProps } from "../../engines/prose/images.tsx";
 
 export const hm = (at: number): string => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 export function age(at: number): string {
@@ -22,7 +23,7 @@ export function Src({ from }: { from: DashFrom | null | undefined }) {
 /** A thread's notes as Markdown, links opening elsewhere. */
 export function Notes({ text }: { text: string }) {
   return <div className="md"><Markdown options={{ forceBlock: true, disableParsingRawHTML: true,
-    overrides: { a: { props: { target: "_blank", rel: "noopener" } } } }}>{text}</Markdown></div>;
+    overrides: { a: { props: { target: "_blank", rel: "noopener" } }, img: { props: imgProps } } }}>{imagesInMarkdown(text)}</Markdown></div>;
 }
 
 /**

@@ -1743,13 +1743,13 @@ const dashboardWrites = {
     let rowDb = null;
     for (;;) {
       rowDb = t.sql("SELECT stage, morning_at, title, body FROM dashboard_tasks WHERE id = ?", id)[0] ?? null;
-      if ((rowDb && rowDb.stage === "todo" && rowDb.morning_at && rowDb.title === `Race pin ${tag} edited` && rowDb.body === `Picked under loss.\nNotes ${tag}`) || performance.now() > until) break;
+      if ((rowDb && rowDb.stage === "todo" && rowDb.morning_at && rowDb.title === `Race pin ${tag} edited` && rowDb.body === `Picked under loss.\n\nNotes ${tag}`) || performance.now() > until) break;
       await sleep(250);
     }
     await t.net.idle(500);
     t.check("picked", !!rowDb?.morning_at && rowDb.stage === "todo", `stage ${rowDb?.stage}, morning_at ${rowDb?.morning_at}`);
     t.check("title", rowDb?.title === `Race pin ${tag} edited`, `the title is ${JSON.stringify(rowDb?.title)}`);
-    t.check("notes", rowDb?.body === `Picked under loss.\nNotes ${tag}`, `the notes are ${JSON.stringify(rowDb?.body?.slice(0, 120))}`);
+    t.check("notes", rowDb?.body === `Picked under loss.\n\nNotes ${tag}`, `the notes are ${JSON.stringify(rowDb?.body?.slice(0, 120))}`);
   },
 };
 
@@ -1941,18 +1941,21 @@ const dashboardTyping = {
     await page.goto(`${t.base}/dashboard?view=thinking`);
     await page.locator(".ws-list").getByText(`Race typing ${tag}`).click();
     await page.getByRole("textbox", { name: "Notes" }).click();
-    const field = page.locator("textarea.dbody");
-    const parts = ["- buy tape", "\n", "- fetch poster ", "\n", "- ", "glue", "\n\n", "Then ", "hang it."];
+    const field = page.locator(".writer.dbody");
+    // keys as the editor takes them: "- " opens a list, Enter a new item, Enter on an empty item leaves the list
+    const parts = ["- buy tape", "Enter", "fetch poster ", "Enter", "glue", "Enter", "Enter", "Then ", "hang it."];
+    const typed = "- buy tape\n- fetch poster \n- glue\n\nThen hang it.";
     const pause = t.rng("pause");
-    let typed = "", fieldOk = true, focusOk = true, at = "";
+    let shown = "", fieldOk = true, focusOk = true, at = "";
     for (const part of parts) {
-      await page.keyboard.type(part, { delay: 10 });
-      typed += part;
+      if (part === "Enter") await page.keyboard.press("Enter"); else { await page.keyboard.type(part, { delay: 10 }); shown += part.replace(/^- /, ""); }
       await sleep(750 + Math.floor(pause() * 900));
-      const now = await field.inputValue().catch(() => null);
-      if (fieldOk && now !== typed) { fieldOk = false; at = JSON.stringify(now); }
-      if (focusOk && !(await page.evaluate(() => document.activeElement?.classList.contains("dbody")))) focusOk = false;
+      const now = await field.textContent().catch(() => null);
+      if (fieldOk && now !== shown) { fieldOk = false; at = JSON.stringify(now); }
+      if (focusOk && !(await page.evaluate(() => !!document.activeElement?.closest(".writer")))) focusOk = false;
     }
+    const blocks = await field.evaluate((el) => [...el.querySelectorAll("li, :scope > p")].map((b) => b.textContent).filter((b, i, all) => b || i < all.length - 1));
+    if (fieldOk && JSON.stringify(blocks) !== JSON.stringify(["buy tape", "fetch poster ", "glue", "Then hang it."])) { fieldOk = false; at = JSON.stringify(blocks); }
     await page.keyboard.press("Tab");
     const until = performance.now() + GRACE_MS * 2;
     let body = null;
