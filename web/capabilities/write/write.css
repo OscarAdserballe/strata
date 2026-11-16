@@ -1,0 +1,11 @@
+.wr{outline:none;white-space:pre-wrap;overflow-wrap:break-word}
+.wr[data-empty="true"]::before{content:attr(data-placeholder);color:#c3c0c8;float:left;height:0;pointer-events:none}
+.wr p{margin:0 0 .6em} .wr > :last-child{margin-bottom:0}
+.wr ul,.wr ol{margin:0 0 .6em;padding-left:1.4em} .wr li{margin:2px 0} .wr li > p{margin:0} .wr li::marker{color:var(--d-faint,#9a96a3)}
+.wr ul[data-type="taskList"]{list-style:none;padding-left:.2em}
+.wr ul[data-type="taskList"] li{display:flex;gap:.5em;align-items:baseline} .wr ul[data-type="taskList"] li > div{flex:1}
+.wr strong{font-weight:650} .wr a{color:inherit;text-decoration:underline;text-decoration-color:#bdb9c6}
+.md .strata-img{display:block;max-width:100%;max-height:50vh;height:auto;margin:8px 0;border-radius:6px;border:1px solid #eeecf0}
+.wr .ProseMirror-selectednode{outline:2px solid #8b88a0;outline-offset:2px}
+.wr-still{color:inherit}
+.wr-status{display:block;margin-top:6px;font:12px var(--sans);color:var(--d-mute,#77737f)}
