@@ -1,6 +1,6 @@
 // dashboard_read's answer: the board as Markdown, one block per thread, cut to the token budget.
 import { paged, pagedText, when } from "../agent/render.ts";
-import { archive, OPEN_STAGES, snapshot, type TaskView } from "./dashboard.ts";
+import { archive, handledSince, OPEN_STAGES, snapshot, type Handled, type TaskView } from "./dashboard.ts";
 
 const HEADS: [string, string][] = [["todo", "To-do"], ["thinking", "Thinking"], ["decide", "Decide"], ["implementing", "Implementing"], ["review", "Review"], ["finish", "Finish"], ["done", "Done"], ["dropped", "Dropped"]];
 const linkLine = (ls: TaskView["links"]): string => ls.map((l) => `${l.kind} ${l.ref}${l.title ? ` (${l.title})` : ""}${l.url ? ` <${l.url}>` : ""}`).join(" · ");
@@ -18,6 +18,24 @@ function block(t: TaskView): string {
 function inboxLine(i: Record<string, unknown>): string {
   const from = (i.from as { source?: string } | undefined)?.source ?? "?";
   return `- ${String(i.id)} · "${String(i.title ?? i.text ?? "")}" · from ${from}${i.context ? `\n  ${String(i.context).replace(/\n+/g, " ")}` : ""}`;
+}
+
+export const HANDLED_DAYS = 7;
+const DAY = 86_400_000;
+const sourceOf = (h: Handled): string => h.source.split(/[\s·:]/)[0] || "Other";
+
+/** One block per source, so a repeat from the same Slack thread or Linear issue is easy to spot. */
+function handledBlock(at: number): string[] {
+  const rows = handledSince(at);
+  if (!rows.length) return [];
+  const groups = new Map<string, Handled[]>();
+  for (const h of rows) groups.set(sourceOf(h), [...(groups.get(sourceOf(h)) ?? []), h]);
+  const lines = [`## Handled in the last ${HANDLED_DAYS} days (don't add these again)`];
+  for (const [src, list] of groups) {
+    lines.push(src);
+    for (const h of list) lines.push(`- ${h.outcome} ${when.day(h.at)} · "${h.title}"${h.link ? ` · ${h.link.ref}${h.link.url ? ` <${h.link.url}>` : ""}` : ""}`);
+  }
+  return [lines.join("\n")];
 }
 
 export function renderDashboard(args: { task?: unknown; stages?: unknown; done_since?: unknown; area?: unknown; cursor?: unknown }, budget: number): string {
@@ -43,6 +61,7 @@ export function renderDashboard(args: { task?: unknown; stages?: unknown; done_s
     if (list.length) items.push(`## ${name}`, ...list.map((t) => `${block(t)}\n`));
   }
   if (!filtered && inbox.length) items.push("## Inbox", ...inbox.map(inboxLine));
+  if (!filtered && !area) items.push(...handledBlock(Date.now() - HANDLED_DAYS * DAY));
   const again = (c: string) => `dashboard_read({ ${filtered ? `stages: ${JSON.stringify(stages)}, ` : ""}${area ? `area: "${area}", ` : ""}cursor: "${c}" })`;
   return paged(head, items, args.cursor, budget, again, "Nothing on the dashboard yet.");
 }

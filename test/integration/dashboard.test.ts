@@ -147,7 +147,7 @@ test("done and dropped threads go to the archive and come back to to-do", async 
   const board = await dash();
   assert.equal(board.tasks.some((t) => t.id === a.id || t.id === b.id), false, "cleared threads leave the board");
   assert.equal(board.archived, 2);
-  assert.doesNotMatch((await call("dashboard_read")).text, /Investigate late/);
+  assert.doesNotMatch((await call("dashboard_read")).text, /### Investigate late/, "an ended thread is only a line under Handled");
   assert.match((await call("dashboard_read", { done_since: "2020-01-01" })).text, /## Done\n### Investigate late compost deliveries · t_\w+ · work · archived/);
   assert.deepEqual((await archive()).tasks.map((t) => t.id).sort(), [a.id, b.id].sort());
   const back = await send(`/api/dashboard/tasks/${a.id}`, "PATCH", { cleared: false, stage: "todo" }, "dash-done-00003");
@@ -199,4 +199,25 @@ test("a thread's notes are kept as typed: a save mid-sentence keeps its trailing
   await send("/api/dashboard/tasks", "POST", { id: "t_0123456789abcdef", title: "Notes as typed", area: "work", stage: "thinking" }, "dash-text-00000");
   assert.equal((await send("/api/dashboard/tasks/t_0123456789abcdef", "PATCH", { body: typed }, "dash-text-00001")).body.body, typed, "notes are kept as typed, trailing spaces and newlines too");
   assert.equal((await send("/api/dashboard/tasks/t_0123456789abcdef", "PATCH", { body: 7 }, "dash-text-00002")).status, 400);
+});
+
+test("dashboard_read lists what you dropped or finished in the last 7 days, by source, so the routine doesn't add it again", async () => {
+  const added = await call("dashboard_add_items", { key: "handled-run-000001", items: [{ title: "Reply to Mara on bed sizes", from: FROM, links: [{ kind: "slack", ref: "#north-beds", url: "https://example.slack.com/archives/C9/p9" }] }] });
+  assert.equal(added.isError, false, added.text);
+  const item = (await dash()).inbox.find((i) => i.title === "Reply to Mara on bed sizes");
+  assert.equal((await send(`/api/dashboard/inbox/${item.id}/drop`, "POST", {}, "dash-handled-01")).status, 200);
+  await send("/api/dashboard/tasks", "POST", { id: "t_handled0001", title: "Rotate the staging key", area: "work", stage: "todo", links: [{ kind: "linear", ref: "TRY-902", url: "https://linear.app/x/issue/TRY-902" }] }, "dash-handled-02");
+  await send("/api/dashboard/tasks/t_handled0001", "PATCH", { stage: "done", cleared: true }, "dash-handled-03");
+  const db = new DatabaseSync(server.db, { timeout: 5000 });
+  try {
+    db.prepare("INSERT INTO dashboard_inbox (id,kind,item,at,handled_at,outcome) VALUES (?,?,?,?,?,?)").run("in_oldhandled", "task",
+      JSON.stringify({ kind: "task", title: "Dropped long ago", from: FROM, links: [] }), Date.now() - 9 * 86_400_000, Date.now() - 8 * 86_400_000, "dropped");
+  } finally { db.close(); }
+  const text = (await call("dashboard_read")).text;
+  const handled = text.slice(text.indexOf("## Handled in the last 7 days"));
+  assert.ok(text.includes("## Handled in the last 7 days"), text);
+  assert.match(handled, /\nSlack\n(?:- .*\n)*- dropped \d{4}-\d\d-\d\d · "Reply to Mara on bed sizes" · #north-beds <https:\/\/example\.slack\.com\/archives\/C9\/p9>/);
+  assert.match(handled, /- done \d{4}-\d\d-\d\d · "Rotate the staging key" · TRY-902 <https:\/\/linear\.app\/x\/issue\/TRY-902>/);
+  assert.doesNotMatch(handled, /Dropped long ago/, "an item handled 8 days ago isn't listed");
+  assert.doesNotMatch((await call("dashboard_read", { stages: ["todo"] })).text, /## Handled/, "a read narrowed to stages leaves it out");
 });
