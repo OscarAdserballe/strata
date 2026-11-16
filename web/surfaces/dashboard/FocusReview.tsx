@@ -68,7 +68,7 @@ function Panel({ t }: { t: DashTask }) {
           <button className="btn" type="submit">Add</button>
         </form> : <button className="btn quiet add-link" onClick={() => setAdding(true)}>+ Add a link</button>}
       </div>
-      <div className="fold"><span className="cap">What you asked for</span>{t.body.trim() ? <Notes text={t.body} /> : <p className="arts-none">You sent it from Thinking on {new Date(t.updatedAt).toLocaleDateString([], { day: "numeric", month: "long" })} with no notes.</p>}</div>
+      <div className="doc-asked"><span className="cap">What you asked for</span>{t.body.trim() ? <Notes text={t.body} /> : <p className="arts-none">You sent it from Thinking on {new Date(t.updatedAt).toLocaleDateString([], { day: "numeric", month: "long" })} with no notes.</p>}</div>
       <div className="doc-foot">
         <button className="btn dark" onClick={() => move(t, "done")}>Done</button>
         <button className="btn" onClick={() => {
