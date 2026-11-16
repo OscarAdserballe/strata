@@ -2,7 +2,17 @@ import { headingNum, slugOf } from "../../../shared/reading/prose-slugs.ts";
 
 export interface Rendered { html: string; maps: number[][] }
 
-export function mdRender(text: string | null | undefined, breaks: boolean): Rendered {
+export interface RenderOpts { fences?: boolean; base?: string | null }
+
+// A link target may carry a title: (u "t"), (u 't') or (<u> "t").
+export function splitTarget(raw: string): { url: string; title: string | null } {
+  const m = raw.trim().match(/^(<[^>]*>|\S+)(?:\s+(?:"([^"]*)"|'([^']*)'))?$/);
+  if (!m) return { url: raw.trim(), title: null };
+  const url = m[1].startsWith("<") ? m[1].slice(1, -1) : m[1];
+  return { url, title: m[2] ?? m[3] ?? null };
+}
+
+export function mdRender(text: string | null | undefined, breaks: boolean, opts: RenderOpts = {}): Rendered {
   const src = String(text || "").replace(/\r\n/g, "\n");
   const lines = src.split("\n");
   const lineAt: number[] = []; { let o = 0; for (const ln of lines) { lineAt.push(o); o += ln.length + 1; } }
@@ -22,7 +32,13 @@ export function mdRender(text: string | null | undefined, breaks: boolean): Rend
     const synth = (word: string, o: number) => { html += esc(word); sp = false; for (const _ of word) map.push(base + o); };
     const escUrl = (u: string) => esc(u).replace(/"/g, "%22");
     const escAttr = (u: string) => esc(u).replace(/"/g, "&quot;");
-    const safeUrl = (u: string): string | null => (/^https?:\/\//i.test(u.trim()) ? u.trim() : null);
+    const safeUrl = (u: string): string | null => {
+      const t = u.trim();
+      if (/^https?:\/\//i.test(t)) return t;
+      if (!opts.base || !t || t.startsWith("#") || /^[a-z][\w+.-]*:/i.test(t)) return null;
+      try { const r = new URL(t, opts.base); return /^https?:$/.test(r.protocol) ? r.href : null; } catch { return null; }
+    };
+    const titled = (t: string | null) => (t ? ` title="${escAttr(t)}"` : "");
     const mediaKind = (u: string): "image" | "video" | "audio" | null => {
       let path: string;
       try { path = new URL(u).pathname.toLowerCase(); } catch { return null; }
@@ -33,7 +49,7 @@ export function mdRender(text: string | null | undefined, breaks: boolean): Rend
     };
 
     // Brackets and the URL's parens are balanced, so "[a [b] c](u)" and ".../Foo_(bar)" survive.
-    const linkAt = (i: number): { ts: number; te: number; url: string; end: number } | null => {
+    const linkAt = (i: number): { ts: number; te: number; url: string; title: string | null; end: number } | null => {
       if (s[i] !== "[") return null;
       let d = 1, j = i + 1;
       while (j < s.length && d) { if (s[j] === "[") d++; else if (s[j] === "]") d--; j++; }
@@ -41,12 +57,14 @@ export function mdRender(text: string | null | undefined, breaks: boolean): Rend
       let p = 1, k = j + 1;
       while (k < s.length && p) { if (s[k] === "(") p++; else if (s[k] === ")") p--; k++; }
       if (p) return null;
-      return { ts: i + 1, te: j - 1, url: s.slice(j + 1, k - 1), end: k };
+      return { ts: i + 1, te: j - 1, ...splitTarget(s.slice(j + 1, k - 1)), end: k };
     };
 
     // Media loads lazily with no referrer; unsafe URLs stay inert like bad links.
-    const media = (source: string, href: string, at: number, a: number, b: number, hint?: "image" | "video" | "audio") => {
-      const src = safeUrl(source), url = safeUrl(href), kind = hint ?? mediaKind(source) ?? "image";
+    const media = (source: string, href: string, at: number, a: number, b: number, hint?: "image" | "video" | "audio", title: string | null = null) => {
+      const src = safeUrl(source), url = safeUrl(href), kind = hint ?? (src && mediaKind(src)) ?? "image";
+      // a lazy-load placeholder: the real image was never in the capture
+      if (!src && /^\s*data:/i.test(source)) { if (a < b) span(a, b); return; }
       if (!src) {
         html += url ? `<a class="fig-missing" href="${escUrl(url)}" target="_blank" rel="noopener">` : `<span class="fig-missing">`;
         if (a < b) span(a, b); else synth("figure", at);
@@ -55,7 +73,7 @@ export function mdRender(text: string | null | undefined, breaks: boolean): Rend
       }
       if (kind === "image") {
         html += url ? `<a class="media" href="${escUrl(url)}" target="_blank" rel="noopener">` : `<span class="media">`;
-        html += `<img class="media-img" src="${escUrl(src)}" alt="${escAttr(s.slice(a, b))}" loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
+        html += `<img class="media-img" src="${escUrl(src)}" alt="${escAttr(s.slice(a, b))}"${titled(title)} loading="lazy" decoding="async" referrerpolicy="no-referrer">`;
         if (a < b) { html += `<span class="media-cap">`; span(a, b); html += "</span>"; }
         html += url ? "</a>" : "</span>";
         return;
@@ -77,18 +95,18 @@ export function mdRender(text: string | null | undefined, breaks: boolean): Rend
         const c = s[i];
         if (c === "!" && s[i + 1] === "[") {
           const l = linkAt(i + 1);
-          if (l && l.end <= b) { media(l.url, l.url, i, l.ts, l.te); i = l.end; continue; }
+          if (l && l.end <= b) { media(l.url, l.url, i, l.ts, l.te, undefined, l.title); i = l.end; continue; }
         }
         if (c === "[") {
           const l = linkAt(i);
           if (l && l.end <= b) {
             // A link wrapping an image keeps both without nesting one anchor in another.
             const im = s[l.ts] === "!" ? linkAt(l.ts + 1) : null;
-            if (im && im.end === l.te) { media(im.url, l.url, i, im.ts, im.te); i = l.end; continue; }
+            if (im && im.end === l.te) { media(im.url, l.url, i, im.ts, im.te, undefined, im.title); i = l.end; continue; }
             const url = safeUrl(l.url);
             const kind = url && mediaKind(url);
             if (url && kind) { media(url, url, i, l.ts, l.te, kind); i = l.end; continue; }
-            if (url) { html += `<a href="${escUrl(url)}" target="_blank" rel="noopener">`; span(l.ts, l.te); html += "</a>"; }
+            if (url) { html += `<a href="${escUrl(url)}"${titled(l.title)} target="_blank" rel="noopener">`; span(l.ts, l.te); html += "</a>"; }
             else span(l.ts, l.te);                       // no usable href → just the text
             i = l.end; continue;
           }
@@ -124,7 +142,7 @@ export function mdRender(text: string | null | undefined, breaks: boolean): Rend
   for (let i = 0; i < lines.length; i++) {
     const ln = lines[i], off = lineAt[i];
 
-    const fence = breaks && ln.match(/^\s*```/);
+    const fence = (breaks || opts.fences) && ln.match(/^\s*```\s*([\w+#.-]*)/);
     if (fence) {
       flush(); closeList();
       let j = i + 1; const body: number[] = [];
@@ -135,7 +153,8 @@ export function mdRender(text: string | null | undefined, breaks: boolean): Rend
         for (let c = 0; c < lines[k].length; c++) { html += esc(lines[k][c]); map.push(lineAt[k] + c); }
       });
       const last = body.length ? body[body.length - 1] : i;
-      emit(`<pre data-b="${nextB()}"><code>${html}</code></pre>`, lineAt[last] + lines[last].length);
+      const lang = fence[1] ? ` data-lang="${esc(fence[1].toLowerCase())}"` : "";
+      emit(`<pre data-b="${nextB()}"${lang}><code>${html}</code></pre>`, lineAt[last] + lines[last].length);
       i = j;
       continue;
     }
@@ -191,7 +210,7 @@ export function mdRender(text: string | null | undefined, breaks: boolean): Rend
   return { html: out.join("\n"), maps };
 }
 
-export const mdToHtml = (text: string | null | undefined, breaks: boolean): string => mdRender(text, breaks).html;
+export const mdToHtml = (text: string | null | undefined, breaks: boolean, opts?: RenderOpts): string => mdRender(text, breaks, opts).html;
 
 // Exported so tests can fuzz the same parser config cards use; pasted input must never hang or throw.
 export const MD_OPTIONS = { forceBlock: true, enforceAtxHeadings: true, disableParsingRawHTML: true } as const;
