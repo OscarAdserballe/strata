@@ -11,5 +11,6 @@ Strata is MIT-licensed (see [LICENSE](LICENSE)). The following is included or bu
 | pdfjs-dist (Mozilla Foundation) | bundled from npm into `dist/` | Apache License 2.0 |
 | React and react-dom (Meta) | bundled from npm into `dist/` | MIT |
 | markdown-to-jsx (Evan Jacobs) | bundled from npm into `dist/` | MIT |
+| Tiptap (ueberdosis GmbH), ProseMirror (Marijn Haverbeke and others), marked (Christopher Jeffrey, MarkedJS) and linkifyjs (SoapBox Innovations), for the dashboard's editor | bundled from npm into `dist/` | MIT |
 
 Everything else under `node_modules/` is a development dependency and is not shipped.

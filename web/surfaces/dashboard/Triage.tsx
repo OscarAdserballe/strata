@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StrataWhy } from "../../data/api.ts";
 import { dash, useDashBoard, useRoutine, type DashItem, type DashTask } from "../../data/entities/dashboard.ts";
 import { toast } from "../../shell/layers.ts";
 import { go, type Mode, type Sub } from "./nav.ts";
-import { Grow, Src, age, hm, newThreadId, useTyped } from "./parts.tsx";
+import { Writer, type WriterHandle } from "../../capabilities/writer/Writer.tsx";
+import { Src, age, hm, newThreadId } from "./parts.tsx";
 import { move, pick, saveText } from "./moves.ts";
 
 const OLD = 14 * 864e5;
@@ -85,7 +86,7 @@ function InboxList({ items, mode }: { items: DashItem[]; mode: Mode }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (!at || t.matches?.("input, textarea") || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!at || t.matches?.("input, textarea") || t.isContentEditable || e.metaKey || e.ctrlKey || e.altKey) return;
       const it = items.find((i) => i.id === at)!;
       const k = e.key.toLowerCase();
       if (k === "b") { e.preventDefault(); keep(at, "backlog", it.area); }
@@ -124,8 +125,7 @@ function InboxList({ items, mode }: { items: DashItem[]; mode: Mode }) {
 
 /** A thread in the backlog or to-do: one line until opened, then its title and prompt to trim, and where it goes next. */
 function Thread({ t, open, onOpen, mode, drag }: { t: DashTask; open: boolean; onOpen(id: string | null): void; mode: Mode; drag(id: string): (e: React.DragEvent) => void }) {
-  const [title, setTitle, flushTitle, titleHeld] = useTyped(t.title, (v) => saveText(t.id, "title", v));
-  const [body, setBody, flushBody, bodyHeld] = useTyped(t.body, (v) => saveText(t.id, "body", v));
+  const head = useRef<WriterHandle>(null), prompt = useRef<WriterHandle>(null);
   const meta = [t.links[0]?.ref, t.createdFrom?.source !== "You" ? t.createdFrom?.source : "You", age(t.createdAt)].filter(Boolean).join(" · ");
   if (!open) return (
     <div className={"r" + (t.morningAt ? " pick" : "")} draggable onDragStart={drag(t.id)}>
@@ -133,17 +133,15 @@ function Thread({ t, open, onOpen, mode, drag }: { t: DashTask; open: boolean; o
       <span className="r-meta">{t.morningAt ? <span className="r-tag">tomorrow</span> : null}{t.links[0]?.ref ?? (t.createdFrom?.source === "You" ? "You" : "")}</span>
     </div>
   );
-  const leave = () => { flushTitle(); flushBody(); onOpen(null); };
+  const leave = () => { head.current?.flush(); prompt.current?.flush(); onOpen(null); };
   return (
     <article className="tr-card open" draggable={false}>
       <div className="tr-head">
-        <Grow className="dtitle" value={title} aria-label="Title" {...titleHeld} onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.closest("article")?.querySelector(".dbody") as HTMLElement | null)?.focus(); } if (e.key === "Escape") leave(); }} />
+        <Writer ref={head} line className="dtitle" value={t.title} label="Title" save={(v) => saveText(t.id, "title", v)} onEnter={() => prompt.current?.focus()} onEscape={leave} />
         <span className="tr-src">{meta}</span>
       </div>
-      <label className="cap" htmlFor={`body-${t.id}`}>Prompt · yours to trim</label>
-      <Grow id={`body-${t.id}`} className="dbody" value={body} placeholder="What should be done, in a few lines you could hand to Claude." {...bodyHeld} onChange={(e) => setBody(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Escape") leave(); }} />
+      <span className="cap">Prompt · yours to trim</span>
+      <Writer ref={prompt} className="dbody" value={t.body} label="Prompt" placeholder="What should be done, in a few lines you could hand to Claude." save={(v) => saveText(t.id, "body", v)} onEscape={leave} />
       <div className="acts-row">
         <button className="btn dark" title={mode === "dispatch" ? "Claude prepares a page; it shows up in Decide" : "Claude comes back with a page in Dispatch"} onClick={() => { leave(); toast("Sent to Dispatch"); dash.send(t.id).catch((e) => said(e, "not sent")); }}>Send to Dispatch</button>
         <button className="btn" title="Open it in Thinking and write it through yourself" onClick={() => { leave(); move(t, "thinking"); go({ mode: "focus", view: "thinking" }); }}>Think it through</button>

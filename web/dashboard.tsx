@@ -4,6 +4,7 @@ import "./styles/tokens.css";
 import "./shell/layers.css";
 import "./capabilities/annotate/annotate.css";
 import "./capabilities/live/live.css";
+import "./capabilities/writer/writer.css";
 import "./surfaces/dashboard/dashboard.css";
 import { createRoot } from "react-dom/client";
 import { stampSession } from "./data/api.ts";

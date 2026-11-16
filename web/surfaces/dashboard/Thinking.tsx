@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { StrataWhy } from "../../data/api.ts";
 import { dash, useDashBoard, type DashTask } from "../../data/entities/dashboard.ts";
 import { toast } from "../../shell/layers.ts";
 import { go } from "./nav.ts";
-import { Grow, Notes, Src, useTyped } from "./parts.tsx";
+import { Writer, type WriterHandle } from "../../capabilities/writer/Writer.tsx";
+import { Src } from "./parts.tsx";
 import { move, saveText } from "./moves.ts";
 
 /** Thinking: one thread's notes open on the sheet, the rest waiting on the left, morning picks first. */
@@ -41,27 +42,19 @@ export default function Thinking() {
 
 /** A thread's doc: its title and the notes you write until you could hand it over without being in the room. */
 export function Doc({ t, where = "thinking" }: { t: DashTask; where?: "thinking" | "review" }) {
-  const [title, setTitle, flushTitle, titleHeld] = useTyped(t.title, (v) => saveText(t.id, "title", v));
-  const [body, setBody, flushBody, bodyHeld] = useTyped(t.body, (v) => saveText(t.id, "body", v));
-  const [editing, setEditing] = useState(false);
-  const flush = () => { flushTitle(); flushBody(); };
+  const head = useRef<WriterHandle>(null), notes = useRef<WriterHandle>(null);
+  const flush = () => { head.current?.flush(); notes.current?.flush(); };
   const copy = () => {
-    const text = `${title}\n\n${body}`.trim();
+    const text = `${head.current?.text() ?? t.title}\n\n${notes.current?.text() ?? t.body}`.trim();
     navigator.clipboard?.writeText(text).then(() => toast("Copied for Claude"), () => toast("Couldn’t copy"));
   };
   return (
     <article className="doc">
       <div className="doc-crumb"><Src from={t.createdFrom} /><span className="grow" />
         {t.links.map((l, i) => l.url ? <a key={i} href={l.url} target="_blank" rel="noopener">{l.ref}</a> : <span key={i}>{l.ref}</span>)}</div>
-      <Grow className="dtitle" value={title} aria-label="Title" placeholder="Untitled" {...titleHeld} onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
-        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setEditing(true); } }} />
-      {editing
-        ? <Grow className="dbody" value={body} aria-label="Notes" autoFocus onFocus={bodyHeld.onFocus} onChange={(e) => setBody(e.target.value)}
-            onBlur={() => { bodyHeld.onBlur(); setEditing(false); }} placeholder="Write until you could hand it to Claude without being in the room." />
-        : <div className="doc-notes" role="textbox" tabIndex={0} aria-label="Notes" onClick={(e) => { if (!(e.target as HTMLElement).closest("a") && !getSelection()?.toString()) setEditing(true); }}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setEditing(true); } }}>
-            {body.trim() ? <Notes text={body} /> : <p className="ph">Write until you could hand it to Claude without being in the room.</p>}
-          </div>}
+      <Writer ref={head} line className="dtitle" value={t.title} label="Title" placeholder="Untitled" save={(v) => saveText(t.id, "title", v)} onEnter={() => notes.current?.focus()} />
+      <Writer ref={notes} className="dbody" value={t.body} label="Notes" save={(v) => saveText(t.id, "body", v)}
+        placeholder="Write until you could hand it to Claude without being in the room." />
       <div className="doc-foot">
         {where === "thinking"
           ? <><button className="btn dark" onClick={() => { flush(); move(t, "review"); go({ view: "review" }); }}>Ready for review</button>

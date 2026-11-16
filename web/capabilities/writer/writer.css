@@ -1,0 +1,9 @@
+/* The Writer: one text field that draws its Markdown as it will be read. The field's own look comes from where it sits. */
+.writer{min-width:0}
+.writer .ProseMirror{outline:none;cursor:text}
+.writer-wait{white-space:pre-wrap;opacity:.7}
+.writer.line p{margin:0}
+.writer .is-editor-empty:first-child::before{content:attr(data-placeholder);float:left;height:0;pointer-events:none;color:#c3c0c8}
+.writer img.strata-img{max-width:100%;max-height:420px;height:auto;border-radius:6px;vertical-align:bottom}
+.writer .ProseMirror-selectednode{outline:2px solid #8b88a0;outline-offset:2px}
+.writer-say{margin:6px 0 0;font:12px/1.4 var(--sans);color:var(--d-mute,#6f6a62)}

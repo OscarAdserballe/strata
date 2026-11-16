@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { store } from "../../data/store.ts";
 import { DASH_KEY, DISPATCH_KEY, useDashBoard, useDispatch } from "../../data/entities/dashboard.ts";
 import { subscribeToast, toastNow } from "../../shell/layers.ts";
+import { warmWriter } from "../../capabilities/writer/Writer.tsx";
 import { go, useNav, type Mode, type View } from "./nav.ts";
 import Triage from "./Triage.tsx";
 import Thinking from "./Thinking.tsx";
@@ -18,6 +19,7 @@ const RAIL: Record<Mode, [View, string][]> = {
 
 export default function Dashboard() {
   const nav = useNav();
+  useEffect(() => warmWriter(), []);
   return <>
     <Sky />
     <Poller />

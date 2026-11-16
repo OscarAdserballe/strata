@@ -26,24 +26,26 @@ try {
 
   // a list typed with pauses between items: each pause saves, and none of them takes back a space, a newline or the caret
   const id = await open(page, `Writing ${run}: a list with pauses`);
-  await page.getByRole("textbox", { name: "Notes" }).click();
-  const field = page.locator("textarea.dbody");
+  const field = page.getByRole("textbox", { name: "Notes" });
+  await field.click();
+  // what the notes show, a line per block: a list item as "- " and its text
+  const shown = () => field.evaluate((el) => [...el.children].flatMap((b) => b.tagName === "UL" ? [...b.children].map((li) => "- " + li.textContent) : [b.textContent]).join("\n"));
   const typed = "- buy tape\n- fetch poster \n- ";
-  for (const part of ["- buy tape", "\n", "- fetch poster ", "\n", "- "]) {
+  for (const part of ["- buy tape", "\n", "fetch poster ", "\n"]) {
     await page.keyboard.type(part, { delay: 15 });
     await page.waitForTimeout(1500);
     assert.equal(await page.evaluate(() => document.activeElement?.classList.contains("dbody")), true, "the notes keep focus through a save");
   }
   await page.keyboard.type("and glue", { delay: 15 });
-  assert.equal(await field.inputValue(), typed + "and glue", "the field shows exactly what was typed");
+  assert.equal(await shown(), typed + "and glue", "the field shows exactly what was typed");
   await page.waitForTimeout(1500);
-  assert.equal(await bodyOf(id), typed + "and glue", "the server keeps spaces and newlines as typed");
+  assert.equal(await bodyOf(id), typed + "and glue", "the server keeps spaces and items as typed");
   // typed in the middle: the caret stays where the keys go, not at the end after the save answers
   await page.keyboard.press("Home");
   await page.keyboard.type("[x] ", { delay: 15 });
   await page.waitForTimeout(1500);
   await page.keyboard.type("+", { delay: 15 });
-  assert.equal(await field.inputValue(), "- buy tape\n- fetch poster \n[x] +- and glue");
+  assert.equal(await shown(), "- buy tape\n- fetch poster \n- [x] +and glue");
   console.log("✓ a list typed with pauses keeps every space, newline, the caret and focus");
 
   // the last line of a long doc stays above the footer while you type at it
@@ -53,9 +55,8 @@ try {
   await page.keyboard.press("Control+End");
   for (let i = 0; i < 4; i++) { await page.keyboard.press("Enter"); await page.keyboard.type(`more ${i}`, { delay: 10 }); }
   const gap = await page.evaluate(() => {
-    const ta = document.querySelector("textarea.dbody"), foot = document.querySelector(".doc-foot");
-    const lh = parseFloat(getComputedStyle(ta).lineHeight);
-    return foot.getBoundingClientRect().top - (ta.getBoundingClientRect().bottom - parseFloat(getComputedStyle(ta).paddingBottom)) + lh * 0;
+    const caret = getSelection().getRangeAt(0).getBoundingClientRect(), foot = document.querySelector(".doc-foot");
+    return foot.getBoundingClientRect().top - caret.bottom;
   });
   assert.ok(gap >= 0, `the line being typed sits above the footer, not under it (${gap.toFixed(0)}px)`);
   console.log("✓ the last line of a long doc stays above the footer");

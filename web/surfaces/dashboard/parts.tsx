@@ -1,5 +1,5 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Markdown from "markdown-to-jsx";
+import { imagesInMarkdown, imgProps } from "../../engines/prose/images.tsx";
 import type { DashFrom } from "../../data/entities/dashboard.ts";
 
 export const hm = (at: number): string => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -19,42 +19,8 @@ export function Src({ from }: { from: DashFrom | null | undefined }) {
   return from?.url ? <a className={`src ${kindOf(s)}`} href={from.url} target="_blank" rel="noopener">{inner}</a> : <span className={`src ${kindOf(s)}`}>{inner}</span>;
 }
 
-/** A thread's notes as Markdown, links opening elsewhere. */
+/** A thread's notes as Markdown, links opening elsewhere and the room's images drawn from the room. */
 export function Notes({ text }: { text: string }) {
   return <div className="md"><Markdown options={{ forceBlock: true, disableParsingRawHTML: true,
-    overrides: { a: { props: { target: "_blank", rel: "noopener" } } } }}>{text}</Markdown></div>;
-}
-
-/**
- * Text you type that saves itself: shown as typed, sent a pause after the last key, and taken from the server only
- * while the field is not focused, so a save's answer never rewrites what is being typed.
- */
-export function useTyped(value: string, save: (v: string) => void, wait = 700): [string, (v: string) => void, () => void, { onFocus(): void; onBlur(): void }] {
-  const [typed, setTyped] = useState<string | null>(null);
-  const [focused, setFocused] = useState(false);
-  const timer = useRef(0);
-  const pending = useRef<string | null>(null);
-  const flush = () => { clearTimeout(timer.current); if (pending.current !== null) { save(pending.current); pending.current = null; } };
-  const set = (v: string) => { setTyped(v); pending.current = v; clearTimeout(timer.current); timer.current = window.setTimeout(flush, wait); };
-  // out of the field and caught up: hand it back to the server, which may hold another device's edit
-  useEffect(() => { if (!focused && typed !== null && pending.current === null && value === typed) setTyped(null); }, [value, typed, focused]);
-  useEffect(() => () => flush(), []);
-  const held = { onFocus: () => setFocused(true), onBlur: () => { flush(); setFocused(false); } };
-  return [typed ?? value, set, flush, held];
-}
-
-/** A textarea as tall as what it holds. */
-export function Grow(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  const ref = useRef<HTMLTextAreaElement | null>(null);
-  useLayoutEffect(() => {
-    const t = ref.current;
-    if (!t) return;
-    // collapsing to measure shortens the page under the scroller, which clamps its scroll and jumps the caret away
-    const kept: [Element, number][] = [];
-    for (let p = t.parentElement; p; p = p.parentElement) if (p.scrollTop) kept.push([p, p.scrollTop]);
-    t.style.height = "auto";
-    t.style.height = `${t.scrollHeight}px`;
-    for (const [p, top] of kept) p.scrollTop = top;
-  }, [props.value]);
-  return <textarea ref={ref} rows={1} {...props} />;
+    overrides: { a: { props: { target: "_blank", rel: "noopener" } }, img: { props: imgProps } } }}>{imagesInMarkdown(text)}</Markdown></div>;
 }
