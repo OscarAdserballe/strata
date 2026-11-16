@@ -9,6 +9,11 @@
     "typescript": "^7.0.2"
   },
   "dependencies": {
+    "@tiptap/extension-image": "^3.34.0",
+    "@tiptap/markdown": "^3.34.0",
+    "@tiptap/pm": "^3.34.0",
+    "@tiptap/react": "^3.34.0",
+    "@tiptap/starter-kit": "^3.34.0",
     "katex": "^0.18.4",
     "markdown-to-jsx": "^9.10.2",
     "pdfjs-dist": "^6.2.108",
@@ -18,7 +23,7 @@
   "name": "strata",
   "private": true,
   "version": "1.0.0",
-  "description": "The reading room \u2014 course decks beside the source you are reading",
+  "description": "The reading room — course decks beside the source you are reading",
   "license": "MIT",
   "repository": {
     "type": "git",

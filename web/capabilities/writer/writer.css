@@ -1,0 +1,10 @@
+/* the shared rich-text field: its text takes the .md look of the page it sits on */
+.writer{position:relative;cursor:text;box-sizing:border-box;width:100%;min-width:0}
+.writer .tiptap{outline:none;white-space:pre-wrap;word-wrap:break-word;min-height:1.6em}
+.writer .tiptap > :last-child{margin-bottom:0}
+.writer-ph{position:absolute;left:0;top:0;pointer-events:none;color:#a8a4ae}
+.writer img{display:block;max-width:100%;height:auto;margin:6px 0 12px;border-radius:8px;border:1px solid var(--d-line, #e6e3ea)}
+.writer img.ProseMirror-selectednode{outline:2px solid #8b88a0;outline-offset:2px}
+.writer a{color:var(--d-link, #2f4fb0)}
+.writer li > p{margin:0}
+.writer .ProseMirror-gapcursor:after{border-top-color:currentColor}

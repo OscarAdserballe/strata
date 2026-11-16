@@ -1,5 +1,4 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import Markdown from "markdown-to-jsx";
 import type { DashFrom } from "../../data/entities/dashboard.ts";
 
 export const hm = (at: number): string => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -17,12 +16,6 @@ export function Src({ from }: { from: DashFrom | null | undefined }) {
   const s = from?.source || "You";
   const inner = <><i />{s}</>;
   return from?.url ? <a className={`src ${kindOf(s)}`} href={from.url} target="_blank" rel="noopener">{inner}</a> : <span className={`src ${kindOf(s)}`}>{inner}</span>;
-}
-
-/** A thread's notes as Markdown, links opening elsewhere. */
-export function Notes({ text }: { text: string }) {
-  return <div className="md"><Markdown options={{ forceBlock: true, disableParsingRawHTML: true,
-    overrides: { a: { props: { target: "_blank", rel: "noopener" } } } }}>{text}</Markdown></div>;
 }
 
 /**

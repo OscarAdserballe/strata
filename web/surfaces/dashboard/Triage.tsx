@@ -3,6 +3,7 @@ import { StrataWhy } from "../../data/api.ts";
 import { dash, useDashBoard, useRoutine, type DashItem, type DashTask } from "../../data/entities/dashboard.ts";
 import { toast } from "../../shell/layers.ts";
 import { go, type Mode, type Sub } from "./nav.ts";
+import Writer from "../../capabilities/writer/Writer.tsx";
 import { Grow, Src, age, hm, newThreadId, useTyped } from "./parts.tsx";
 import { move, pick, saveText } from "./moves.ts";
 
@@ -85,7 +86,7 @@ function InboxList({ items, mode }: { items: DashItem[]; mode: Mode }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (!at || t.matches?.("input, textarea") || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!at || t.matches?.("input, textarea") || t.isContentEditable || e.metaKey || e.ctrlKey || e.altKey) return;
       const it = items.find((i) => i.id === at)!;
       const k = e.key.toLowerCase();
       if (k === "b") { e.preventDefault(); keep(at, "backlog", it.area); }
@@ -138,12 +139,12 @@ function Thread({ t, open, onOpen, mode, drag }: { t: DashTask; open: boolean; o
     <article className="tr-card open" draggable={false}>
       <div className="tr-head">
         <Grow className="dtitle" value={title} aria-label="Title" {...titleHeld} onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.closest("article")?.querySelector(".dbody") as HTMLElement | null)?.focus(); } if (e.key === "Escape") leave(); }} />
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.closest("article")?.querySelector(".dbody .tiptap") as HTMLElement | null)?.focus(); } if (e.key === "Escape") leave(); }} />
         <span className="tr-src">{meta}</span>
       </div>
       <label className="cap" htmlFor={`body-${t.id}`}>Prompt · yours to trim</label>
-      <Grow id={`body-${t.id}`} className="dbody" value={body} placeholder="What should be done, in a few lines you could hand to Claude." {...bodyHeld} onChange={(e) => setBody(e.target.value)}
-        onKeyDown={(e) => { if (e.key === "Escape") leave(); }} />
+      <Writer id={`body-${t.id}`} className="dbody" value={body} label="Prompt" placeholder="What should be done, in a few lines you could hand to Claude." {...bodyHeld} onChange={setBody}
+        onKey={(e) => { if (e.key !== "Escape") return false; leave(); return true; }} />
       <div className="acts-row">
         <button className="btn dark" title={mode === "dispatch" ? "Claude prepares a page; it shows up in Decide" : "Claude comes back with a page in Dispatch"} onClick={() => { leave(); toast("Sent to Dispatch"); dash.send(t.id).catch((e) => said(e, "not sent")); }}>Send to Dispatch</button>
         <button className="btn" title="Open it in Thinking and write it through yourself" onClick={() => { leave(); move(t, "thinking"); go({ mode: "focus", view: "thinking" }); }}>Think it through</button>

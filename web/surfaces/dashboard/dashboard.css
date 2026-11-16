@@ -109,7 +109,9 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .tr-src{font-size:12px;color:var(--d-mute)}
 .tr-card .cap{margin-top:4px}
 .tr-card .dbody{width:100%;resize:none;border:1px solid var(--d-line-2);border-radius:10px;padding:10px 12px;font-size:13.5px;line-height:1.5;color:#222;background:#fff;min-height:64px;transition:border-color .15s}
-.tr-card .dbody:focus{outline:none;border-color:#8b88a0}
+.tr-card .dbody:focus-within{border-color:#8b88a0}
+.tr-card .dbody .tiptap{min-height:42px}
+.tr-card .dbody .writer-ph{left:12px;top:10px}
 /* every card's actions read the same: the primary, the secondary, quiet ones after, and Drop far right */
 .acts-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:4px}
 .acts-row .btn.dark + .btn{margin-right:8px}
@@ -210,11 +212,10 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .doc-crumb{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--d-mute)}
 .doc-crumb .tag{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--d-faint)}
 .doc .dtitle{width:100%;border:0;background:none;resize:none;padding:0;margin:0;font:600 34px/1.15 var(--serif);letter-spacing:-.01em;outline:none}
-.doc .dtitle::placeholder,.doc .dbody::placeholder{color:#c3c0c8}
-.doc .dbody{width:100%;border:0;background:none;resize:none;padding:0;font:17px/1.65 var(--serif);color:#2b2824;min-height:240px;outline:none}
-.doc-notes{flex:1;cursor:text;font:17px/1.65 var(--serif);color:#2b2824;outline:none}
-.doc-notes .md li::marker{color:var(--d-faint)}
-.doc-notes .ph{margin:0;color:var(--d-faint)}
+.doc .dtitle::placeholder{color:#c3c0c8}
+.doc-notes{flex:1;font:17px/1.65 var(--serif);color:#2b2824}
+.doc-notes .tiptap{min-height:240px}
+.doc-notes li::marker{color:var(--d-faint)}
 .md p{margin:0 0 12px} .md ul,.md ol{margin:0 0 12px;padding-left:22px} .md li{margin:3px 0}
 .md h1,.md h2,.md h3,.md h4{margin:22px 0 6px;font:600 11px/1.4 var(--sans);letter-spacing:.08em;text-transform:uppercase;color:var(--d-faint)}
 .md blockquote{margin:6px 0 12px;padding:2px 0 2px 12px;border-left:2px solid var(--d-line-2);color:var(--d-ink-3)}
