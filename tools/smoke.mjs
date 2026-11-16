@@ -78,6 +78,11 @@ try {
   }, null, { timeout: 15000 }).then(() => true, () => false);
   check("a pdf page paints real pixels", painted);
 
+  // the claims are off until the reader turns them on
+  const claimsChip = page.locator(".rbar-chip.claims");
+  await claimsChip.waitFor({ timeout: 10000 }).catch(() => {});
+  check("the claims start hidden", (await page.locator(".clm-row").count()) === 0);
+  if (await claimsChip.count()) await claimsChip.click();
   const bands = await page.waitForFunction(() => document.querySelectorAll(".clm-row").length > 0,
     null, { timeout: 10000 }).then(() => true, () => false);
   // count both tree levels: each anchors differently, and either can silently resolve to nothing

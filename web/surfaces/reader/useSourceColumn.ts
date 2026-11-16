@@ -302,8 +302,9 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
   const litNode = () => { const cur = room.live().card; return (cur && cur.node) || null; };
   function litClaims() { litBands(pageRef.current, litNode()); }
   function paintClaims() {
-    const { src: s, cards: deck } = room.live();
-    paintBands(pageRef.current, s ? drawnAs(s.kind) : null, s ? claimsOfSource() : [], deck, goToClaimCard, litNode());
+    const { src: s, cards: deck } = room.live(), claims = s ? claimsOfSource() : [];
+    switches.count("claims", claims.length);
+    paintBands(pageRef.current, s ? drawnAs(s.kind) : null, switches.on("claims") ? claims : [], deck, goToClaimCard, litNode());
   }
 
   useEffect(() => {
@@ -394,6 +395,7 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
       const now = switches.getSnapshot().on;
       if (now === was) return;
       was = now;
+      paintClaims();
       paintLayer();
     });
   }, []);

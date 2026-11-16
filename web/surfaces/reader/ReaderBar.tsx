@@ -23,7 +23,7 @@ export interface ReaderBarProps {
 }
 
 const KIND: Record<string, string> = { pdf: "PDF", html: "HTML", transcript: "transcript" };
-const LAYERS: [Layer, string][] = [["notes", "notes"], ["cards", "cards"], ["ask", "ask"]];
+const LAYERS: [Layer, string][] = [["notes", "notes"], ["cards", "cards"], ["ask", "ask"], ["claims", "claims"]];
 
 // While a source is open the bar is one row: where you are, and which layers are on.
 export default function ReaderBar(p: ReaderBarProps) {
@@ -51,7 +51,7 @@ export default function ReaderBar(p: ReaderBarProps) {
       {p.imports ? <ImportsStatus onOpen={p.onImport} className="rbar-imports" /> : null}
       <span className="rbar-slot" ref={barSlot.set} />
       <span className="rbar-lbl">layers</span>
-      {LAYERS.filter(([l]) => l !== "ask" || sw.count.ask > 0).map(([l, label]) =>
+      {LAYERS.filter(([l]) => (l !== "ask" && l !== "claims") || sw.count[l] > 0).map(([l, label]) =>
         <button key={l} className={"rbar-chip " + (l === "ask" ? "asks" : l) + (sw.on[l] ? "" : " off")} aria-pressed={sw.on[l]}
           title={`${sw.on[l] ? "hide" : "show"} ${label}`} onClick={() => switches.flip(l)}>
           <i />{label}<b>{sw.count[l]}</b>

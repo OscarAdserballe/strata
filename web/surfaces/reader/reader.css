@@ -50,6 +50,7 @@
 .rbar-chip.notes i{background:var(--warn);}
 .rbar-chip.cards i{background:var(--accent);} .rbar-chip.cards b{color:var(--accent);}
 .rbar-chip.asks i{background:var(--ink-soft);} .rbar-chip.asks b{color:var(--ink-soft);}
+.rbar-chip.claims i{background:var(--ink-faint);} .rbar-chip.claims b{color:var(--ink-faint);}
 .rbar-chip.off{background:none !important;border-color:var(--line) !important;color:var(--ink-faint) !important;}
 .rbar-chip.off i{background:none !important;box-shadow:inset 0 0 0 1px currentColor;}
 .rbar-more{position:relative;display:flex;}

@@ -1,16 +1,16 @@
 // The layer switches in the reader's bar, and how many of each the open source holds.
 // Module state, not a screen's: flipping one repaints the page's layers and the bar, never the room.
 
-export type Layer = "notes" | "cards" | "ask";
+export type Layer = "notes" | "cards" | "ask" | "claims";
 export interface Switches { on: Readonly<Record<Layer, boolean>>; count: Readonly<Record<Layer, number>> }
 
 const KEY = "strata.layers";
 function read(): Record<Layer, boolean> {
-  const all = { notes: true, cards: true, ask: true };
+  const all = { notes: true, cards: true, ask: true, claims: false };
   try { return { ...all, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch { return all; }
 }
 
-let state: Switches = { on: read(), count: { notes: 0, cards: 0, ask: 0 } };
+let state: Switches = { on: read(), count: { notes: 0, cards: 0, ask: 0, claims: 0 } };
 const heard = new Set<() => void>();
 const tell = () => { for (const cb of [...heard]) cb(); };
 
