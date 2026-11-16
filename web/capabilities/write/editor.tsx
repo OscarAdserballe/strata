@@ -30,8 +30,6 @@ export interface WriterProps {
   onEscape?(): void;
   onFocus?(): void;
   onBlur?(): void;
-  /** set by Writer: the plain stand-in had the focus, so the editor takes it */
-  took?: { current: boolean };
 }
 
 const OURS = /\/api\/images\/([0-9a-f]{16})$/;
@@ -119,10 +117,11 @@ export default function WriterEditor(p: WriterProps) {
   const shown = useRef(p.value);
   const mine = useRef<string | null>(null);
   const held = useRef<{ at: number }[]>([]);
+  const pointed = useRef(false);
   const editor = useEditor({
     extensions: extensions(p),
     ...(p.line ? { content: lineDoc(p.value) } : { content: p.value, contentType: "markdown" as const }),
-    autofocus: p.autoFocus || p.took?.current ? "end" : false,
+    autofocus: p.autoFocus ? "end" : false,
     immediatelyRender: true,
     shouldRerenderOnTransaction: false,
     editorProps: {
@@ -130,6 +129,7 @@ export default function WriterEditor(p: WriterProps) {
       // the sheet's footer is sticky: keep the caret's line clear of it, not under it
       scrollMargin: { top: 24, bottom: p.line ? 24 : 120, left: 0, right: 0 },
       scrollThreshold: { top: 24, bottom: p.line ? 24 : 120, left: 0, right: 0 },
+      handleDOMEvents: { pointerdown: () => { pointed.current = true; return false; } },
       handleKeyDown: (_v, e) => {
         if (e.key === "Escape" && props.current.onEscape) { props.current.onEscape(); return true; }
         if (e.key === "Enter" && props.current.line) { e.preventDefault(); props.current.onEnter?.(); return true; }
@@ -160,7 +160,12 @@ export default function WriterEditor(p: WriterProps) {
       shown.current = now;
       props.current.onChange(now);
     },
-    onFocus: () => props.current.onFocus?.(),
+    onFocus: ({ editor: e }) => {
+      // focus that came from Tab or from Enter in a title carries on at the end; a click keeps its spot
+      if (!pointed.current) atEnd(e);
+      pointed.current = false;
+      props.current.onFocus?.();
+    },
     onBlur: () => props.current.onBlur?.(),
   }, []);
 

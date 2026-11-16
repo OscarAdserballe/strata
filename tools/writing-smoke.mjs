@@ -120,5 +120,25 @@ try {
   await page.waitForTimeout(1200);
   assert.match(await bodyOf(tri), /^- one\n- two\n\n!\[\]\(img:[0-9a-f]{16}\)$/);
   console.log("✓ Triage's prompt takes a list with pauses and a pasted image");
+
+  // on a slow wire, keys typed before the editor arrives go into a plain field, which hands over once you leave it
+  const slow = await browser.newPage({ viewport: { width: 1280, height: 860 } });
+  slow.on("pageerror", (e) => errors.push(e.message));
+  await slow.route(/chunks\/editor-[^/]*\.js$/, async (r) => { await new Promise((x) => setTimeout(x, 2500)); await r.continue(); });
+  const early = tid(), earlyTitle = `Writing ${run}: before the editor`;
+  await api("/api/dashboard/tasks", "POST", { id: early, title: earlyTitle, body: "first", area: "work", stage: "thinking" });
+  await slow.goto(`${base}/dashboard?view=thinking`);
+  await slow.locator(".ws-list").getByText(earlyTitle).click();
+  await slow.locator("textarea.dbody").click();
+  await slow.keyboard.press("End");
+  await slow.keyboard.type(" second", { delay: 40 });
+  await slow.waitForTimeout(3000);
+  assert.equal(await slow.locator("textarea.dbody").inputValue(), "first second", "the plain field keeps the keys, and isn't swapped out while you type");
+  await slow.locator(".doc .dtitle").click();
+  await slow.locator(".ProseMirror.dbody").waitFor({ timeout: 5000 });
+  assert.equal(await slow.locator(".ProseMirror.dbody").textContent(), "first second");
+  await slow.waitForTimeout(1200);
+  assert.equal(await bodyOf(early), "first second");
+  console.log("✓ keys typed before the editor arrives are kept, and the editor takes over once you leave the field");
   assert.deepEqual(errors, []);
 } finally { await browser.close(); }

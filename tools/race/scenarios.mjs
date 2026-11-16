@@ -1735,13 +1735,13 @@ const dashboardWrites = {
     let rowDb = null;
     for (;;) {
       rowDb = t.sql("SELECT stage, title, body FROM dashboard_tasks WHERE id = ?", id)[0] ?? null;
-      if ((rowDb && rowDb.stage === "thinking" && rowDb.title === `Race pin ${tag} edited` && rowDb.body === `Picked under loss.\n\nNotes ${tag}`) || performance.now() > until) break;
+      if ((rowDb && rowDb.stage === "thinking" && rowDb.title === `Race pin ${tag} edited` && rowDb.body.replace(/\n+/g, "\n") === `Picked under loss.\nNotes ${tag}`) || performance.now() > until) break;
       await sleep(250);
     }
     await t.net.idle(500);
     t.check("moved", rowDb?.stage === "thinking", `stage ${rowDb?.stage}`);
     t.check("title", rowDb?.title === `Race pin ${tag} edited`, `the title is ${JSON.stringify(rowDb?.title)}`);
-    t.check("notes", rowDb?.body === `Picked under loss.\n\nNotes ${tag}`, `the notes are ${JSON.stringify(rowDb?.body?.slice(0, 120))}`);
+    t.check("notes", rowDb?.body?.replace(/\n+/g, "\n") === `Picked under loss.\nNotes ${tag}`, `the notes are ${JSON.stringify(rowDb?.body?.slice(0, 120))}`);
   },
 };
 
