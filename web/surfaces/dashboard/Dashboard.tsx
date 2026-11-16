@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { store } from "../../data/store.ts";
 import { DASH_KEY, DISPATCH_KEY, useDashBoard, useDispatch } from "../../data/entities/dashboard.ts";
 import { subscribeToast, toastNow } from "../../shell/layers.ts";
+import { useDeploy } from "../../shell/session.ts";
 import { go, useNav, type Mode, type View } from "./nav.ts";
 import Triage from "./Triage.tsx";
 import Thinking from "./Thinking.tsx";
@@ -50,6 +51,8 @@ function Header() {
   const board = useDashBoard(), pane = useDispatch();
   const tasks = board?.tasks ?? [], threads = pane?.threads ?? [];
   const inbox = board?.inbox.length ?? 0;
+  const todo = tasks.filter((t) => t.stage === "todo").length;
+  const on = (sub: "inbox" | "todo") => nav.view === "triage" && nav.sub === sub;
   const count = (v: View): string => {
     if (v === "thinking") return String(tasks.filter((t) => t.stage === "thinking").length || "");
     if (v === "review") return String(tasks.filter((t) => t.stage === "review" && !t.dispatched).length || "");
@@ -64,9 +67,13 @@ function Header() {
           {(["focus", "dispatch"] as Mode[]).map((m) => <button key={m} role="tab" aria-selected={nav.mode === m} onClick={() => go({ mode: m })}>
             {m === "focus" ? "Focus" : "Dispatch"}</button>)}
         </div>
-        <button className={"dh-inbox" + (nav.view === "triage" && nav.sub === "inbox" ? " on" : "")} aria-pressed={nav.view === "triage" && nav.sub === "inbox"}
+        <button className={"dh-inbox" + (on("inbox") ? " on" : "")} aria-pressed={on("inbox")}
           onClick={() => go({ view: "triage", sub: "inbox" })}>
           Inbox <i>{inbox || ""}</i>
+        </button>
+        <button className={"dh-inbox dh-todo" + (on("todo") ? " on" : "")} aria-pressed={on("todo")}
+          onClick={() => go({ view: "triage", sub: "todo" })}>
+          To-do <i>{todo || ""}</i>
         </button>
       </div>
       <div className="dh-main">
@@ -76,10 +83,22 @@ function Header() {
           <button aria-current={nav.view === v ? "page" : undefined} onClick={() => go({ view: v })}>{name} <i className={WAITS.includes(v) ? "wait" : undefined}>{count(v)}</i></button>
         </span>)}
       </nav>
-      <div className="dh-side end"><Clock /></div>
+      <div className="dh-side end"><Deploy /><Clock /></div>
       </div>
     </header>
   );
+}
+
+// The same dot and line as the room's top bar, for an admin; nothing for anyone else.
+function Deploy() {
+  const deploy = useDeploy();
+  const [open, setOpen] = useState(false);
+  if (!deploy) return null;
+  return <span className="dh-deploy-wrap">
+    <button className={"dh-deploy " + deploy.level} aria-label={"Deploy: " + deploy.line} title={"Deploy: " + deploy.line}
+      aria-expanded={open} onClick={() => setOpen((v) => !v)} />
+    {open ? <span className={"dh-deploy-line " + deploy.level} role="status"><b>Deploy</b>{deploy.line}</span> : null}
+  </span>;
 }
 
 // The minute changes on its own clock, so only this re-renders.
