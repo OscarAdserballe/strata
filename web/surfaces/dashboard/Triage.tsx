@@ -8,7 +8,6 @@ import { Grow, Src, age, hm, newThreadId, useTyped } from "./parts.tsx";
 import { move, saveText } from "./moves.ts";
 
 const OLD = 14 * 864e5;
-const TABS: [Sub, string][] = [["inbox", "Inbox"], ["todo", "To-do"]];
 const said = (e: unknown, what: string) => toast(StrataWhy(e, what), 4200);
 
 function useArea(): [string, (a: string) => void] {
@@ -32,10 +31,6 @@ export default function Triage({ mode, sub }: { mode: Mode; sub: Sub }) {
   return (
     <div className="ws triage">
       <aside className="ws-list" aria-label="Triage">
-        <nav className="tr-nav" role="tablist" aria-label="Triage">
-          {TABS.filter(([k]) => k !== "inbox").map(([k, name]) => <button key={k} role="tab" aria-selected={sub === k} className={"ws-card" + (sub === k ? " on" : "")}
-            onClick={() => { setOpen(null); go({ sub: k }); }}><span className="t">{name}</span><i>{counts[k] || ""}</i></button>)}
-        </nav>
         <Routine />
       </aside>
       <div className="ws-room">

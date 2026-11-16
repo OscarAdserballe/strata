@@ -30,6 +30,8 @@ kbd{font:500 10.5px/1 var(--sans);border:1px solid var(--d-line-2);border-radius
 .dh-main{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;min-width:0}
 .dh-side{display:flex;align-items:center;gap:14px;min-width:0}
 .dh-side.end{justify-content:flex-end}
+/* Inbox and To-do run past the 248px column into the rail's empty left side */
+.dh > .dh-side{position:relative;z-index:1;white-space:nowrap}
 .dh-modes{display:flex;gap:2px;padding:3px;background:rgba(40,30,60,.05);border:1px solid transparent;border-radius:11px}
 .dh-modes button{padding:7px 15px;border-radius:8px;font-size:13px;font-weight:600;color:#6b6873;transition:background .15s,color .15s}
 .dh-modes button:hover:not([aria-selected="true"]){background:rgba(255,255,255,.9);color:var(--d-ink)}
@@ -38,6 +40,7 @@ kbd{font:500 10.5px/1 var(--sans);border:1px solid var(--d-line-2);border-radius
 .dh-inbox i:empty,.dh-step button i:empty{display:none}
 .dh-inbox i,.dh-step button i.wait{font-style:normal;font-weight:600;font-size:11.5px;line-height:18px;min-width:18px;padding:0 5px;border-radius:9px;background:var(--d-wait);color:#fff;text-align:center}
 .dh-inbox:hover{background:rgba(255,255,255,.6)}
+.dh-inbox.quiet i{background:none;color:var(--d-mute);font-weight:500}
 .dh-inbox.on{background:#fff;font-weight:600;box-shadow:0 0 0 1px rgba(26,20,30,.14),0 1px 2px rgba(30,20,50,.08)}
 .dh-rail{display:flex;align-items:center;gap:4px;padding:4px;border-radius:12px;background:rgba(40,30,60,.05);border:1px solid transparent;transition:opacity .2s}
 .dh-step{display:flex;align-items:center;gap:4px}
@@ -47,6 +50,9 @@ kbd{font:500 10.5px/1 var(--sans);border:1px solid var(--d-line-2);border-radius
 
 .dh-step button:hover:not([aria-current]){background:rgba(255,255,255,.6)}
 .dh-step button[aria-current]{background:#fff;color:var(--d-ink);font-weight:600;box-shadow:0 0 0 1px rgba(26,20,30,.14),0 1px 2px rgba(30,20,50,.08)}
+.dh-deploy{width:7px;height:7px;border-radius:50%;background:var(--good);flex:none}
+.dh-deploy.orange{background:var(--warn)}
+.dh-deploy.red{background:oklch(0.55 0.17 28)}
 .dh-clock{font-size:13px;font-weight:500;color:var(--d-ink-3);white-space:nowrap;font-variant-numeric:tabular-nums}
 .dash-main{flex:1;min-height:0;display:flex;flex-direction:column}
 
@@ -67,11 +73,6 @@ kbd{font:500 10.5px/1 var(--sans);border:1px solid var(--d-line-2);border-radius
 a.src:hover{color:var(--d-ink);text-decoration:none}
 
 /* ===== triage: on the workspace grid, its tab and the routine in the rail, the list where the sheet sits elsewhere ===== */
-.tr-nav{display:flex;flex-direction:column;gap:2px}
-.tr-nav .ws-card{flex-direction:row;align-items:center;justify-content:space-between;padding:8px 12px}
-.tr-nav .ws-card .t{font-size:13.5px;font-weight:500}
-.tr-nav .ws-card i{font-style:normal;font-size:12px;color:var(--d-ghost)}
-.tr-nav .ws-card.on i{color:var(--d-mute)}
 .ws-list > .tr-area{margin:10px 0 0;align-self:stretch}
 .ws-list > .tr-area button{flex:1;text-align:center}
 .tr-main{flex:1;min-height:0;overflow-y:auto;padding:0 2px 48px;margin:0 -2px}
@@ -227,6 +228,9 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 }
 @media (max-width:900px){
   .dh-rail{overflow-x:auto;max-width:100%}
+  .dh > .dh-side{gap:8px}
+  .dh-inbox{padding:8px 11px}
+  .dh-modes button{padding:7px 12px}
   .dh-side.end{display:none}
   .ws{flex-direction:column;height:auto;padding:20px 16px 0}
   .ws-list{flex:none;overflow:visible}

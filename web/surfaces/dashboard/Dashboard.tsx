@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { store } from "../../data/store.ts";
 import { DASH_KEY, DISPATCH_KEY, useDashBoard, useDispatch } from "../../data/entities/dashboard.ts";
 import { subscribeToast, toastNow } from "../../shell/layers.ts";
+import { useDeploy } from "../../shell/session.ts";
 import { go, useNav, type Mode, type View } from "./nav.ts";
 import Triage from "./Triage.tsx";
 import Thinking from "./Thinking.tsx";
@@ -51,7 +52,8 @@ function Header() {
   const nav = useNav();
   const board = useDashBoard(), pane = useDispatch();
   const tasks = board?.tasks ?? [], threads = pane?.threads ?? [];
-  const inbox = board?.inbox.length ?? 0;
+  const inbox = board?.inbox.length ?? 0, todo = tasks.filter((t) => t.stage === "todo").length;
+  const on = (sub: "inbox" | "todo") => nav.view === "triage" && nav.sub === sub;
   const count = (v: View): string => {
     if (v === "thinking") return String(tasks.filter((t) => t.stage === "thinking").length || "");
     if (v === "review") return String(tasks.filter((t) => t.stage === "review" && !t.dispatched).length || "");
@@ -66,9 +68,13 @@ function Header() {
           {(["focus", "dispatch"] as Mode[]).map((m) => <button key={m} role="tab" aria-selected={nav.mode === m} onClick={() => go({ mode: m })}>
             {m === "focus" ? "Focus" : "Dispatch"}</button>)}
         </div>
-        <button className={"dh-inbox" + (nav.view === "triage" && nav.sub === "inbox" ? " on" : "")} aria-pressed={nav.view === "triage" && nav.sub === "inbox"}
+        <button className={"dh-inbox" + (on("inbox") ? " on" : "")} aria-pressed={on("inbox")}
           onClick={() => go({ view: "triage", sub: "inbox" })}>
           Inbox <i>{inbox || ""}</i>
+        </button>
+        <button className={"dh-inbox quiet" + (on("todo") ? " on" : "")} aria-pressed={on("todo")}
+          onClick={() => go({ view: "triage", sub: "todo" })}>
+          To-do <i>{todo || ""}</i>
         </button>
       </div>
       <div className="dh-main">
@@ -78,7 +84,7 @@ function Header() {
           <button aria-current={nav.view === v ? "page" : undefined} onClick={() => go({ view: v })}>{name} <i className={WAITS.includes(v) ? "wait" : undefined}>{count(v)}</i></button>
         </span>)}
       </nav>
-      <div className="dh-side end"><Clock /></div>
+      <div className="dh-side end"><Deploy /><Clock /></div>
       </div>
     </header>
   );
@@ -89,6 +95,12 @@ function Clock() {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => { const h = window.setInterval(() => setNow(new Date()), 30_000); return () => clearInterval(h); }, []);
   return <span className="dh-clock">{hm(now.getTime())} · {now.toLocaleDateString([], { weekday: "long" })}</span>;
+}
+
+// The room's deploy dot, for an admin: the session is already held, so no request or timer of its own.
+function Deploy() {
+  const d = useDeploy();
+  return d ? <span className={"dh-deploy " + d.level} role="img" tabIndex={0} aria-label={"Deploy: " + d.line} title={"Deploy: " + d.line} /> : null;
 }
 
 // Reads again every 20 s while something moves, backing off to two minutes when nothing has; never while hidden.

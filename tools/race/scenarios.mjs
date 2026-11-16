@@ -1685,7 +1685,7 @@ const dashboardTriage = {
     const counts = titles.map((title) => t.sql("SELECT COUNT(*) n FROM dashboard_tasks WHERE title = ?", title)[0].n);
     t.check("kept", open === 0 && counts.every((n) => n === 1), `${open} still open; threads: ${counts.join(", ")}`);
 
-    await page.getByRole("tab", { name: /^To-do/ }).click();
+    await page.locator(".dh").getByRole("button", { name: /^To-do/ }).click();
     const row = page.locator(".r", { hasText: `Race task ${tag}` });
     await row.waitFor();
     await row.locator(".t").click();
@@ -1717,7 +1717,7 @@ const dashboardWrites = {
     const page = await t.open({ latency: true, lostAck: { match: lost, pick: new Set([1, 2, 3]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dashboard?view=triage&sub=todo`);
     await page.getByRole("tab", { name: /^Work/ }).click();
-    await page.getByRole("tab", { name: /^To-do/ }).click();
+    await page.locator(".dh").getByRole("button", { name: /^To-do/ }).click();
     const moved = page.locator(".r", { hasText: `Race pin ${tag}` });
     await moved.waitFor();
     await moved.locator(".t").click();
@@ -1760,7 +1760,7 @@ const dashboardAdd = {
     const adds = (e) => e.write && /\/api\/dashboard\/tasks(\/[^/]+)?$/.test(e.path);
     const page = await t.open({ latency: true, lostAck: { match: adds, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dashboard?view=triage&sub=todo`);
-    await page.getByRole("tab", { name: /^To-do/ }).click();
+    await page.locator(".dh").getByRole("button", { name: /^To-do/ }).click();
     for (const title of titles) {
       await page.locator("#addIn").fill(title);
       await page.getByRole("button", { name: "Add", exact: true }).click();

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
-// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, and drops threads from Decide and Thinking.
+// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, drops threads from Decide and Thinking, and To-do opens from the header.
 const base = (process.argv[2] || "http://127.0.0.1:8804").replace(/\/+$/, "");
 let n = 0;
 const key = () => `smoke-${Date.now().toString(36)}-${++n}`;
@@ -50,5 +50,13 @@ try {
   for (let i = 0; i < 20 && (await stageOf(think)) !== null; i++) await page.waitForTimeout(250);
   assert.equal(await stageOf(think), null, "a dropped Thinking thread leaves the board");
   console.log("✓ Drop in a Thinking doc");
+  // To-do sits beside Inbox in the header and opens the to-do list
+  await thread(`Smoke ${run}: a thread kept in to-do`, "todo");
+  await page.goto(`${base}/dispatch?view=decide`, { waitUntil: "networkidle" });
+  await page.locator(".dh").getByRole("button", { name: /^To-do/ }).click();
+  await page.getByRole("button", { name: `Smoke ${run}: a thread kept in to-do` }).waitFor({ timeout: 5000 });
+  assert.match(page.url(), /view=triage&sub=todo/);
+  assert.equal(await page.locator(".ws-list").getByRole("tab", { name: /To-do/ }).count(), 0, "the rail no longer repeats To-do");
+  console.log("✓ To-do in the header opens the to-do list");
   assert.deepEqual(errors, []);
 } finally { await browser.close(); }
