@@ -70,6 +70,8 @@ const SHEET_W = 460, INSET = 40, GAP = 8, BRACKET = 13, PUSH = 180, CARET = 7;
 
 const said = (it: LayerItem) => it.kind === "note" && !!it.text.trim();
 const asking = (it: LayerItem) => it.kind === "card" && it.state !== "done";
+/** Whether a click on the page or Esc may shut this item's sheet: a card still to answer stays open until it is graded. */
+export const pageShuts = (it: LayerItem): boolean => !asking(it);
 const markOf = (it: LayerItem): TickMark => (it.kind === "note" ? "note" : it.kind === "ask" ? "ask" : it.kind === "card" && it.state === "done" ? "card-done" : "card");
 // an ask with nothing said yet is being asked; one being answered stays open while the answer comes
 const asking_ = (it: LayerItem) => it.kind === "ask" && (!it.turns.length || it.writing !== null);
@@ -135,7 +137,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
   // pinned: items the reader opened (by their words or their passage's tick) or asked; wanted: items to open once their
   // passage can show
   const pinned = new Set<string>(), wanted = new Set<string>();
-  // an ask's sheet is open once asked, and a card's once turned over, unless the reader closed it or put it off
+  // an ask's sheet is open once asked, and a card's until it is graded, unless the reader closed it or put it off
   const shut = new Set<string>();
   // cards opened while still to answer: their sheet shuts again once they are graded
   const asked = new Set<string>();
@@ -281,12 +283,12 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
       if (g.spot.words && g.spot.tint && !g.spot.hidden) targets.push({ key, range: g.spot.tint, ids: g.items.map((it) => it.id) });
       for (const it of g.items) {
         if (it.kind === "card" && it.state === "done" && asked.has(it.id)) { asked.delete(it.id); pinned.delete(it.id); }
-        const turned = it.kind === "card" && it.state === "revealed" && !shut.has(it.id);
+        const due = asking(it) && !shut.has(it.id);
         // an ask stays open once asked, so its answer and the next question have somewhere to be
         if (it.kind === "ask" && it.writing !== null && !shut.has(it.id) && !g.spot.hidden) pinned.add(it.id);
         const writing = (it.kind === "note" && it.editing) || it.kind === "draft" || (asking_(it) && !shut.has(it.id));
         if (!g.spot.hidden && wanted.has(it.id)) { opened(it); wanted.delete(it.id); }
-        if (!g.spot.hidden && (turned || writing || pinned.has(it.id))) { open.add(key); shows.add(it.id); }
+        if (!g.spot.hidden && (due || writing || pinned.has(it.id))) { open.add(key); shows.add(it.id); }
       }
     }
     for (const [key, g] of groups) if (open.has(key) && g.spot.words && g.spot.tint) wash["card-on"]!.push(g.spot.tint);
@@ -419,7 +421,8 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
   function shutWords(): boolean {
     if (!last) return false;
     const words = new Set(targets.map((t) => t.key)), ids = new Set<string>();
-    for (const s of shown) if (words.has(s.key) && !moved.has(s.key)) for (const t of targets) if (t.key === s.key) t.ids.forEach((id) => ids.add(id));
+    const stays = new Set(last.items.filter((it) => !pageShuts(it)).map((it) => it.id));
+    for (const s of shown) if (words.has(s.key) && !moved.has(s.key)) for (const t of targets) if (t.key === s.key) t.ids.forEach((id) => { if (!stays.has(id)) ids.add(id); });
     for (const id of ids) { pinned.delete(id); shut.add(id); }
     return ids.size > 0;
   }

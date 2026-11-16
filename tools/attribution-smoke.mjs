@@ -21,14 +21,14 @@ try {
     await page.goto(`${base}/?board=${board.id}&pair=${pair.id}`, { waitUntil: "networkidle" });
     await page.locator(".page-col [data-b]").first().waitFor();
     await page.waitForTimeout(1200);
-    // a card lies shut on its words until they are clicked; then its sheet hangs just under them
+    // a card still to answer lies open just under its words; one placed nowhere opens nothing
     const words = await page.evaluate(() => {
       const h = CSS.highlights.get("strata-card"), r = h && [...h][0];
       const rs = r ? [...r.getClientRects()] : [];
       return rs.length ? { text: r.toString(), x: rs[0].left + 4, y: rs[0].top + rs[0].height / 2, bottom: Math.max(...rs.map((x) => x.bottom)) } : null;
     });
     const before = await page.locator(".layer-plane > [data-fold]").count();
-    assert.equal(before, 0, "no card's sheet opens by itself");
+    assert.equal(before, placed ? 1 : 0, "a card still to answer opens by itself, where it has a place");
     if (words) { await page.mouse.click(words.x, words.y); await page.waitForTimeout(500); }
     const under = await page.evaluate((q) => {
       const sheet = [...document.querySelectorAll(".layer-plane > [data-fold]")].find((f) => f.textContent.includes(q));
@@ -41,5 +41,5 @@ try {
     await api(`/api/boards/${board.id}/minted/${made.id}`, "DELETE");
   }
   assert.deepEqual(errors, []);
-  console.log("✓ a quote puts the card on its words, opened by a click; a heading reference places it nowhere");
+  console.log("✓ a quote puts the card on its words, open under them; a heading reference places it nowhere");
 } finally { await browser.close(); await api(`/api/boards/${board.id}`, "DELETE"); }

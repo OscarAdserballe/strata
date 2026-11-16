@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { type Place, dockOf, onWords, threadOf } from "./layers.ts";
+import { type LayerDom, type LayerItem, type Place, type Spot, dockOf, layerDrawer, onWords, pageShuts, threadOf } from "./layers.ts";
 
 const place = (over: Partial<Place> = {}): Place => ({
   passage: { top: 100, bottom: 180, left: 40, right: 600 }, column: { left: 40, right: 600 }, width: 680, unit: 1, perClient: 1, ...over,
@@ -72,4 +72,32 @@ test("a click is on a card's words only within their lines", () => {
   assert.ok(onWords(rects, 399, 20));
   assert.ok(!onWords(rects, 300, 50), "past the end of the last line");
   assert.ok(!onWords(rects, 60, 20), "before the start of the first line");
+});
+
+const card = (id: string, state: "asking" | "revealed" | "done"): LayerItem => ({
+  kind: "card", id, q: id + "?", where: "", face: false, held: false, state, got: state === "done" ? true : null, mcq: false,
+  anchor: { start: 0, end: 0, quote: id },
+});
+// sheets that would open are asked for their place, and get none, so nothing needs a document to draw into
+function placedBy(items: LayerItem[]): string[] {
+  const asked: string[] = [];
+  const dom: LayerDom = {
+    spotOf: (it) => ({ key: "w:" + it.id, block: {} as HTMLElement, tint: {} as Range, words: true }) as Spot,
+    place: (s) => { asked.push(s.key); return null; },
+    sheet: () => null, closeExcept() {}, tick() {}, clearTicks() {},
+  };
+  const nop = () => {};
+  layerDrawer(dom).draw(items, { edit: nop, leave: nop, remove: nop, reply: nop, show: nop, later: nop, grade: nop, keep: nop, discard: nop, ask: nop, capture: nop });
+  return asked;
+}
+
+test("a card still to answer opens by itself, turned over or not; one graded stays shut", () => {
+  assert.deepEqual(placedBy([card("new", "asking"), card("turned", "revealed"), card("graded", "done")]), ["w:new", "w:turned"]);
+});
+
+test("a click on the page or Esc shuts a graded card's sheet, never one still to answer", () => {
+  assert.equal(pageShuts(card("new", "asking")), false);
+  assert.equal(pageShuts(card("turned", "revealed")), false);
+  assert.equal(pageShuts(card("graded", "done")), true);
+  assert.equal(pageShuts({ kind: "note", id: "n", quote: "q", text: "t", editing: false, replies: [], anchor: { start: 0, end: 1, quote: "q" } }), true);
 });

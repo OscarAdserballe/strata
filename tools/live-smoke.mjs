@@ -38,8 +38,8 @@ try {
   await tab.close();
   console.log("✓ a link in a live page opens in a new tab, not inside the frame");
 
-  // cards land on the page by their quotes: one inside a list item, one in a paragraph. Each lies shut on its words until
-  // they are clicked; the page draws the sheets over itself, never inside it, and no sheet covers another.
+  // cards land on the page by their quotes: one inside a list item, one in a paragraph. Each still to answer lies open
+  // under its words, and a click elsewhere on the page doesn't shut it; the sheets lie over the page, neither covering the other.
   const tree = { title: "Delegation-loss curve", question: "?", nodes: [{ label: "hops lose", kind: "claim", anchor: "#delegation-loss-curve", children: [] }] };
   await api(`/api/boards/${board.id}/resources/${r.id}/tree`, "PUT", { tree, cards: [
     { node: "n1", type: "flashcard", source: `quote: ${JSON.stringify("The first hop drops the brief's constraints.")}`, front: "What does the first hop drop?", back: "The constraints." },
@@ -50,17 +50,10 @@ try {
   await again.waitForFunction(() => CSS.highlights.get("strata-card")?.size === 2, null, { timeout: 15000 });
   await again.waitForTimeout(400);
   const sheetsNow = () => again.evaluate(() => [...document.querySelectorAll("strata-fold")].filter((h) => h.shadowRoot?.querySelector(".fi.card")).length);
-  assert.equal(await sheetsNow(), 0, "no card's sheet opens by itself");
-  // the list item's words first: the paragraph's lie above them, where the first sheet can't cover them
-  for (const quote of ["The first hop", "Each hop loses"]) {
-    await again.evaluate((q) => {
-      const r = [...CSS.highlights.get("strata-card")].find((x) => x.toString().startsWith(q)), at = r.getClientRects()[0];
-      const x = at.left + 4, y = at.top + at.height / 2;
-      document.elementFromPoint(x, y).dispatchEvent(new MouseEvent("click", { clientX: x, clientY: y, bubbles: true, composed: true, button: 0 }));
-    }, quote);
-    await again.waitForTimeout(300);
-  }
-  await again.waitForFunction(() => [...document.querySelectorAll("strata-fold")].filter((h) => h.shadowRoot?.querySelector(".fi.card")).length === 2, null, { timeout: 5000 });
+  assert.equal(await sheetsNow(), 2, "a card still to answer opens by itself");
+  await again.evaluate(() => document.body.dispatchEvent(new MouseEvent("click", { clientX: 2, clientY: 2, bubbles: true, composed: true, button: 0 })));
+  await again.waitForTimeout(300);
+  assert.equal(await sheetsNow(), 2, "a click on the page leaves a card still to answer open");
   const laid = await again.evaluate(() => {
     const hosts = [...document.querySelectorAll("strata-fold")].filter((h) => h.shadowRoot?.querySelector(".fold"));
     const rs = hosts.map((h) => h.getBoundingClientRect());
