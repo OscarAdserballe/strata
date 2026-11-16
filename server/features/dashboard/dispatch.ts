@@ -12,7 +12,7 @@ import type { Link } from "./dashboard.ts";
 const fail = (msg: string): never => { throw new DashError(msg); };
 export const HANDLE = "dispatch";
 export const PRESS_LABEL: Record<string, string> = { send: "Send", go: "Go", back: "Send back" };
-const SENDABLE = ["backlog", "todo"];
+const SENDABLE = ["todo"];
 const ON_YOU = ["decide", "review"];
 
 /** Where the next page lands, from the newest press: Send back stays, Go moves on, a sent thread starts in Decide. */
@@ -29,10 +29,10 @@ function moveTo(t: TaskRow, stage: string, at: number): void {
 
 const thread = (id: string): TaskRow => q.task.get(id) ?? fail(`No thread ${id}.`);
 
-/** Backlog or to-do → Implementing: Claude prepares the first page. */
+/** To-do → Implementing: Claude prepares the first page. */
 export function sendThread(id: string, sessionUrl: string | null): PressRow {
   const t = thread(id), stage = stageOf(t);
-  if (!SENDABLE.includes(stage)) fail(`Only a thread in the backlog or to-do is sent; this one is in ${stage}.`);
+  if (!SENDABLE.includes(stage)) fail(`Only a thread in to-do is sent; this one is in ${stage}.`);
   return press(t, "send", stage, null, sessionUrl);
 }
 
@@ -55,7 +55,7 @@ function press(t: TaskRow, kind: string, stage: string, version: number | null, 
 }
 
 /** Checked before anything awaits, so a press that can't happen never wakes the routine. */
-export function checkSend(id: string): void { const s = stageOf(thread(id)); if (!SENDABLE.includes(s)) fail(`Only a thread in the backlog or to-do is sent; this one is in ${s}.`); }
+export function checkSend(id: string): void { const s = stageOf(thread(id)); if (!SENDABLE.includes(s)) fail(`Only a thread in to-do is sent; this one is in ${s}.`); }
 export function checkPress(id: string, kind: unknown): void {
   if (kind !== "go" && kind !== "back") fail("kind is go or back.");
   const s = stageOf(thread(id));
@@ -68,7 +68,7 @@ export interface Note { id: string; on: string | null; text: string }
 export interface Thread { id: string; title: string; text: string; stage: string; page: string | null; notes: Note[] }
 
 export function board(): { id: string; title: string; stage: string }[] {
-  const order = ["implementing", "decide", "review", "todo", "thinking", "backlog"];
+  const order = ["implementing", "decide", "review", "todo", "thinking"];
   return q.tasks.all().map((t) => ({ id: t.id, title: t.title, stage: stageOf(t) }))
     .filter((t) => !ended(t.stage))
     .sort((x, y) => order.indexOf(x.stage) - order.indexOf(y.stage));

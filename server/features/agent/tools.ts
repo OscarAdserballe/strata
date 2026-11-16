@@ -65,7 +65,7 @@ const DASH_ITEM = {
     context: { type: "string", description: "A line or two on what this is and why it came up, at most 400 characters. The reader writes the rest themselves, so don't draft a plan." },
     links: { type: "array", maxItems: 20, items: DASH_LINK, description: "What it is about and already exists: the Linear issue, PR, Slack thread, Notion page." },
     from: DASH_FROM,
-    area: { type: "string", enum: ["work", "personal"], description: "Which backlog it lands in. Default: work for Slack, Linear, GitHub and meeting sources, personal otherwise." },
+    area: { type: "string", enum: ["work", "personal"], description: "Which list it lands in. Default: work for Slack, Linear, GitHub and meeting sources, personal otherwise." },
   },
 };
 
@@ -240,7 +240,7 @@ export const TOOLS: Tool[] = [
   // The dashboard is its own app that borrows this MCP server, so it gets its own tools instead of apply ops.
   {
     name: "dashboard_add_items", title: "Add to the dashboard inbox", scope: "write",
-    description: "Puts tasks in the dashboard's inbox; the reader sends each to the backlog or to-do, or drops it. A task is a title, a line or two of context, where it came from (from, with the words it came from as quote) and links to what already exists: Linear issues, GitHub PRs, Slack threads, Notion pages. The reader writes the notes themselves in Thinking, so don't draft a plan or a spec. Read dashboard_read first and don't add what is already there. All or nothing.",
+    description: "Puts tasks in the dashboard's inbox; the reader keeps each in to-do, or drops it. A task is a title, a line or two of context, where it came from (from, with the words it came from as quote) and links to what already exists: Linear issues, GitHub PRs, Slack threads, Notion pages. The reader writes the notes themselves in Thinking, so don't draft a plan or a spec. Read dashboard_read first and don't add what is already there. All or nothing.",
     inputSchema: schema({ key: KEY, items: { type: "array", minItems: 1, maxItems: 50, items: DASH_ITEM } }, ["key", "items"]),
     write: async (x) => {
       if (!Array.isArray(x.items) || !x.items.length || x.items.length > 50) fail("items is a list of 1 to 50 items.");
@@ -254,12 +254,12 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "dashboard_read", title: "Read the dashboard", scope: "read",
-    description: "Everything on the dashboard as Markdown: each thread with its notes and links, grouped by stage (Backlog, To-do with tomorrow morning's picks first, Thinking, Review), then the inbox. Pass task for one thread in full, stages to narrow, done_since to include finished and archived ones.",
+    description: "Everything on the dashboard as Markdown: each thread with its notes and links, grouped by stage (To-do, Thinking, Decide, Implementing, Review), then the inbox. Pass task for one thread in full, stages to narrow, done_since to include finished and archived ones.",
     inputSchema: schema({
       task: { type: "string", description: "A thread's id or exact title: that thread in full." },
-      stages: { type: "array", items: { type: "string", enum: [...DASH_STAGES] }, description: "Only these stages. Default: the four open ones." },
+      stages: { type: "array", items: { type: "string", enum: [...DASH_STAGES] }, description: "Only these stages. Default: every open one." },
       done_since: { type: "string", description: "A date, e.g. 2026-10-20: also show threads done or dropped since then." },
-      area: { type: "string", enum: ["work", "personal"], description: "Only that backlog's threads. Default: both." },
+      area: { type: "string", enum: ["work", "personal"], description: "Only that area's threads. Default: both." },
       cursor: CURSOR, max_tokens: MAX,
     }),
     read: (x) => renderDashboard(x, budgetOf(x.max_tokens)),
