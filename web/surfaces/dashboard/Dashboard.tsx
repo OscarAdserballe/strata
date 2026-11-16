@@ -9,6 +9,7 @@ import FocusReview from "./FocusReview.tsx";
 import Dispatch from "./Dispatch.tsx";
 import { hm } from "./parts.tsx";
 import { loadWriter } from "../../capabilities/write/Writer.tsx";
+import Pad from "../../capabilities/pad/Pad.tsx";
 
 // what waits on you carries an orange count; the rest is information
 const WAITS: View[] = ["review", "decide", "built"];
@@ -35,6 +36,7 @@ export default function Dashboard() {
           : <Dispatch view={nav.view} />}
       </main>
     </div>
+    <Pad />
     <Toast />
   </>;
 }

@@ -12,6 +12,7 @@ export interface VersionRow { task_id: string; n: number; resource_id: string; l
 export interface PressRow { id: string; task_id: string; kind: string; stage: string; version: number | null; at: number; session_url: string | null }
 export interface NoteRow { id: string; resource_id: string; quote: string; note: string; box: string | null; created_at: number }
 export interface ReplyRow { id: string; mark_id: string; author: string; text: string; created_at: number }
+export interface PadRow { text: string; rev: number; updated_at: number }
 export interface RoutineRow { url: string; token: string; ran_at: number | null; session_url: string | null; error: string | null; updated_at: number }
 
 export const dashboardRepo = {
@@ -51,6 +52,10 @@ export const dashboardRepo = {
   repliesOn: stmt<ReplyRow>("SELECT id, mark_id, author, text, created_at FROM mark_replies WHERE resource_id = ? ORDER BY created_at, id"),
   noteMark: stmt<{ id: string; board_id: string; resource_id: string; note: string | null }>("SELECT id, board_id, resource_id, note FROM marks WHERE id = ?"),
   insAgentReply: stmt("INSERT INTO mark_replies (id,board_id,mark_id,resource_id,author,text,created_at,updated_at) VALUES (?,?,?,?,'agent',?,?,?)"),
+  // The notepad: one Markdown document written whole; rev rises by one each write, for If-Match.
+  pad: stmt<PadRow>("SELECT text, rev, updated_at FROM dashboard_pad WHERE id = 1"),
+  putPad: stmt(`INSERT INTO dashboard_pad (id, text, rev, updated_at) VALUES (1, ?, 1, ?)
+    ON CONFLICT(id) DO UPDATE SET text = excluded.text, rev = dashboard_pad.rev + 1, updated_at = excluded.updated_at`),
   routine: stmt<RoutineRow>("SELECT url, token, ran_at, session_url, error, updated_at FROM dashboard_routine WHERE id = 1"),
   putRoutine: stmt(`INSERT INTO dashboard_routine (id,url,token,updated_at) VALUES (1,?,?,?)
     ON CONFLICT(id) DO UPDATE SET url=excluded.url, token=excluded.token, ran_at=NULL, session_url=NULL, error=NULL, updated_at=excluded.updated_at`),

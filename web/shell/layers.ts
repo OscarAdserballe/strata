@@ -9,6 +9,7 @@ export const LAYERS = [
   ["veil", 80],
   ["bench-lib", 85],   // the keeps opened from the library: over the library's veil
   ["saving", 88],
+  ["pad", 89],         // the notepad, over every screen; toasts still show over it
   ["toast", 90],
   ["ask-dock", 95],    // the Ask a screen laid over the room mounts (library, review, cram, keeps)
   ["capture", 100],
