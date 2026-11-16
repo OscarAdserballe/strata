@@ -10,6 +10,9 @@
 .prose code{font-family:var(--mono);font-size:.86em;background:var(--paper-3);border-radius:4px;padding:1px 4px;}
 .prose pre{margin:0 0 15px;padding:12px 14px;background:var(--paper-2);border:1px solid var(--line-soft);border-radius:8px;overflow-x:auto;tab-size:2;}
 .prose pre code{display:block;background:none;padding:0;border-radius:0;font-size:13px;line-height:1.55;white-space:pre;}
+.prose pre[data-drawn="yes"]{display:none;}
+.prose figure.diagram{margin:0 0 15px;overflow-x:auto;text-align:center;}
+.prose figure.diagram svg{max-width:100%;height:auto;}
 .prose .empty{font-style:italic;color:var(--ink-faint);}
 .prose a{color:var(--accent-deep);text-decoration:underline;text-decoration-color:var(--accent-line);text-underline-offset:2px;}
 .prose a:hover{text-decoration-color:var(--accent-deep);}
