@@ -8,6 +8,7 @@ import Thinking from "./Thinking.tsx";
 import FocusReview from "./FocusReview.tsx";
 import Dispatch from "./Dispatch.tsx";
 import { hm } from "./parts.tsx";
+import { loadWriter } from "../../capabilities/write/Writer.tsx";
 
 // No arrows between the tabs: Claude picks where a thread goes next, so they are places, not steps.
 // what waits on you carries an orange count; the rest is information
@@ -19,6 +20,10 @@ const RAIL: Record<Mode, [View, string][]> = {
 
 export default function Dashboard() {
   const nav = useNav();
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 300));
+    idle(() => { loadWriter().catch(() => {}); });
+  }, []);
   return <>
     <Sky />
     <Poller />
