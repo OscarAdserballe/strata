@@ -201,6 +201,27 @@ test("a thread's notes are kept as typed: a save mid-sentence keeps its trailing
   assert.equal((await send("/api/dashboard/tasks/t_0123456789abcdef", "PATCH", { body: 7 }, "dash-text-00002")).status, 400);
 });
 
+test("the notepad is one document: a write on an older rev is a 409 carrying the current text, and nothing is written", async () => {
+  const put = (text: unknown, rev: number | null, key: string) => server.api("/api/dashboard/pad", {
+    method: "PUT", body: JSON.stringify({ text }), headers: { "Content-Type": "application/json", "Idempotency-Key": key, ...(rev === null ? {} : { "If-Match": `"${rev}"` }) },
+  });
+  assert.deepEqual((await server.api("/api/dashboard/pad")).body, { text: "", rev: 0 });
+  const first = await put("- the chat drag sticks at the top\n", 0, "pad-write-000001");
+  assert.deepEqual([first.status, first.body], [200, { text: "- the chat drag sticks at the top\n", rev: 1 }]);
+  assert.deepEqual((await put("- the chat drag sticks at the top\n", 0, "pad-write-000001")).body, first.body, "a resent key replays the answer");
+
+  const other = await put("- the chat drag sticks at the top\n- a second tab's line\n", 1, "pad-write-000002");
+  assert.equal(other.body.rev, 2);
+  const stale = await put("- the chat drag sticks at the top\n- this tab's line\n", 1, "pad-write-000003");
+  assert.equal(stale.status, 409);
+  assert.deepEqual(stale.body.conflict, { rev: 2, value: { text: "- the chat drag sticks at the top\n- a second tab's line\n", rev: 2 } });
+  assert.equal((await server.api("/api/dashboard/pad")).body.text, "- the chat drag sticks at the top\n- a second tab's line\n");
+
+  assert.equal((await put(42, 2, "pad-write-000004")).status, 400, "text is text");
+  assert.equal((await put("x".repeat(200001), 2, "pad-write-000005")).status, 400, "too long is refused, never cut");
+  assert.equal((await server.api("/api/dashboard/pad")).body.rev, 2);
+});
+
 test("dashboard_read lists what you dropped or finished in the last 7 days, by source, so the routine doesn't add it again", async () => {
   const added = await call("dashboard_add_items", { key: "handled-run-000001", items: [{ title: "Reply to Mara on bed sizes", from: FROM, links: [{ kind: "slack", ref: "#north-beds", url: "https://example.slack.com/archives/C9/p9" }] }] });
   assert.equal(added.isError, false, added.text);
