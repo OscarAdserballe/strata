@@ -12,14 +12,18 @@ import type { Link } from "./dashboard.ts";
 const fail = (msg: string): never => { throw new DashError(msg); };
 export const HANDLE = "dispatch";
 export const PRESS_LABEL: Record<string, string> = { send: "Send", go: "Go", back: "Send back" };
+/** What a press reads as, to the agent and in the wake: Send on a Finish page reopens it. */
+export const pressLabel = (kind: string, stage: string): string => (kind === "send" && stage === "finish" ? "Reopen" : PRESS_LABEL[kind] ?? kind);
 const SENDABLE = ["todo"];
-const ON_YOU = ["decide", "review"];
+const ON_YOU = ["decide", "review", "finish"];
+export const LANDS = ["decide", "review", "finish"] as const;
+export type Lands = (typeof LANDS)[number];
 
-/** Where the next page lands, from the newest press: Send back stays, Go moves on, a sent thread starts in Decide. */
-export function landsIn(p: Pick<PressRow, "kind" | "stage"> | undefined): "decide" | "review" | "done" {
-  if (!p || p.kind === "send") return "decide";
-  if (p.kind === "back") return p.stage === "review" ? "review" : "decide";
-  return p.stage === "review" ? "done" : "review";
+/** Where the next page lands when the post names nowhere: back where it was pressed; a reopened or new thread in Decide. Go is an older client's. */
+export function landsIn(p: Pick<PressRow, "kind" | "stage"> | undefined): Lands {
+  if (!p) return "decide";
+  if (p.kind === "go") return p.stage === "review" ? "finish" : "review";
+  return p.stage === "review" ? "review" : "decide";
 }
 
 const ended = (stage: string): boolean => stage === "done" || stage === "dropped";
@@ -36,11 +40,9 @@ export function sendThread(id: string, sessionUrl: string | null): PressRow {
   return press(t, "send", stage, null, sessionUrl);
 }
 
-/** Go or Send back on the page in Decide or Review: stored as the thread's newest note, and it goes to Claude. */
+/** Send on the page in Decide, Review or Finish: stored as the thread's newest note, and it goes to Claude, who reads the notes and picks what comes next. */
 export function pressThread(id: string, kind: unknown, sessionUrl: string | null): PressRow {
-  if (kind !== "go" && kind !== "back") fail("kind is go or back.");
-  const t = thread(id), stage = stageOf(t);
-  if (!ON_YOU.includes(stage)) fail(`Go and Send back are for a thread in Decide or Review; this one is in ${stage}.`);
+  const t = thread(id), stage = checkPress(id, kind);
   const v = q.lastN.get(id)!.n;
   if (!v) fail("This thread has no page yet.");
   return press(t, kind as string, stage, v, sessionUrl);
@@ -56,10 +58,12 @@ function press(t: TaskRow, kind: string, stage: string, version: number | null, 
 
 /** Checked before anything awaits, so a press that can't happen never wakes the routine. */
 export function checkSend(id: string): void { const s = stageOf(thread(id)); if (!SENDABLE.includes(s)) fail(`Only a thread in to-do is sent; this one is in ${s}.`); }
-export function checkPress(id: string, kind: unknown): void {
-  if (kind !== "go" && kind !== "back") fail("kind is go or back.");
+export function checkPress(id: string, kind: unknown): string {
+  if (kind !== "send" && kind !== "go" && kind !== "back") fail("kind is send.");
   const s = stageOf(thread(id));
-  if (!ON_YOU.includes(s)) fail(`Go and Send back are for a thread in Decide or Review; this one is in ${s}.`);
+  if (!ON_YOU.includes(s)) fail(`Send is for a thread in Decide, Review or Finish; this one is in ${s}.`);
+  if (kind !== "send" && s === "finish") fail("A thread in Finish is reopened with send.");
+  return s;
 }
 
 // ---------- the agent's three calls ----------
@@ -81,7 +85,7 @@ const noteId = (markId: string): string => `hl_${markId}`;
 function notesOf(v: VersionRow | undefined, presses: PressRow[]): Note[] {
   if (!v) return [];
   const words = q.notesOn.all(v.resource_id).map((m) => ({ at: m.created_at, note: { id: noteId(m.id), on: m.quote, text: m.note } }));
-  const pressed = presses.filter((p) => p.version === v.n && p.kind !== "send").map((p) => ({ at: p.at, note: { id: p.id, on: null, text: PRESS_LABEL[p.kind] } }));
+  const pressed = presses.filter((p) => p.version === v.n).map((p) => ({ at: p.at, note: { id: p.id, on: null, text: pressLabel(p.kind, p.stage) } }));
   return [...words, ...pressed].sort((x, y) => x.at - y.at).map((x) => x.note);
 }
 
@@ -91,15 +95,17 @@ export function open(id: string): Thread {
   return { id: t.id, title: t.title, text: t.body, stage: stageOf(t), page: last ? (bytesOf(last.resource_id)?.toString("utf-8") ?? null) : null, notes: notesOf(last, q.pressesOf.all(id)) };
 }
 
-export interface Post { page?: string; replies: [string, string][] }
+
 
 /** Checks a post's shape and does the awaiting a page needs; the returned function writes, inside the commit. */
-export async function preparePost(id: string, raw: { page?: unknown; replies?: unknown }): Promise<() => string> {
+export async function preparePost(id: string, raw: { page?: unknown; replies?: unknown; lands?: unknown }): Promise<() => string> {
   const t = q.task.get(id) ?? fail(`No thread ${id}. dashboard_board lists them.`);
   if (raw.page === undefined && raw.replies === undefined) fail("Post a page, replies, or both.");
   const page = raw.page === undefined ? undefined : typeof raw.page === "string" && raw.page.trim() ? raw.page : fail("page is the HTML of the next version.");
   if (page !== undefined && Buffer.byteLength(page) > MAX_UPLOAD_BYTES) fail("page is too big.");
   if (page !== undefined && stageOf(t) !== "implementing") fail(`This thread is in ${stageOf(t)}, with the reader. Post a page only while it is implementing; replies can go any time.`);
+  if (raw.lands !== undefined && raw.page === undefined) fail("lands goes with a page.");
+  if (raw.lands !== undefined && !(LANDS as readonly unknown[]).includes(raw.lands)) fail(`lands is one of ${LANDS.join(", ")}.`);
   const replies = checkReplies(id, raw.replies);
   let prepared: PreparedSource | null = null;
   if (page !== undefined) {
@@ -119,12 +125,12 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
     if (prepared) {
       const cur = q.task.get(id)!;
       if (stageOf(cur) !== "implementing") fail(`This thread moved to ${stageOf(cur)} while the page was being prepared.`);
-      const lands = landsIn(q.lastPress.get(id));
+      const lands = (raw.lands as Lands | undefined) ?? landsIn(q.lastPress.get(id));
       const n = q.lastN.get(id)!.n + 1;
       const rid = writeSource(dispatchBoard(), prepared);
       q.insVersion.run(id, n, rid, lands, at);
       moveTo(cur, lands, at);
-      said.push(`v${n} posted; the thread is in ${lands === "done" ? "Done" : lands === "decide" ? "Decide" : "Review"}`);
+      said.push(`v${n} posted; the thread is in ${lands === "finish" ? "Finish" : lands === "decide" ? "Decide" : "Review"}`);
     }
     return said.join("; ") + ".";
   };
@@ -167,7 +173,7 @@ export interface VersionView { n: number; resourceId: string; at: number; landed
 export interface PressView { kind: string; stage: string; version: number | null; at: number; sessionUrl: string | null }
 export interface DispatchThread { id: string; title: string; stage: string; links: Link[]; updatedAt: number; versions: VersionView[]; press: PressView | null; lands: string | null }
 
-/** What the left pane shows: threads in Decide, Implementing and Review (those Dispatch sent), and the inbox count. */
+/** What the left pane shows: threads in Decide, Implementing, Review (those Dispatch sent) and Finish, and the inbox count. */
 export function pane(inbox: number): { rev: number; board: string | null; inbox: number; threads: DispatchThread[] } {
   const counts = new Map(q.noteCounts.all().map((r) => [r.resource_id, r.n]));
   const vs = new Map<string, VersionView[]>();
@@ -180,7 +186,7 @@ export function pane(inbox: number): { rev: number; board: string | null; inbox:
   for (const p of q.presses.all()) last.set(p.task_id, p);
   const threads = q.tasks.all().flatMap((t): DispatchThread[] => {
     const stage = stageOf(t), p = last.get(t.id);
-    if (stage !== "decide" && stage !== "implementing" && !(stage === "review" && p)) return [];
+    if (stage !== "decide" && stage !== "implementing" && stage !== "finish" && !(stage === "review" && p)) return [];
     return [{ id: t.id, title: t.title, stage, links: JSON.parse(t.links || "[]") as Link[], updatedAt: t.updated_at, versions: vs.get(t.id) ?? [],
       press: p ? { kind: p.kind, stage: p.stage, version: p.version, at: p.at, sessionUrl: p.session_url } : null,
       lands: stage === "implementing" ? landsIn(p) : null }];

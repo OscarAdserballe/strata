@@ -9,7 +9,7 @@ const thread = (id: string, stage: string): DispatchThread => ({ id, title: id, 
 const PANE: DispatchPane = { rev: 10, board: "b-1", inbox: 0, threads: [thread("t_d", "decide"), thread("t_r", "review")] };
 
 test("a press moves the card to Implementing at once, landing where the server will put the next page", () => {
-  const land = (id: string, kind: "go" | "back") => {
+  const land = (id: string, kind: "send" | "go" | "back") => {
     const s = new Store();
     s.apply(DISPATCH_KEY, 1, PANE, "wire", { epoch: "e", stamp: 1 });
     const op = dispatchOps.press(id, kind, () => 5, s);
@@ -20,7 +20,9 @@ test("a press moves the card to Implementing at once, landing where the server w
   assert.deepEqual(land("t_d", "back"), ["implementing", "decide", "back", "decide"]);
   assert.deepEqual(land("t_d", "go"), ["implementing", "review", "go", "decide"]);
   assert.deepEqual(land("t_r", "back"), ["implementing", "review", "back", "review"]);
-  assert.deepEqual(land("t_r", "go"), ["implementing", "done", "go", "review"]);
+  assert.deepEqual(land("t_r", "go"), ["implementing", "finish", "go", "review"]);
+  assert.deepEqual(land("t_d", "send"), ["implementing", "decide", "send", "decide"]);
+  assert.deepEqual(land("t_r", "send"), ["implementing", "review", "send", "review"]);
 });
 
 test("the press's answer carries the pane, since a dashboard write leaves the room's revision where it was", async () => {

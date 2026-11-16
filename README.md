@@ -42,6 +42,10 @@ recreates the container, waits up to four minutes for it to be healthy, and roll
 isn't. `GET /api/health` reports the running `build`. Its logic is `ops/update.sh`, which ships inside the image, so
 it updates along with Strata. The data lives in the Docker volume `strata-rooms`; no update touches it.
 
+An admin sees a dot in the top bar: green when the room runs the head of `main` and the updater is checking in,
+orange when it has fallen behind or the updater has gone quiet, red when an update was rolled back or a backup
+failed. The `···` menu says which.
+
 `ops/restore.sh ROOM BACKUP.db`, run from the same directory, seeds an empty room from a backup.
 
 ## How it's built

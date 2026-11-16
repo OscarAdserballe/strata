@@ -151,3 +151,33 @@ test("plainQuote strips markdown but keeps the words; slugOf survives punctuatio
   assert.equal(plainQuote("**bold** and [link](https://x.y) and `code`"), "bold and link and code");
   assert.equal(slugOf("The Early — Impact, of the *prototype*!"), "the-early-impact-of-the-prototype");
 });
+
+test("a source can render its ``` fences, and a mermaid fence is marked for drawing", () => {
+  const code = mdRender("intro\n\n```js\nconst x = 1;\nconst y = 2;\n```\n\nafter", false, { fences: true });
+  assert.match(code.html, /<pre data-b="1" data-lang="js"><code>const x = 1;\nconst y = 2;<\/code><\/pre>/);
+  assert.match(code.html, /<p data-b="2">after<\/p>/);
+  const chart = mdToHtml("```mermaid\ngraph TD; A-->B\n```", false, { fences: true });
+  assert.match(chart, /<pre data-b="0" data-lang="mermaid"><code>graph TD; A--&gt;B<\/code><\/pre>/);
+});
+
+test("an image title is not part of its URL", () => {
+  const h = mdToHtml('![a chart](https://e.com/x.png "The chart")', false);
+  assert.match(h, /src="https:\/\/e\.com\/x\.png"/);
+  assert.match(h, /title="The chart"/);
+  assert.match(mdToHtml("[home](https://e.com 'Home page')", false), /<a href="https:\/\/e\.com" title="Home page"/);
+});
+
+test("relative links and images resolve against the capture's URL; a bare #fragment stays text", () => {
+  const base = "https://blog.example/p/one";
+  assert.match(mdToHtml("[next](/p/next)", false, { base }), /<a href="https:\/\/blog\.example\/p\/next" target="_blank"/);
+  assert.match(mdToHtml("![](img/x.png)", false, { base }), /src="https:\/\/blog\.example\/p\/img\/x\.png"/);
+  assert.doesNotMatch(mdToHtml("[1](#fn1)", false, { base }), /<a /);
+  assert.doesNotMatch(mdToHtml("[next](/p/next)", false), /<a /);
+  assert.doesNotMatch(mdToHtml("[x](javascript:alert(1))", false, { base }), /<a /);
+});
+
+test("a lazy-load data: placeholder draws nothing instead of a figure stub", () => {
+  const { html, maps } = mdRender("![](data:image/gif;base64,R0lGODlhAQABAAAAACw=)", false);
+  assert.doesNotMatch(html, /figure|<img/);
+  assert.equal(maps.length, 0);
+});

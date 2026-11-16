@@ -11,11 +11,12 @@ import { hm } from "./parts.tsx";
 import { loadWriter } from "../../capabilities/write/Writer.tsx";
 import Pad from "../../capabilities/pad/Pad.tsx";
 
+// No arrows between the tabs: Claude picks where a thread goes next, so they are places, not steps.
 // what waits on you carries an orange count; the rest is information
-const WAITS: View[] = ["review", "decide", "built"];
+const WAITS: View[] = ["review", "decide", "built", "finish"];
 const RAIL: Record<Mode, [View, string][]> = {
   focus: [["thinking", "Thinking"], ["review", "Review"]],
-  dispatch: [["decide", "Decide"], ["implementing", "Implementing"], ["built", "Review"]],
+  dispatch: [["decide", "Decide"], ["implementing", "With Claude"], ["built", "Review"], ["finish", "Finish"]],
 };
 
 export default function Dashboard() {
@@ -73,8 +74,7 @@ function Header() {
       <div className="dh-main">
       <span />
       <nav className="dh-rail" aria-label="Stages">
-        {rail.map(([v, name], i) => <span key={v} className="dh-step">
-          {i ? <b aria-hidden="true">›</b> : null}
+        {rail.map(([v, name]) => <span key={v} className="dh-step">
           <button aria-current={nav.view === v ? "page" : undefined} onClick={() => go({ view: v })}>{name} <i className={WAITS.includes(v) ? "wait" : undefined}>{count(v)}</i></button>
         </span>)}
       </nav>

@@ -27,3 +27,5 @@
 .cap .err{font:500 10px/1.45 var(--mono);color:oklch(0.55 0.15 30);}
 .cap .row{display:flex;align-items:center;gap:10px;}
 .cap .row .grow{flex:1;}
+.kindle-help-b { min-width: 22px; }
+.kindle-steps { margin: 0; padding-left: 20px; }

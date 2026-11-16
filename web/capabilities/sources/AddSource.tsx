@@ -1,6 +1,7 @@
 import React, { useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { addImports } from "./imports.ts";
+import KindleHelp from "./KindleHelp.tsx";
 import { StrataAPI, StrataWhy } from "../../data/api.ts";
 import { store } from "../../data/store.ts";
 import { BOARDS, REGISTER, sources } from "../../data/entities/sources.ts";
@@ -128,6 +129,7 @@ export function AddSourceForm({ board = UNFILED }: { board?: Target }) {
       <button type="button" className="home-quiet" onClick={() => addSource.file(board, study)}>+ Add file</button>
       <button type="button" className="home-quiet" aria-pressed={study} title="Make flashcards from the file as it arrives; you can always make them later"
         onClick={() => setStudy((v) => !v)}>flashcards: {study ? "on" : "off"}</button>
+      <KindleHelp />
     </form>
     {err ? <div className="rg-err" role="alert">{err}</div> : null}
   </>;

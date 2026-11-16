@@ -1783,52 +1783,62 @@ const dashboardAdd = {
 
 const dispatchPress = {
   name: "dispatch-press",
-  what: "in Dispatch you press Send back on one thread's page and Go on another's, on a lossy wire with the first press's answer lost; each press is stored once and both threads wait in Implementing",
+  what: "in Dispatch you press Send on one thread's page in Decide and Reopen then Send on another's in Finish, on a lossy wire with the first press's answer lost; each press is stored once, and Claude's next page lands once, where its post says",
   checks: {
     once: "each press is on the server exactly once",
-    moved: "both threads are in implementing on the server",
-    shown: "the pane no longer lists either thread under Decide",
+    moved: "both threads were with Claude once pressed",
+    shown: "the pane no longer lists either thread where it was pressed",
+    landed: "the next post lands each thread once, in the stage its lands names",
   },
   async run(t) {
     const tag = `${t.seed}-${Date.now().toString(36)}`;
     const { token } = await t.api("/api/agent/tokens", "POST", { name: `race dispatch ${t.seed}`, write: true });
     let n = 0;
-    const post = async (id, html) => {
+    const post = async (id, html, lands) => {
       const r = await fetch(`${t.base}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "tools/call", params: { name: "dashboard_post", arguments: { key: `race-post-${tag}-${n}`, id, page: html } } }) });
+        body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "tools/call", params: { name: "dashboard_post", arguments: { key: `race-post-${tag}-${n}`, id, page: html, ...(lands ? { lands } : {}) } } }) });
       const body = await r.json();
       if (!body.result || body.result.isError) throw new Error(`dashboard_post: ${JSON.stringify(body).slice(0, 200)}`);
     };
     const ids = [0, 1].map((i) => `t_dsp${i}${t.seed}${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_]/g, ""));
-    const titles = [`Race back ${tag}`, `Race go ${tag}`];
+    const titles = [`Race send ${tag}`, `Race reopen ${tag}`];
+    const first = ["decide", "finish"], next = ["review", "decide"];
     for (const [i, id] of ids.entries()) {
       await t.api("/api/dashboard/tasks", "POST", { id, title: titles[i], body: "Under loss.", area: "work" });
       await t.api(`/api/dashboard/tasks/${id}/send`, "POST", {});
-      await post(id, `<!doctype html><html><body><h1>${titles[i]}</h1><p>A page to decide on.</p></body></html>`);
+      await post(id, `<!doctype html><html><body><h1>${titles[i]}</h1><p>A page to answer.</p></body></html>`, first[i]);
     }
     const presses = (e) => e.write && /\/api\/dashboard\/tasks\/[^/]+\/press$/.test(e.path);
     const page = await t.open({ latency: true, lostAck: { match: presses, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
-    await page.goto(`${t.base}/dispatch`);
-    for (const [i, button] of [[0, "Send back"], [1, "Go →"]]) {
-      const card = page.locator(".ws-card", { hasText: titles[i] });
+    const pressOn = async (view, title, reopen) => {
+      await page.goto(`${t.base}/dispatch?view=${view}`);
+      const card = page.locator(".ws-card", { hasText: title });
       await card.first().waitFor();
       if (!(await card.first().evaluate((el) => el.classList.contains("open")))) await card.first().click();
-      await page.locator(".ws-card.open", { hasText: titles[i] }).getByRole("button", { name: button, exact: true }).click();
-    }
+      const open = page.locator(".ws-card.open", { hasText: title });
+      if (reopen) await open.getByRole("button", { name: "Reopen", exact: true }).click();
+      await open.getByRole("button", { name: "Send", exact: true }).click();
+      await page.evaluate(() => window.__strataSettled?.());
+      return (await page.locator(".ws-list").textContent()) ?? "";
+    };
+    const listed = [await pressOn("decide", titles[0], false), await pressOn("finish", titles[1], true)];
+    const pressed = (id) => t.sql("SELECT kind, stage FROM dashboard_presses WHERE task_id = ? AND version IS NOT NULL", id);
     const until = performance.now() + GRACE_MS * 2;
     let rows = [];
     for (;;) {
-      rows = ids.map((id) => t.sql("SELECT kind FROM dashboard_presses WHERE task_id = ? AND kind != 'send'", id));
+      rows = ids.map(pressed);
       if (rows.every((r) => r.length >= 1) || performance.now() > until) break;
       await sleep(250);
     }
     await t.net.idle(500);
-    rows = ids.map((id) => t.sql("SELECT kind FROM dashboard_presses WHERE task_id = ? AND kind != 'send'", id));
+    rows = ids.map(pressed);
     const stages = ids.map((id) => t.sql("SELECT stage FROM dashboard_tasks WHERE id = ?", id)[0]?.stage);
-    t.check("once", rows[0].length === 1 && rows[0][0].kind === "back" && rows[1].length === 1 && rows[1][0].kind === "go", rows.map((r, i) => `${titles[i]}: ${r.map((x) => x.kind).join(",") || "none"}`).join("; "));
+    t.check("once", rows.every((r, i) => r.length === 1 && r[0].kind === "send" && r[0].stage === first[i]), rows.map((r, i) => `${titles[i]}: ${r.map((x) => `${x.kind}@${x.stage}`).join(",") || "none"}`).join("; "));
     t.check("moved", stages.every((s) => s === "implementing"), stages.join(", "));
-    const listed = await page.locator(".ws-list").textContent();
-    t.check("shown", !titles.some((x) => listed.includes(x)), `the Decide list reads ${JSON.stringify(listed.slice(0, 160))}`);
+    t.check("shown", listed.every((l, i) => !l.includes(titles[i])), listed.map((l) => JSON.stringify(l.slice(0, 120))).join(" · "));
+    for (const [i, id] of ids.entries()) await post(id, `<!doctype html><html><body><h1>${titles[i]} v2</h1></body></html>`, next[i]);
+    const after = ids.map((id) => ({ stage: t.sql("SELECT stage FROM dashboard_tasks WHERE id = ?", id)[0]?.stage, landed: t.sql("SELECT landed FROM dashboard_versions WHERE task_id = ? ORDER BY n", id).map((r) => r.landed) }));
+    t.check("landed", after.every((a, i) => a.stage === next[i] && a.landed.length === 2 && a.landed[1] === next[i]), after.map((a) => `${a.stage} [${a.landed.join(",")}]`).join("; "));
   },
 };
 

@@ -254,7 +254,7 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "dashboard_read", title: "Read the dashboard", scope: "read",
-    description: "Everything on the dashboard as Markdown: each thread with its notes and links, grouped by stage (To-do, Thinking, Decide, Implementing, Review), then the inbox. Pass task for one thread in full, stages to narrow, done_since to include finished and archived ones.",
+    description: "Everything on the dashboard as Markdown: each thread with its notes and links, grouped by stage (To-do, Thinking, Decide, Implementing, Review, Finish), then the inbox. Pass task for one thread in full, stages to narrow, done_since to include finished and archived ones.",
     inputSchema: schema({
       task: { type: "string", description: "A thread's id or exact title: that thread in full." },
       stages: { type: "array", items: { type: "string", enum: [...DASH_STAGES] }, description: "Only these stages. Default: every open one." },
@@ -273,21 +273,22 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "dashboard_open", title: "Dispatch: one thread", scope: "read",
-    description: "One thread in full as JSON { id, title, text, stage, page, notes: [{ id, on, text }] }: page is the newest version's HTML (null before the first), notes are the reader's on that version, oldest first, on naming the words each is on. A note on nothing is a press: Go or Send back, and the newest one says what to do. No page: write one. Send back: revise the page. Go: build it, or merge if the page is already the built one.",
+    description: "One thread in full as JSON { id, title, text, stage, page, notes: [{ id, on, text }] }: page is the newest version's HTML (null before the first), notes are the reader's on that version, oldest first, on naming the words each is on. A note on nothing is a press (Send, or Reopen on a Finish page); the notes before it say what the reader wants, and you decide what comes next. No page: write one.",
     inputSchema: schema({ id: { type: "string", description: "The thread's id, from dashboard_board." } }, ["id"]),
     read: (x) => JSON.stringify(dash(() => openThread(String(x.id ?? ""))), null, 1),
   },
   {
     name: "dashboard_post", title: "Dispatch: say something back", scope: "write",
-    description: "page: the next version, a whole self-contained HTML page; posting it hands the thread back to the reader, and Strata decides where it lands from their last press. replies: { noteId: \"text\" }, said under each of the reader's notes; they can go any time. A page is only taken while the thread is implementing.",
+    description: "page: the next version, a whole self-contained HTML page; posting it hands the thread back to the reader. lands: where it goes, your call from the notes: decide (a proposal to answer), review (the whole thing built, ready to merge) or finish (merged, or not doing it, or filed elsewhere; the page says what to check). Without lands it goes back where it was pressed. replies: { noteId: \"text\" }, said under each of the reader's notes; they can go any time. A page is only taken while the thread is implementing.",
     inputSchema: schema({
       key: KEY, id: { type: "string", description: "The thread's id." },
       page: { type: "string", description: "The next version's HTML." },
+      lands: { type: "string", enum: ["decide", "review", "finish"], description: "Where the page goes. Default: where the reader pressed Send." },
       replies: { type: "object", additionalProperties: { type: "string" }, description: "{ noteId: \"text\" }, ids from dashboard_open's notes." },
     }, ["key", "id"]),
     write: (x) => dashAsync(async () => {
-      const run = await preparePost(String(x.id ?? ""), { page: x.page, replies: x.replies });
-      return () => { const said = dash(run); logEvent(db, APP, "dispatch_post", { page: x.page !== undefined, replies: x.replies ? Object.keys(x.replies as object).length : 0 }, null); return said; };
+      const run = await preparePost(String(x.id ?? ""), { page: x.page, replies: x.replies, lands: x.lands });
+      return () => { const said = dash(run); logEvent(db, APP, "dispatch_post", { page: x.page !== undefined, lands: x.lands ?? null, replies: x.replies ? Object.keys(x.replies as object).length : 0 }, null); return said; };
     }),
   },
 ];

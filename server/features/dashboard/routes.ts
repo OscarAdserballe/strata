@@ -3,7 +3,7 @@ import { route, type Route } from "../../platform/router/router.ts";
 import { addItems, archive, checkItem, createTask, dropItem, editItem, keepItem, padOf, patchTask, snapshot, taskView, writePad } from "./dashboard.ts";
 import { dashboardRepo as q } from "./repo.ts";
 import { fireRoutine, recordRun, routineView, setRoutine, wake } from "./routine.ts";
-import { checkPress, checkSend, pane, pressThread, sendThread } from "./dispatch.ts";
+import { checkPress, checkSend, pane, pressLabel, pressThread, sendThread } from "./dispatch.ts";
 
 const ID = "([A-Za-z0-9_]{3,60})";
 // Every write answers with the board and the Dispatch pane as they now are: a dashboard write leaves the room's revision
@@ -74,8 +74,8 @@ export const dashboardRoutes: Route[] = [
 
   route("POST", new RegExp(`^/api/dashboard/tasks/${ID}/press$`), async ({ params, body, commit }) => {
     const b = await body();
-    checkPress(params[0], b.kind);
-    const w = await wake(`${b.kind === "go" ? "Go" : "Send back"}: ${q.task.get(params[0])?.title ?? params[0]}`);
+    const stage = checkPress(params[0], b.kind);
+    const w = await wake(`${pressLabel(String(b.kind), stage)}: ${q.task.get(params[0])?.title ?? params[0]}`);
     commit(() => {
       if (w.ran) recordRun(w.ran);
       return { status: 200, body: { press: pressThread(params[0], b.kind, w.sessionUrl), ...state() } };

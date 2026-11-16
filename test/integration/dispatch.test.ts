@@ -104,25 +104,50 @@ test("Send back keeps v1 with its notes, and the next page is v2 in Decide; repl
   assert.match((await post(t.id, { replies: { hl_mk_nope: "x" } })).text, /not one of the reader's notes on this thread/);
 });
 
-test("Go in Decide lands in Review; Send back in Review stays in Review as the next version; Go in Review is Done", async () => {
+test("an older client's Go still lands as before, with Done now Finish", async () => {
   const t = (await pane()).threads.find((x) => x.title.startsWith("Some process"));
   assert.equal((await send(`/api/dashboard/tasks/${t.id}/press`, "POST", { kind: "maybe" })).status, 400);
   assert.equal((await send(`/api/dashboard/tasks/${t.id}/press`, "POST", { kind: "go" })).status, 200);
   assert.equal((await thread(t.id)).lands, "review");
   assert.match((await post(t.id, { page: page("Built as you picked in v2", "Red on main, green on the PR.") })).text, /v3 posted; the thread is in Review\./);
-  assert.deepEqual((await thread(t.id)).versions.map((v: any) => v.landed), ["decide", "decide", "review"]);
-
-  assert.equal((await send(`/api/dashboard/tasks/${t.id}/press`, "POST", { kind: "back" })).status, 200);
-  assert.equal((await thread(t.id)).lands, "review");
-  assert.match((await post(t.id, { page: page("v4", "Rebuilt.") })).text, /v4 posted; the thread is in Review\./);
-
   assert.equal((await send(`/api/dashboard/tasks/${t.id}/press`, "POST", { kind: "go" })).status, 200);
-  assert.equal((await thread(t.id)).lands, "done");
-  assert.match((await post(t.id, { page: page("Merged", "PR merged.") })).text, /v5 posted; the thread is in Done\./);
-  assert.equal(await thread(t.id), undefined, "a done thread leaves the pane");
-  const focus = (await server.api("/api/dashboard")).body.tasks.find((x: any) => x.id === t.id);
-  assert.equal(focus, undefined, "and is cleared off Focus's board into the archive");
-  assert.equal((await open(t.id)).stage, "done");
+  assert.equal((await thread(t.id)).lands, "finish");
+  assert.match((await post(t.id, { page: page("Merged", "PR merged.") })).text, /v4 posted; the thread is in Finish\./);
+});
+
+test("Send leaves where it lands to Claude: the post's lands puts it in Decide, Review or Finish, and Archive clears it", async () => {
+  const id = await newThread("Fewer buttons in flow");
+  await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  assert.match((await post(id, { page: page("v1", "Two buttons."), lands: "nowhere" })).text, /lands is one of decide, review, finish/);
+  assert.match((await post(id, { replies: {}, lands: "review" })).text, /lands goes with a page/);
+  assert.match((await post(id, { page: page("v1", "Two buttons.") })).text, /v1 posted; the thread is in Decide\./, "no lands: a new thread's first page is a proposal");
+
+  const sent = await send(`/api/dashboard/tasks/${id}/press`, "POST", { kind: "send" });
+  assert.equal(sent.status, 200, JSON.stringify(sent.body));
+  assert.deepEqual((await open(id)).notes.at(-1), { id: sent.body.press.id, on: null, text: "Send" }, "the press is a note on nothing");
+  assert.match((await post(id, { page: page("Built", "Whole stack."), lands: "review" })).text, /v2 posted; the thread is in Review\./);
+
+  await send(`/api/dashboard/tasks/${id}/press`, "POST", { kind: "send" });
+  assert.equal((await thread(id)).lands, "review", "without lands it goes back where it was pressed");
+  assert.match((await post(id, { page: page("Merged", "Open a board: Finish lists it."), lands: "finish" })).text, /v3 posted; the thread is in Finish\./);
+  const t = await thread(id);
+  assert.deepEqual([t.stage, t.versions.map((v: any) => v.landed)], ["finish", ["decide", "review", "finish"]]);
+  assert.equal((await send(`/api/dashboard/tasks/${id}/press`, "POST", { kind: "go" })).status, 400, "Finish has no Go");
+
+  const reopened = await send(`/api/dashboard/tasks/${id}/press`, "POST", { kind: "send" });
+  assert.equal(reopened.status, 200, JSON.stringify(reopened.body));
+  assert.equal((await open(id)).notes.at(-1).text, "Reopen");
+  assert.equal((await thread(id)).lands, "decide", "a reopened thread comes back as a proposal unless Claude says otherwise");
+  await post(id, { page: page("Not doing it", "Filed as TRY-1."), lands: "finish" });
+
+  assert.equal((await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "finish" })).status, 200, "staying in Finish is not a move");
+  const other = await newThread("Not in Finish yet");
+  assert.equal((await send(`/api/dashboard/tasks/${other}`, "PATCH", { stage: "finish" })).status, 400, "Finish is reached through a post, not by hand");
+  const archived = await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "done", cleared: true });
+  assert.equal(archived.status, 200, JSON.stringify(archived.body));
+  assert.equal(await thread(id), undefined, "an archived thread leaves the pane");
+  const fold = (await server.api("/api/dashboard/archive")).body.tasks.find((x: any) => x.id === id);
+  assert.deepEqual([fold.stage, fold.dispatched], ["done", true], "and is listed under Archived");
 });
 
 test("a press needs a page on you, and a resent post writes one version", async () => {
