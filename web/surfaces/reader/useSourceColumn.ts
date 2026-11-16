@@ -9,6 +9,7 @@ import type { HtmlEngine } from "../../engines/html/HtmlEngine.ts";
 import { liveEngine, liveUrlOf, noteFolds, paintLiveMarks, type LiveAt } from "../../capabilities/live/live.ts";
 import { drawnAs } from "../../engines/html/drawn.ts";
 import { mdRender } from "../../engines/prose/render.ts";
+import { drawDiagrams } from "../../engines/prose/diagrams.ts";
 import { paintProseMarks, reconcileProseMarks } from "../../engines/prose/paint.ts";
 import { claimsIn } from "../../engines/tree/claims.ts";
 import { litClaims as litBands, paintClaims as paintBands } from "../../engines/tree/claimBands.ts";
@@ -318,7 +319,7 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
     journey("prose.open");
     StrataSourceText(activeId, src.id, src.generation).then((t: string) => {
       if (dead) return;
-      const r = mdRender(t, false);
+      const r = mdRender(t, false, { fences: true, base: src.originUrl });
       docRef.current = { html: r.html, maps: r.maps, text: t };
       setDocHtml(r.html);
     }).catch(() => { docRef.current = EMPTY_DOC(); setDocHtml(""); });
@@ -335,7 +336,7 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
     const layout = [splitW, ui, pz].join();
     if (fresh) {
       col.innerHTML = docHtml;
-      if (docHtml) { paintProseMarks(col, docRef.current.maps, proseMarks(src, marksHere), openMark && openMark.id); arrived("prose.open"); }
+      if (docHtml) { paintProseMarks(col, docRef.current.maps, proseMarks(src, marksHere), openMark && openMark.id); arrived("prose.open"); drawDiagrams(col, () => { paintClaims(); paintLayer(); }); }
     }
     paintClaims();
     if (fresh || was.layout !== layout) paintLayer();
