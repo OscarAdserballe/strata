@@ -1,11 +1,23 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, useState } from "react";
 import { EditorContent, useEditor, type Editor } from "@tiptap/react";
+import { TextSelection } from "@tiptap/pm/state";
+import type { EditorView } from "@tiptap/pm/view";
 import { imageSrc } from "../../engines/prose/images.tsx";
 import { imagesIn, uploadImage } from "../attach/attach.ts";
 import { extensionsFor, lineDoc } from "./schema.ts";
 import type { WriterHandle, WriterProps } from "./Writer.tsx";
 
 const read = (e: Editor, line: boolean): string => (line ? e.getText() : e.getMarkdown());
+
+// A key can arrive before the selectionchange of the key before it (Ctrl+End, then Enter), so take the caret from the DOM.
+function caughtUp(view: EditorView): void {
+  const dom = view.dom.ownerDocument.getSelection(), sel = view.state.selection;
+  if (!(sel instanceof TextSelection) || !dom?.anchorNode || !dom.focusNode || !view.dom.contains(dom.anchorNode) || !view.dom.contains(dom.focusNode)) return;
+  try {
+    const anchor = view.posAtDOM(dom.anchorNode, dom.anchorOffset), head = view.posAtDOM(dom.focusNode, dom.focusOffset);
+    if (anchor !== sel.anchor || head !== sel.head) view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, anchor, head)));
+  } catch { /* a position the DOM can't map: keep ProseMirror's */ }
+}
 
 /** The Tiptap side of the Writer, loaded on first use. */
 const WriterEditor = forwardRef<WriterHandle, WriterProps>(function WriterEditor(props, ref) {
@@ -49,7 +61,8 @@ const WriterEditor = forwardRef<WriterHandle, WriterProps>(function WriterEditor
       // the sticky footer under a doc covers the bottom of the sheet
       scrollMargin: { top: 8, left: 8, right: 8, bottom: line ? 8 : 112 },
       transformPastedText: (text) => (line ? text.replace(/\s*\n\s*/g, " ") : text),
-      handleKeyDown: (_view, e) => {
+      handleKeyDown: (view, e) => {
+        if (!e.isComposing) caughtUp(view);
         const p = latest.current;
         if (e.key === "Escape" && p.onEscape) { flush(); p.onEscape(); return true; }
         if (e.key === "Enter" && line && !e.isComposing) { e.preventDefault(); p.onEnter?.(); return true; }
