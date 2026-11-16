@@ -55,3 +55,15 @@ test("main.js and the lazy chunks share no module: the only chunk loaded at boot
     }
   }
 });
+
+test("the offline download keeps every lazy door but leaves Mermaid's chunks online-only", async () => {
+  const { offlineAssets } = await import("../offline-assets.mjs");
+  const saved = offlineAssets(metafile);
+  for (const entry of Object.keys(LAZY)) {
+    const [path] = outputs.find(([, o]) => o.entryPoint === entry);
+    assert.ok(saved.includes(path), `${entry} is saved for offline`);
+  }
+  const mermaid = outputs.filter(([, o]) => /node_modules\/mermaid\//.test(o.entryPoint ?? ""));
+  assert.ok(mermaid.length > 0, "mermaid has chunks");
+  for (const [path] of mermaid) assert.ok(!saved.includes(path), `${path} stays online-only`);
+});
