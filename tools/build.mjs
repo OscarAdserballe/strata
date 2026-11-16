@@ -3,6 +3,7 @@
 import * as esbuild from "esbuild";
 import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { writeSources } from "./dist-fresh.mjs";
+import { offlineAssets } from "./offline-assets.mjs";
 
 // What index.html preloads: the chunk main.js imports before it can run, and the latin files of the faces
 // main.tsx warms, so neither waits a round trip behind the bundle.
@@ -43,7 +44,7 @@ const options = {
   plugins: [{ name: "offline-assets", setup(build) {
     build.onEnd(result => {
       if (result.errors.length || !result.metafile) return;
-      const assets = Object.keys(result.metafile.outputs).filter(path => !path.endsWith(".map"));
+      const assets = offlineAssets(result.metafile);
       writeFileSync("dist/offline-assets.json", JSON.stringify({ assets: [...assets, ...copyPdfWasm()] }));
       bootPreload(result.metafile);
       writeSources("main", result.metafile);
