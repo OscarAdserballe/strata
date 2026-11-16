@@ -315,9 +315,11 @@ test("apply's schema names every op's fields, so no guide read is needed first",
   assert.deepEqual(of("add_question").required, ["op", "front"]);
   assert.match(await ok("get_guide", { topic: "apply" }), /- `place` \(id, group\?, milestone\?, pinned\?\): Puts a source/);
   const routine = await ok("get_guide", { topic: "routine" });
+  assert.match(routine, /Readers scan before they read/, "the routine guide carries the attention principles");
+  assert.doesNotMatch(routine, /exemplar/i, "no page to copy the layout of");
   for (const tool of ["dashboard_board", "dashboard_open", "dashboard_post", "dashboard_add_items", "dashboard_read"]) assert.ok(routine.includes(tool), `the routine guide names ${tool}`);
   for (const kind of ["proposal", "built"]) {
-    assert.ok(routine.includes(`topic: "${kind}"`), `the routine guide points at the ${kind} exemplar`);
-    assert.match(await ok("get_guide", { topic: kind }), /<!doctype html>[\s\S]*data-strata-id=/);
+    assert.ok(routine.includes(`topic: "${kind}"`), `the routine guide points at the ${kind} topic`);
+    assert.doesNotMatch(await ok("get_guide", { topic: kind }), /<!doctype html>/i, `${kind} says what a page holds, not a template to copy`);
   }
 });

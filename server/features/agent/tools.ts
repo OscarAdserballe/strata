@@ -43,10 +43,6 @@ const GUIDE = (() => {
     .replace("{{OPS}}", Object.keys(OPS).map(opLine).join("\n"));
   const topics = new Map<string, string>();
   for (const part of raw.split(/^## /m).slice(1)) topics.set(part.slice(0, part.indexOf("\n")).trim(), `## ${part.trim()}`);
-  for (const name of ["proposal", "built"]) {
-    const page = readFileSync(new URL(`./pages/${name}.html`, import.meta.url), "utf8");
-    topics.set(name, `## ${name}\n\nThe exemplar ${name} page: keep its layout and styles, change the content.\n\n\`\`\`html\n${page.trim()}\n\`\`\``);
-  }
   return topics;
 })();
 export const GUIDE_TOPICS = [...GUIDE.keys()];
