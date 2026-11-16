@@ -7,7 +7,7 @@ const base = (argv.find((a) => /^https?:\/\//.test(a)) || "http://127.0.0.1:8804
 const shardArg = argv.includes("--shard") ? argv[argv.indexOf("--shard") + 1] : null;
 const shard = shardArg ? shardArg.split("/").map(Number) : null;
 if (shard && !(shard[1] >= 1 && shard[0] >= 1 && shard[0] <= shard[1])) { console.error(`--shard wants i/n with 1 ≤ i ≤ n, not ${shardArg}`); process.exit(2); }
-const all = ["smoke","nav-smoke","review-smoke","offline-smoke","import-smoke","home-smoke","tidy-smoke","cleanup-smoke","board-load-smoke","reading-position-smoke","capture-smoke","library-smoke","attribution-smoke","attach-smoke","live-smoke"];
+const all = ["smoke","nav-smoke","review-smoke","offline-smoke","import-smoke","home-smoke","tidy-smoke","cleanup-smoke","board-load-smoke","reading-position-smoke","capture-smoke","library-smoke","attribution-smoke","attach-smoke","live-smoke","dispatch-smoke","writing-smoke"];
 const suites = all.filter((_, k) => !shard || k % shard[1] === shard[0] - 1);
 for (const suite of suites) {
   console.log(`\nRunning ${suite}`);

@@ -124,8 +124,8 @@ function InboxList({ items, mode }: { items: DashItem[]; mode: Mode }) {
 
 /** A thread in the backlog or to-do: one line until opened, then its title and prompt to trim, and where it goes next. */
 function Thread({ t, open, onOpen, mode, drag }: { t: DashTask; open: boolean; onOpen(id: string | null): void; mode: Mode; drag(id: string): (e: React.DragEvent) => void }) {
-  const [title, setTitle, flushTitle] = useTyped(t.title, (v) => saveText(t.id, "title", v));
-  const [body, setBody, flushBody] = useTyped(t.body, (v) => saveText(t.id, "body", v));
+  const [title, setTitle, flushTitle, titleHeld] = useTyped(t.title, (v) => saveText(t.id, "title", v));
+  const [body, setBody, flushBody, bodyHeld] = useTyped(t.body, (v) => saveText(t.id, "body", v));
   const meta = [t.links[0]?.ref, t.createdFrom?.source !== "You" ? t.createdFrom?.source : "You", age(t.createdAt)].filter(Boolean).join(" · ");
   if (!open) return (
     <div className={"r" + (t.morningAt ? " pick" : "")} draggable onDragStart={drag(t.id)}>
@@ -137,12 +137,12 @@ function Thread({ t, open, onOpen, mode, drag }: { t: DashTask; open: boolean; o
   return (
     <article className="tr-card open" draggable={false}>
       <div className="tr-head">
-        <Grow className="dtitle" value={title} aria-label="Title" onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
+        <Grow className="dtitle" value={title} aria-label="Title" {...titleHeld} onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.closest("article")?.querySelector(".dbody") as HTMLElement | null)?.focus(); } if (e.key === "Escape") leave(); }} />
         <span className="tr-src">{meta}</span>
       </div>
       <label className="cap" htmlFor={`body-${t.id}`}>Prompt · yours to trim</label>
-      <Grow id={`body-${t.id}`} className="dbody" value={body} placeholder="What should be done, in a few lines you could hand to Claude." onChange={(e) => setBody(e.target.value)}
+      <Grow id={`body-${t.id}`} className="dbody" value={body} placeholder="What should be done, in a few lines you could hand to Claude." {...bodyHeld} onChange={(e) => setBody(e.target.value)}
         onKeyDown={(e) => { if (e.key === "Escape") leave(); }} />
       <div className="acts-row">
         <button className="btn dark" title={mode === "dispatch" ? "Claude prepares a page; it shows up in Decide" : "Claude comes back with a page in Dispatch"} onClick={() => { leave(); toast("Sent to Dispatch"); dash.send(t.id).catch((e) => said(e, "not sent")); }}>Send to Dispatch</button>

@@ -27,23 +27,34 @@ export function Notes({ text }: { text: string }) {
 
 /**
  * Text you type that saves itself: shown as typed, sent a pause after the last key, and taken from the server only
- * while you are not typing into it.
+ * while the field is not focused, so a save's answer never rewrites what is being typed.
  */
-export function useTyped(value: string, save: (v: string) => void, wait = 700): [string, (v: string) => void, () => void] {
+export function useTyped(value: string, save: (v: string) => void, wait = 700): [string, (v: string) => void, () => void, { onFocus(): void; onBlur(): void }] {
   const [typed, setTyped] = useState<string | null>(null);
+  const [focused, setFocused] = useState(false);
   const timer = useRef(0);
   const pending = useRef<string | null>(null);
   const flush = () => { clearTimeout(timer.current); if (pending.current !== null) { save(pending.current); pending.current = null; } };
   const set = (v: string) => { setTyped(v); pending.current = v; clearTimeout(timer.current); timer.current = window.setTimeout(flush, wait); };
-  // the server caught up with what was typed: hand the field back to it
-  useEffect(() => { if (typed !== null && pending.current === null && value === typed) setTyped(null); }, [value, typed]);
+  // out of the field and caught up: hand it back to the server, which may hold another device's edit
+  useEffect(() => { if (!focused && typed !== null && pending.current === null && value === typed) setTyped(null); }, [value, typed, focused]);
   useEffect(() => () => flush(), []);
-  return [typed ?? value, set, flush];
+  const held = { onFocus: () => setFocused(true), onBlur: () => { flush(); setFocused(false); } };
+  return [typed ?? value, set, flush, held];
 }
 
 /** A textarea as tall as what it holds. */
 export function Grow(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
   const ref = useRef<HTMLTextAreaElement | null>(null);
-  useLayoutEffect(() => { const t = ref.current; if (t) { t.style.height = "auto"; t.style.height = `${t.scrollHeight}px`; } }, [props.value]);
+  useLayoutEffect(() => {
+    const t = ref.current;
+    if (!t) return;
+    // collapsing to measure shortens the page under the scroller, which clamps its scroll and jumps the caret away
+    const kept: [Element, number][] = [];
+    for (let p = t.parentElement; p; p = p.parentElement) if (p.scrollTop) kept.push([p, p.scrollTop]);
+    t.style.height = "auto";
+    t.style.height = `${t.scrollHeight}px`;
+    for (const [p, top] of kept) p.scrollTop = top;
+  }, [props.value]);
   return <textarea ref={ref} rows={1} {...props} />;
 }

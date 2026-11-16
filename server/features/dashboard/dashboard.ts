@@ -33,6 +33,9 @@ const str = (v: unknown, field: string, max: number, required = false): string |
   return s.slice(0, max);
 };
 
+// notes saved while being typed: their spaces and newlines are the writer's, not noise to trim
+const asTyped = (v: unknown, field: string, max: number): string => (typeof v === "string" ? v.slice(0, max) : fail(`${field} is text.`));
+
 export function checkLinks(raw: unknown, field = "links"): Link[] {
   if (raw === undefined || raw === null) return [];
   if (!Array.isArray(raw) || raw.length > MAX.links) return fail(`${field} is a list of at most ${MAX.links} links.`);
@@ -151,7 +154,7 @@ export function patchTask(id: string, b: Record<string, unknown>): TaskRow {
   if (isEnded(stage)) morning = null;
   const cleared = b.cleared === undefined ? cur.cleared_at : flag(b.cleared, "cleared") ? (cur.cleared_at ?? t) : null;
   const links = b.links === undefined ? cur.links : JSON.stringify(checkLinks(b.links));
-  q.setTask.run(str(b.title, "title", MAX.title) ?? cur.title, b.body === undefined ? cur.body : (str(b.body, "body", MAX.body) ?? ""),
+  q.setTask.run(str(b.title, "title", MAX.title) ?? cur.title, b.body === undefined || b.body === null ? cur.body : asTyped(b.body, "body", MAX.body),
     stateOf(stage), cur.waiting_on, cur.parent_id, links, cur.prompt, morning, cleared, t, stage, morning, id);
   if (b.area !== undefined) {
     if (!(AREAS as readonly string[]).includes(String(b.area))) fail("area is work or personal.");

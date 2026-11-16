@@ -176,6 +176,7 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .vers button[aria-current] span{color:var(--d-quiet)}
 .ws-card .acts{display:flex;gap:7px;margin-top:3px}
 .ws-card .acts .btn{flex:1;justify-content:center;padding:8px 0;font-size:12.5px}
+.ws-card .acts .btn.quiet{flex:0 0 auto;padding:8px 9px}
 .ws-group{margin:12px 12px 2px;font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--d-quiet)}
 .ws-none{margin:0;padding:9px 12px;font-size:13px;line-height:1.5;color:var(--d-quiet)}
 .ws-fold{margin-top:12px;padding:9px 12px;font-size:12.5px;color:var(--d-mute);border-top:1px solid var(--d-line)}
@@ -191,7 +192,7 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .ws-sheet{flex:1;min-height:0;position:relative;display:flex;margin-bottom:24px;background:#fff;border-radius:10px;box-shadow:var(--d-sheet);overflow:hidden}
 .ws-sheet .livepage{border-radius:inherit}
 .ws-sheet .htmlsrc-body{border-radius:inherit;overflow:hidden}
-.ws-sheet.fit{flex:0 1 auto;align-self:stretch;max-height:calc(100% - 24px);overflow-y:auto}
+.ws-sheet.fit{flex:0 1 auto;align-self:stretch;max-height:calc(100% - 24px);overflow-y:auto;scroll-padding-bottom:96px}
 .ws-sheet.fit .doc{overflow:visible;min-height:0}
 .ws-sheet.fit .doc-foot{margin-top:12px}
 .ws-sheet.fit .doc-foot{position:sticky;bottom:0;background:linear-gradient(rgba(255,255,255,0),#fff 14px);padding-bottom:24px;margin-bottom:-32px}

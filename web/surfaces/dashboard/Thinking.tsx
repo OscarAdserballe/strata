@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StrataWhy } from "../../data/api.ts";
 import { dash, useDashBoard, type DashTask } from "../../data/entities/dashboard.ts";
 import { toast } from "../../shell/layers.ts";
@@ -15,6 +15,8 @@ export default function Thinking() {
   const rest = tasks.filter((t) => t.stage === "todo" && !t.morningAt).sort((a, b) => b.updatedAt - a.updatedAt);
   const [sel, setSel] = useState<string | null>(null);
   const t = open.find((x) => x.id === sel) ?? open[0] ?? null;
+  // hold the doc on the sheet: another thread's save would otherwise sort itself to the top and take its place
+  useEffect(() => { if (t && sel !== t.id) setSel(t.id); }, [t?.id]);
   const take = (x: DashTask) => { setSel(x.id); move(x, "thinking"); };
   return (
     <div className="ws">
@@ -39,8 +41,8 @@ export default function Thinking() {
 
 /** A thread's doc: its title and the notes you write until you could hand it over without being in the room. */
 export function Doc({ t, where = "thinking" }: { t: DashTask; where?: "thinking" | "review" }) {
-  const [title, setTitle, flushTitle] = useTyped(t.title, (v) => saveText(t.id, "title", v));
-  const [body, setBody, flushBody] = useTyped(t.body, (v) => saveText(t.id, "body", v));
+  const [title, setTitle, flushTitle, titleHeld] = useTyped(t.title, (v) => saveText(t.id, "title", v));
+  const [body, setBody, flushBody, bodyHeld] = useTyped(t.body, (v) => saveText(t.id, "body", v));
   const [editing, setEditing] = useState(false);
   const flush = () => { flushTitle(); flushBody(); };
   const copy = () => {
@@ -51,11 +53,11 @@ export function Doc({ t, where = "thinking" }: { t: DashTask; where?: "thinking"
     <article className="doc">
       <div className="doc-crumb"><Src from={t.createdFrom} /><span className="grow" />
         {t.links.map((l, i) => l.url ? <a key={i} href={l.url} target="_blank" rel="noopener">{l.ref}</a> : <span key={i}>{l.ref}</span>)}</div>
-      <Grow className="dtitle" value={title} aria-label="Title" placeholder="Untitled" onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
+      <Grow className="dtitle" value={title} aria-label="Title" placeholder="Untitled" {...titleHeld} onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setEditing(true); } }} />
       {editing
-        ? <Grow className="dbody" value={body} aria-label="Notes" autoFocus onChange={(e) => setBody(e.target.value)}
-            onBlur={() => { flushBody(); setEditing(false); }} placeholder="Write until you could hand it to Claude without being in the room." />
+        ? <Grow className="dbody" value={body} aria-label="Notes" autoFocus onFocus={bodyHeld.onFocus} onChange={(e) => setBody(e.target.value)}
+            onBlur={() => { bodyHeld.onBlur(); setEditing(false); }} placeholder="Write until you could hand it to Claude without being in the room." />
         : <div className="doc-notes" role="textbox" tabIndex={0} aria-label="Notes" onClick={(e) => { if (!(e.target as HTMLElement).closest("a") && !getSelection()?.toString()) setEditing(true); }}
             onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setEditing(true); } }}>
             {body.trim() ? <Notes text={body} /> : <p className="ph">Write until you could hand it to Claude without being in the room.</p>}
@@ -66,7 +68,8 @@ export function Doc({ t, where = "thinking" }: { t: DashTask; where?: "thinking"
               <button className="btn" onClick={() => { flush(); toast("Sent to Dispatch"); dash.send(t.id).catch((e) => toast(StrataWhy(e, "not sent"), 4200)); }}>Send to Dispatch</button>
               <button className="btn quiet" onClick={copy}>Copy for Claude</button>
               <span className="grow" />
-              <button className="btn quiet" onClick={() => { flush(); move(t, "todo"); }}>Back to to-do</button></>
+              <button className="btn quiet" onClick={() => { flush(); move(t, "todo"); }}>Back to to-do</button>
+              <button className="btn quiet danger" onClick={() => { flush(); move(t, "dropped"); }}>Drop</button></>
           : <button className="btn quiet" onClick={copy}>Copy for Claude</button>}
       </div>
     </article>
