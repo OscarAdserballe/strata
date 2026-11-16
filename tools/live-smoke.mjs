@@ -8,7 +8,7 @@ const api = async (path, method = "GET", body) => {
 };
 const PAGE = `<!doctype html><html><head><meta name="color-scheme" content="light dark"><title>Delegation-loss curve</title>
 <style>body{background:#fbfaf7}@media (prefers-color-scheme: dark){body{background:#121212}}</style><script>window.x = 1</script></head>
-<body><h1>Delegation-loss curve</h1><p>Each hop loses a little.</p><ol><li>The first hop drops the brief's constraints.</li><li>The second hop drops the why.</li></ol><input type="range"></body></html>`;
+<body><h1>Delegation-loss curve</h1><p>Each hop loses a little.</p><ol><li>The first hop drops the brief's constraints.</li><li>The second hop drops the why.</li></ol><input type="range"><p><a id="out" href="https://example.test/elsewhere">elsewhere</a></p></body></html>`;
 const board = (await api("/api/boards", "POST", { title: `Live fixture ${Date.now()}` })).board;
 // dark as an OS setting, not CDP emulation: emulation reaches every frame and hides what the iframe inherits
 const browser = await chromium.launch({ channel: process.env.PLAYWRIGHT_CHANNEL || undefined, args: ["--blink-settings=preferredColorScheme=0"] });
@@ -29,6 +29,14 @@ try {
   const above = await page.evaluate(() => document.querySelector(".htmlsrc")?.firstElementChild?.className);
   assert.equal(above, "htmlsrc-body", "nothing sits above the page, as with a PDF or Markdown source");
   console.log("✓ a live page opens with no strip above it");
+
+  // a link would load inside the sandboxed frame, where most sites refuse to be framed; it opens a tab instead
+  await context.route("https://example.test/**", (route) => route.fulfill({ body: "<p>elsewhere</p>", contentType: "text/html" }));
+  const [tab] = await Promise.all([context.waitForEvent("page"), frame.click("#out")]);
+  await tab.waitForURL("https://example.test/elsewhere");
+  assert.ok(await frame.$("#out"), "the page is still in the frame");
+  await tab.close();
+  console.log("✓ a link in a live page opens in a new tab, not inside the frame");
 
   // cards land on the page by their quotes: one inside a list item, one in a paragraph. Each lies shut on its words until
   // they are clicked; the page draws the sheets over itself, never inside it, and no sheet covers another.

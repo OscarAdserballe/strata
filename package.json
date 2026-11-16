@@ -17,6 +17,7 @@
     "@tiptap/starter-kit": "3.32.2",
     "katex": "^0.18.4",
     "markdown-to-jsx": "^9.10.2",
+    "mermaid": "^12.3.0",
     "pdfjs-dist": "^6.2.108",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
