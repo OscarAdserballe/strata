@@ -6,9 +6,9 @@ import { dashboardRepo as q, type InboxRow, type TaskRow, type UpdateRow } from 
 export class DashError extends Error { httpStatus = 400; }
 const fail = (msg: string): never => { throw new DashError(msg); };
 
-export const STAGES = ["todo", "thinking", "decide", "implementing", "review", "done", "dropped"] as const;
+export const STAGES = ["todo", "thinking", "decide", "implementing", "review", "finish", "done", "dropped"] as const;
 // Dispatch moves a thread into these itself, when it is sent, pressed or posted to.
-const DISPATCH_ONLY = ["decide", "implementing"];
+const DISPATCH_ONLY = ["decide", "implementing", "finish"];
 export const OPEN_STAGES = ["todo", "thinking", "review"];
 // An older client or agent may still name the backlog, which is now to-do.
 const current = (stage: string): string => (stage === "backlog" ? "todo" : stage);

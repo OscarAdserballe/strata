@@ -59,7 +59,7 @@ const stub = { ranAt: 0, n: 0, url: null as string | null };
 
 export interface Woken { ran: Ran | null; sessionUrl: string | null }
 
-/** Sending a thread, Go and Send back wake the routine; within the cooldown the run already going picks it up. */
+/** Sending a thread and Send on its page wake the routine; within the cooldown the run already going picks it up. */
 export async function wake(why: string): Promise<Woken> {
   if (STUB) {
     if (Date.now() - stub.ranAt < COOLDOWN) { console.log(`[routine stub] ${why}: a run started under a minute ago, so none is fired`); return { ran: null, sessionUrl: stub.url }; }
