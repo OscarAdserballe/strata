@@ -20,9 +20,9 @@ async function tool(name, args) {
 }
 
 // ---------- pages: plain synthetic HTML, the way Claude would post them ----------
-// the routine's exemplars (get_guide topics proposal and built) are the pages seeded here, so the two never drift
-const exemplar = (name) => readFileSync(new URL(`../server/features/agent/pages/${name}.html`, import.meta.url), "utf8");
-const STYLE = exemplar("proposal").match(/<style>[\s\S]*?<\/style>/)[0];
+// two hand-made sample pages, so the seeded dashboard shows realistic HTML
+const sample = (name) => readFileSync(new URL(`./dispatch-pages/${name}.html`, import.meta.url), "utf8");
+const STYLE = sample("proposal").match(/<style>[\s\S]*?<\/style>/)[0];
 const page = (title, body) => `<!doctype html><html><head><meta charset="utf-8"><title>${title}</title>${STYLE}</head><body><main>${body}</main></body></html>`;
 
 const decideV1 = page("v1", `<div class="ref">RCP-128</div><h1>Steps the assistant adds never get a photo</h1>
@@ -31,7 +31,7 @@ const decideV1 = page("v1", `<div class="ref">RCP-128</div><h1>Steps the assista
 <div class="opt"><small>B</small><b>Ask which photo</b>One question per new step.</div><div class="opt"><small>C</small><b>Leave it blank</b>The page shows a gap.</div></div>
 <div class="facts"><div><small>Size</small>1 PR · about 120 lines</div><div><small>Touches</small>Step editor</div><div><small>Proof</small>One new test</div><div><small>Unsure about</small>Whether anyone notices</div></div>`);
 
-const decideV2 = exemplar("proposal");
+const decideV2 = sample("proposal");
 
 const shortDecide = (h, lede, a, b) => page("v1", `<h1>${h}</h1><p class="lede">${lede}</p>
 <div class="opts" style="grid-template-columns:1fr 1fr"><div class="opt pick"><small>A · WHAT I'D DO</small><b>${a}</b>The smaller change.</div><div class="opt"><small>B</small><b>${b}</b>More to build.</div></div>
@@ -108,7 +108,7 @@ await post(r1, { page: shortDecide("Short recipes print a blank page (v2)", "Onl
 await note(r1, 2, "Measure, then break", "Yes, this.");
 await note(r1, 2, "Never break", "Long recipes would run into the footer.");
 await press(r1, "go");
-await post(r1, { page: exemplar("built") });
+await post(r1, { page: sample("built") });
 await note(r1, 3, "Photos stay in the separate gallery", "File an issue to put photos on the steps. Not in this PR.");
 // Decide · 4: the one with two versions is created last, so it sits on top
 for (const [title, body, h, lede, a, b, links] of [
