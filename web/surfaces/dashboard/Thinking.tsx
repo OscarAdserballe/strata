@@ -2,7 +2,8 @@ import { useEffect, useState } from "react";
 import { StrataWhy } from "../../data/api.ts";
 import { dash, useDashBoard, type DashTask } from "../../data/entities/dashboard.ts";
 import { toast } from "../../shell/layers.ts";
-import { Grow, Notes, Src, useTyped } from "./parts.tsx";
+import Writer, { focusWriterIn } from "../../capabilities/write/LazyWriter.tsx";
+import { Grow, Src, useTyped } from "./parts.tsx";
 import { move, saveText } from "./moves.ts";
 
 /** Thinking: one thread's notes open on the sheet, to-do waiting on the left. */
@@ -39,7 +40,6 @@ export default function Thinking() {
 export function Doc({ t, where = "thinking" }: { t: DashTask; where?: "thinking" | "review" }) {
   const [title, setTitle, flushTitle, titleHeld] = useTyped(t.title, (v) => saveText(t.id, "title", v));
   const [body, setBody, flushBody, bodyHeld] = useTyped(t.body, (v) => saveText(t.id, "body", v));
-  const [editing, setEditing] = useState(false);
   const flush = () => { flushTitle(); flushBody(); };
   const copy = () => {
     const text = `${title}\n\n${body}`.trim();
@@ -50,14 +50,8 @@ export function Doc({ t, where = "thinking" }: { t: DashTask; where?: "thinking"
       <div className="doc-crumb"><Src from={t.createdFrom} /><span className="grow" />
         {t.links.map((l, i) => l.url ? <a key={i} href={l.url} target="_blank" rel="noopener">{l.ref}</a> : <span key={i}>{l.ref}</span>)}</div>
       <Grow className="dtitle" value={title} aria-label="Title" placeholder="Untitled" {...titleHeld} onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
-        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setEditing(true); } }} />
-      {editing
-        ? <Grow className="dbody" value={body} aria-label="Notes" autoFocus onFocus={bodyHeld.onFocus} onChange={(e) => setBody(e.target.value)}
-            onBlur={() => { bodyHeld.onBlur(); setEditing(false); }} placeholder="Write until you could hand it to Claude without being in the room." />
-        : <div className="doc-notes" role="textbox" tabIndex={0} aria-label="Notes" onClick={(e) => { if (!(e.target as HTMLElement).closest("a") && !getSelection()?.toString()) setEditing(true); }}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); setEditing(true); } }}>
-            {body.trim() ? <Notes text={body} /> : <p className="ph">Write until you could hand it to Claude without being in the room.</p>}
-          </div>}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); focusWriterIn(e.currentTarget.closest("article")); } }} />
+      <Writer className="dbody" value={body} onChange={setBody} label="Notes" {...bodyHeld} placeholder="Write until you could hand it to Claude without being in the room." />
       <div className="doc-foot">
         {where === "thinking"
           ? <><button className="btn dark" onClick={() => { flush(); move(t, "review"); }}>Ready for review</button>

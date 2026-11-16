@@ -9,7 +9,9 @@ import { createRoot } from "react-dom/client";
 import { stampSession } from "./data/api.ts";
 import Dashboard from "./surfaces/dashboard/Dashboard.tsx";
 import { navNow } from "./surfaces/dashboard/nav.ts";
+import { prefetchWriter } from "./capabilities/write/LazyWriter.tsx";
 
 stampSession();
 document.title = navNow().mode === "focus" ? "Focus" : "Dispatch";
 createRoot(document.getElementById("dash")!).render(<Dashboard />);
+prefetchWriter();

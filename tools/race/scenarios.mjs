@@ -1725,9 +1725,9 @@ const dashboardWrites = {
     await title.focus();
     await page.keyboard.press("Control+End");
     await title.pressSequentially(" edited", { delay: 15 });
-    const notes = page.locator(".tr-card.open .dbody");
-    await notes.focus();
-    await page.keyboard.press("Control+End");
+    const notes = page.locator(".tr-card.open .ProseMirror.dbody");
+    // the caret is put at the end by the editor, not by a click a loaded runner may land before the editor reads it
+    await notes.evaluate((el) => el.editor.commands.focus("end"));
     await notes.pressSequentially(`\nNotes ${tag}`, { delay: 15 });
     await page.locator(".tr-card.open").getByRole("button", { name: "Think it through" }).click();
 
@@ -1735,13 +1735,13 @@ const dashboardWrites = {
     let rowDb = null;
     for (;;) {
       rowDb = t.sql("SELECT stage, title, body FROM dashboard_tasks WHERE id = ?", id)[0] ?? null;
-      if ((rowDb && rowDb.stage === "thinking" && rowDb.title === `Race pin ${tag} edited` && rowDb.body === `Picked under loss.\nNotes ${tag}`) || performance.now() > until) break;
+      if ((rowDb && rowDb.stage === "thinking" && rowDb.title === `Race pin ${tag} edited` && rowDb.body === `Picked under loss.\n\nNotes ${tag}`) || performance.now() > until) break;
       await sleep(250);
     }
     await t.net.idle(500);
     t.check("moved", rowDb?.stage === "thinking", `stage ${rowDb?.stage}`);
     t.check("title", rowDb?.title === `Race pin ${tag} edited`, `the title is ${JSON.stringify(rowDb?.title)}`);
-    t.check("notes", rowDb?.body === `Picked under loss.\nNotes ${tag}`, `the notes are ${JSON.stringify(rowDb?.body?.slice(0, 120))}`);
+    t.check("notes", rowDb?.body === `Picked under loss.\n\nNotes ${tag}`, `the notes are ${JSON.stringify(rowDb?.body?.slice(0, 120))}`);
   },
 };
 
@@ -1917,7 +1917,7 @@ const selectionCard = {
 
 const dashboardTyping = {
   name: "dashboard-typing",
-  what: "type a list into a Thinking doc with pauses that each save, while the saves answer late and out of order and one answer is lost; the field never loses a key, and the server ends with exactly what was typed",
+  what: "type a bullet list into a Thinking doc with pauses that each save, while the saves answer late and out of order and one answer is lost; the field never loses a key, and the server ends with exactly what was typed",
   checks: {
     field: "after every pause the field holds exactly what was typed so far",
     focus: "the notes keep focus through every save",
@@ -1931,17 +1931,19 @@ const dashboardTyping = {
     const page = await t.open({ latency: true, reorder: { writes: true }, lostAck: { match: isSave, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dashboard?view=thinking`);
     await page.locator(".ws-list").getByText(`Race typing ${tag}`).click();
-    await page.getByRole("textbox", { name: "Notes" }).click();
-    const field = page.locator("textarea.dbody");
-    const parts = ["- buy tape", "\n", "- fetch poster ", "\n", "- ", "glue", "\n\n", "Then ", "hang it."];
+    const field = page.locator(".ProseMirror.dbody");
+    await field.click();
+    // Enter in a bullet starts the next one, and Enter on an empty one leaves the list; null where an empty bullet is mid-flight
+    const parts = [["- buy tape", "- buy tape"], ["\n", null], ["fetch poster ", "- buy tape\n- fetch poster "], ["\n", null], ["glue", "- buy tape\n- fetch poster \n- glue"],
+      ["\n\n", null], ["Then ", "- buy tape\n- fetch poster \n- glue\n\nThen "], ["hang it.", "- buy tape\n- fetch poster \n- glue\n\nThen hang it."]];
+    const typed = parts[parts.length - 1][1];
     const pause = t.rng("pause");
-    let typed = "", fieldOk = true, focusOk = true, at = "";
-    for (const part of parts) {
+    let fieldOk = true, focusOk = true, at = "";
+    for (const [part, want] of parts) {
       await page.keyboard.type(part, { delay: 10 });
-      typed += part;
       await sleep(750 + Math.floor(pause() * 900));
-      const now = await field.inputValue().catch(() => null);
-      if (fieldOk && now !== typed) { fieldOk = false; at = JSON.stringify(now); }
+      const now = await field.evaluate((el) => el.editor.getMarkdown()).catch(() => null);
+      if (fieldOk && want !== null && now !== want) { fieldOk = false; at = JSON.stringify(now); }
       if (focusOk && !(await page.evaluate(() => document.activeElement?.classList.contains("dbody")))) focusOk = false;
     }
     await page.keyboard.press("Tab");
