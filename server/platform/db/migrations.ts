@@ -279,6 +279,9 @@ const MIGRATIONS: [name: string, run: () => void][] = [
     }
   }],
   ["dashboard-stages", dashboardStages],
+  // Backlog and to-do were one list in two places, and tomorrow morning's pick a third: all of it is to-do now.
+  ["dashboard-one-todo", () => db.exec(`UPDATE dashboard_tasks SET stage = 'todo' WHERE stage = 'backlog';
+    UPDATE dashboard_tasks SET morning_at = NULL, pinned_at = NULL WHERE morning_at IS NOT NULL OR pinned_at IS NOT NULL`)],
   // A note can sit on a page's labelled box (data-strata-id) rather than on words.
   ["marks-box", () => addColumn("marks", "box", "TEXT")],
   ["comments-to-notes", commentsToNotes],
