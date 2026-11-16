@@ -88,7 +88,8 @@ try {
   await page.locator(".ws-list").getByText(`Writer ${run}: old notes`).click();
   const oldNotes = page.getByRole("textbox", { name: "Notes" });
   await oldNotes.click();
-  await page.keyboard.press("Tab");
+  // out by the mouse: Tab in a list item indents it, which is a change
+  await page.locator(".ws-caption").click();
   await page.waitForTimeout(1200);
   assert.equal(await oldNotes.locator("strong").count(), 0, "raw HTML is not drawn as bold");
   assert.match(await oldNotes.textContent(), /Costs 5\*3 <b>raw<\/b>/);
