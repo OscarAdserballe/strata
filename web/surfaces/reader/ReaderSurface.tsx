@@ -195,7 +195,7 @@ export default function ReaderSurface(props: ReaderSurfaceProps) {
             ? <div className="page-col prose marked" ref={proseRef} />
             : null}
           {!onHome && !showTree && src && column.live.url
-            ? <HtmlSource engine={column.live.engine} url={column.live.url} title={src.filename} scale={props.ui * ROOM * pz} />
+            ? <HtmlSource engine={column.live.engine} url={column.live.url} scale={props.ui * ROOM * pz} />
             : null}
           {/* React never renders children here, so pdf.js canvases survive re-renders */}
           <div ref={pdfHostRef} style={{ display: !onHome && !showTree && src && src.kind === "pdf" ? "block" : "none" }} />

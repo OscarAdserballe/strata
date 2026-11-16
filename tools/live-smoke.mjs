@@ -26,6 +26,9 @@ try {
   assert.deepEqual(inside, { dark: false, bg: "rgb(251, 250, 247)" }, "a live page follows the room's light scheme, not the OS");
   assert.deepEqual(errors, []);
   console.log("✓ a live page renders light in a dark OS");
+  const above = await page.evaluate(() => document.querySelector(".htmlsrc")?.firstElementChild?.className);
+  assert.equal(above, "htmlsrc-body", "nothing sits above the page, as with a PDF or Markdown source");
+  console.log("✓ a live page opens with no strip above it");
 
   // cards land on the page by their quotes: one inside a list item, one in a paragraph. Each lies shut on its words until
   // they are clicked; the page draws the sheets over itself, never inside it, and no sheet covers another.
