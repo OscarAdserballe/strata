@@ -3,6 +3,7 @@ import { StrataWhy } from "../../data/api.ts";
 import { dash, useDashBoard, useRoutine, type DashItem, type DashTask } from "../../data/entities/dashboard.ts";
 import { toast } from "../../shell/layers.ts";
 import { go, type Mode, type Sub } from "./nav.ts";
+import Writer from "../../capabilities/write/Writer.tsx";
 import { Grow, Src, age, hm, newThreadId, useTyped } from "./parts.tsx";
 import { move, saveText } from "./moves.ts";
 
@@ -69,7 +70,7 @@ function InboxList({ items, mode }: { items: DashItem[]; mode: Mode }) {
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (!at || t.matches?.("input, textarea") || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (!at || t.closest?.("input, textarea, [contenteditable=true]") || e.metaKey || e.ctrlKey || e.altKey) return;
       const it = items.find((i) => i.id === at)!;
       const k = e.key.toLowerCase();
       if (k === "t") { e.preventDefault(); keep(at, it.area); }
@@ -124,7 +125,7 @@ function Thread({ t, open, onOpen, mode }: { t: DashTask; open: boolean; onOpen(
         <span className="tr-src">{meta}</span>
       </div>
       <label className="cap" htmlFor={`body-${t.id}`}>Prompt · yours to trim</label>
-      <Grow id={`body-${t.id}`} className="dbody" value={body} placeholder="What should be done, in a few lines you could hand to Claude." {...bodyHeld} onChange={(e) => setBody(e.target.value)}
+      <Writer id={`body-${t.id}`} className="dbody" label="Prompt" value={body} placeholder="What should be done, in a few lines you could hand to Claude." {...bodyHeld} onChange={setBody}
         onKeyDown={(e) => { if (e.key === "Escape") leave(); }} />
       <div className="acts-row">
         <button className="btn dark" title={mode === "dispatch" ? "Claude prepares a page; it shows up in Decide" : "Claude comes back with a page in Dispatch"} onClick={() => { leave(); toast("Sent to Dispatch"); dash.send(t.id).catch((e) => said(e, "not sent")); }}>Send to Dispatch</button>

@@ -8,6 +8,7 @@ import Thinking from "./Thinking.tsx";
 import FocusReview from "./FocusReview.tsx";
 import Dispatch from "./Dispatch.tsx";
 import { hm } from "./parts.tsx";
+import { loadWriter } from "../../capabilities/write/Writer.tsx";
 
 // what waits on you carries an orange count; the rest is information
 const WAITS: View[] = ["review", "decide", "built"];
@@ -18,6 +19,10 @@ const RAIL: Record<Mode, [View, string][]> = {
 
 export default function Dashboard() {
   const nav = useNav();
+  useEffect(() => {
+    const idle = window.requestIdleCallback ?? ((f: () => void) => setTimeout(f, 300));
+    idle(() => { loadWriter().catch(() => {}); });
+  }, []);
   return <>
     <Sky />
     <Poller />

@@ -1725,23 +1725,25 @@ const dashboardWrites = {
     await title.focus();
     await page.keyboard.press("Control+End");
     await title.pressSequentially(" edited", { delay: 15 });
-    const notes = page.locator(".tr-card.open .dbody");
+    const notes = page.locator(".tr-card.open .dbody[contenteditable=true]");
     await notes.focus();
     await page.keyboard.press("Control+End");
-    await notes.pressSequentially(`\nNotes ${tag}`, { delay: 15 });
+    // the editor reads a caret the browser moved on the next selectionchange, a frame after the key
+    await sleep(100);
+    await page.keyboard.type(`\nNotes ${tag}`, { delay: 15 });
     await page.locator(".tr-card.open").getByRole("button", { name: "Think it through" }).click();
 
     const until = performance.now() + GRACE_MS * 2;
     let rowDb = null;
     for (;;) {
       rowDb = t.sql("SELECT stage, title, body FROM dashboard_tasks WHERE id = ?", id)[0] ?? null;
-      if ((rowDb && rowDb.stage === "thinking" && rowDb.title === `Race pin ${tag} edited` && rowDb.body === `Picked under loss.\nNotes ${tag}`) || performance.now() > until) break;
+      if ((rowDb && rowDb.stage === "thinking" && rowDb.title === `Race pin ${tag} edited` && rowDb.body === `Picked under loss.\n\nNotes ${tag}`) || performance.now() > until) break;
       await sleep(250);
     }
     await t.net.idle(500);
     t.check("moved", rowDb?.stage === "thinking", `stage ${rowDb?.stage}`);
     t.check("title", rowDb?.title === `Race pin ${tag} edited`, `the title is ${JSON.stringify(rowDb?.title)}`);
-    t.check("notes", rowDb?.body === `Picked under loss.\nNotes ${tag}`, `the notes are ${JSON.stringify(rowDb?.body?.slice(0, 120))}`);
+    t.check("notes", rowDb?.body === `Picked under loss.\n\nNotes ${tag}`, `the notes are ${JSON.stringify(rowDb?.body?.slice(0, 120))}`);
   },
 };
 
@@ -1931,17 +1933,24 @@ const dashboardTyping = {
     const page = await t.open({ latency: true, reorder: { writes: true }, lostAck: { match: isSave, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dashboard?view=thinking`);
     await page.locator(".ws-list").getByText(`Race typing ${tag}`).click();
+    await page.locator(".dbody[contenteditable=true]").waitFor();
     await page.getByRole("textbox", { name: "Notes" }).click();
-    const field = page.locator("textarea.dbody");
-    const parts = ["- buy tape", "\n", "- fetch poster ", "\n", "- ", "glue", "\n\n", "Then ", "hang it."];
+    // what the Writer shows, items as "- " and blocks a blank line apart; an Enter opens the next item before it is typed
+    const shown = () => page.evaluate(() => {
+      const walk = (x) => x.type === "text" ? x.text : x.type === "bulletList" ? x.content.map((li) => "- " + walk(li)).join("\n") : (x.content ?? []).map(walk).join(x.type === "doc" ? "\n\n" : "");
+      return walk(document.querySelector(".dbody").editor.getJSON());
+    }).catch(() => null);
+    const parts = [["- buy tape", "- buy tape"], ["\n", "- buy tape\n- "], ["- fetch poster ", "- buy tape\n- fetch poster "], ["\n", "- buy tape\n- fetch poster \n- "],
+      ["- ", "- buy tape\n- fetch poster \n- "], ["glue", "- buy tape\n- fetch poster \n- glue"], ["\n\n", "- buy tape\n- fetch poster \n- glue\n\n"],
+      ["Then ", "- buy tape\n- fetch poster \n- glue\n\nThen "], ["hang it.", "- buy tape\n- fetch poster \n- glue\n\nThen hang it."]];
+    const typed = parts.at(-1)[1];
     const pause = t.rng("pause");
-    let typed = "", fieldOk = true, focusOk = true, at = "";
-    for (const part of parts) {
+    let fieldOk = true, focusOk = true, at = "";
+    for (const [part, want] of parts) {
       await page.keyboard.type(part, { delay: 10 });
-      typed += part;
       await sleep(750 + Math.floor(pause() * 900));
-      const now = await field.inputValue().catch(() => null);
-      if (fieldOk && now !== typed) { fieldOk = false; at = JSON.stringify(now); }
+      const now = await shown();
+      if (fieldOk && now !== want) { fieldOk = false; at = JSON.stringify(now); }
       if (focusOk && !(await page.evaluate(() => document.activeElement?.classList.contains("dbody")))) focusOk = false;
     }
     await page.keyboard.press("Tab");
