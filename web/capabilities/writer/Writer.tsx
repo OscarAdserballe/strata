@@ -1,3 +1,4 @@
+import "./writer.css";
 import { forwardRef, lazy, Suspense } from "react";
 
 export interface WriterProps {
