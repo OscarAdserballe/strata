@@ -105,36 +105,19 @@ Where a page lands is your call, not a fixed order:
 - `review`: the whole thing built and ready to merge. A stack of PRs goes once, all of it, not one part at a time.
 - `finish`: nothing more to build. Merged, or the decision was not to do it, or it became a Linear issue (link it). The page lists what the reader can now check ("open X, and Y shows"), if anything; the reader archives it from there.
 
-A page is one self-contained, light HTML file, short enough to decide from. Shape it to the task: no two threads need the same layout, so draw the screen for a UI change, a table for a trade-off, the diff or pseudocode for a code change, a row per item for a batch. What every page holds is fixed; how it looks is yours. `get_guide({ topic: "proposal" })` and `get_guide({ topic: "built" })` say what each holds.
+A page is one self-contained, light HTML file the reader decides from. You are a far better designer than any template, so there is none: shape each page to its task and use your judgment. A few things hold everywhere:
 
-- **proposal** (lands in `decide`): the problem, what happens today, two or three options with the one you would pick, and its size and risk.
-- **built** (lands in `review`): what failed before and passes now, what you added or left out, and the PR.
-- **finish** (lands in `finish`): what happened (merged, filed, or not doing it, with the link) and a short list of checks.
-
-**Design for attention.** Readers scan before they read: on a web page most people read about a fifth of the words, and look hardest at the top and down the left edge. So put the answer in the first line, order the rest by importance, and fold away whatever a reader only needs if they doubt the answer. A person holds about four things in mind at once, so group content into a few named chunks and put the things to compare side by side instead of asking anyone to remember one screen while looking at another. Colour, position, size and shape are seen before a word is read, so give each one a single meaning and use it to mark the one thing that needs attention. Every mark, word and box must carry something the reader needs: label things directly, drop decoration and repetition, and let people recognise what they see instead of decoding it.
-
-**Visual rules for every page.** Light only, one sans font, generous white space and a narrow reading column. One accent colour means "needs you" (the ask, your pick) and nothing else; green and red mean pass and fail; everything else is grey or ink. One weight of border, one radius. No badges, icons or boxes that carry no information. It must still read at phone width.
+- **The reader's attention is the scarce thing.** Readers scan before they read: on a web page most people read about a fifth of the words, and look hardest at the top and down the left edge. So put the answer in the first line, order the rest by importance, and fold away whatever a reader only needs if they doubt the answer. A person holds about four things in mind at once, so group content into a few named chunks and put the things to compare side by side instead of asking anyone to remember one screen while looking at another. Colour, position, size and shape are seen before a word is read, so give each one a single meaning and use it to draw the eye to the one thing that needs the reader. Every mark, word and box must carry something the reader needs.
+- **A few options and a recommendation.** A decision comes with two or three real alternatives and the one you'd pick.
+- **Before and after.** Show the change rather than describe it: the screen before and after for anything visual (Figma is usually the best place to mock it; put the image or a link on the page), and pseudocode before and after for code, as the abstraction the reader reasons in, not the diff.
+- **Where it lands:** a proposal goes to `decide` (`get_guide({ topic: "proposal" })`), the built thing with its PR and proof to `review` (`get_guide({ topic: "built" })`), and what happened plus what to check to `finish`.
 
 Give each option and claim a stable `data-strata-id`, so the reader's notes land on it.
 
 ## proposal
 
-A proposal lands in `decide` and must let the reader pick in under a minute.
-
-- **The answer first.** The h1 is your recommendation or verdict, not the topic; one line under it says why.
-- **The ask, once.** Near the top, one clearly marked line: what to pick or answer, and that a note and Send does it.
-- **Two or three options side by side**, each a few words of what it is and the one cost that tells them apart. Mark yours ("I'd do this") so it is found without reading.
-- **Show what it is about.** The screen before and after, a table of options against what matters, or the pseudocode before and after: whichever the task turns on. Not a description of it.
-- **Size and risk** in one line of facts at the end, with anything you are unsure of.
-- **Fold the rest** into `<details>`: how you found it, the code paths, what you ruled out.
+A proposal lands in `decide`. It is good when the reader can pick from it in a minute: your recommendation up top, two or three options they can compare at a glance, the thing itself shown before and after, and its size and risk. The rest is your call.
 
 ## built
 
-A built page lands in `review` and must let the reader merge, or say why not, in under a minute.
-
-- **The answer first.** The h1 says what now works; the line under it says how to see it.
-- **Proof.** What failed before and passes now, and which gates ran, with failures shown as plainly as passes.
-- **What changed**, shown the way the task is about: the screen, the behaviour, or the pseudocode before and after.
-- **What you left out** or could not run, each with why.
-- **The PR or PRs** with size, CI state and what Send will do (merge which PRs).
-- **Fold the rest** into `<details>`.
+A built page lands in `review`. It is good when the reader can merge from it in a minute: what works now and the proof (what failed before, which gates ran, failures as plain as passes), the change shown before and after, what you left out, and the PRs and what Send will merge. The rest is your call.
