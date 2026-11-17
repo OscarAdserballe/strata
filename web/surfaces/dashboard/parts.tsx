@@ -8,6 +8,12 @@ export function age(at: number): string {
   const m = Math.max(1, Math.round((Date.now() - at) / 60000));
   return m < 60 ? `${m} min` : m < 1440 ? `${Math.round(m / 60)} h` : m < 1440 * 14 ? `${Math.round(m / 1440)} d` : `${Math.round(m / 10080)} w`;
 }
+/** Work or Personal, as last picked on this device. */
+export function useArea(): [string, (a: string) => void] {
+  const [area, setArea] = useState(() => { try { return localStorage.getItem("dashboard-area") === "personal" ? "personal" : "work"; } catch { return "work"; } });
+  return [area, (a) => { setArea(a); try { localStorage.setItem("dashboard-area", a); } catch { /* private mode: the choice lasts the visit */ } }];
+}
+
 /** getRandomValues, not randomUUID: the room is also reached over plain http. */
 export const newThreadId = (): string => "t_" + Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, "0")).join("");
 

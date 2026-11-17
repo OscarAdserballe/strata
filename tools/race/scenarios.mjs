@@ -1858,6 +1858,45 @@ const dispatchPress = {
   },
 };
 
+const dispatchNewThread = {
+  name: "dispatch-new-thread",
+  what: "from Decide's sidebar you write a thread and Send it to Dispatch, then write another and Keep it, on a lossy wire with the first create's answer lost; each thread is on the server once with its context, the sent one with Claude after one send, the kept one in to-do",
+  checks: {
+    once: "each thread written in the sidebar is on the server once, with its context",
+    sent: "the sent thread is with Claude, pressed once",
+    kept: "the kept thread is in to-do, never sent",
+  },
+  async run(t) {
+    const tag = `${t.seed}-${Date.now().toString(36)}`;
+    const titles = [`Race new send ${tag}`, `Race new keep ${tag}`];
+    const creates = (e) => e.write && e.method === "POST" && e.path === "/api/dashboard/tasks";
+    const page = await t.open({ latency: true, lostAck: { match: creates, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    await page.goto(`${t.base}/dispatch?view=decide`);
+    await page.locator(".ws-new-row").waitFor();
+    for (const [i, title] of titles.entries()) {
+      if (i === 0) await page.keyboard.press("n"); else await page.locator(".ws-new-row").click();
+      const form = page.locator(".ws-new-form");
+      await form.getByLabel("Title").fill(title);
+      await form.getByLabel("Context").fill(`Context ${i} under loss.`);
+      await form.getByRole("button", { name: i === 0 ? "Send to Dispatch" : "Keep in to-do", exact: true }).click();
+    }
+    const rowsOf = () => titles.map((title) => t.sql("SELECT id, stage, body FROM dashboard_tasks WHERE title = ?", title));
+    const until = performance.now() + GRACE_MS * 2;
+    let rows = [];
+    for (;;) {
+      rows = rowsOf();
+      if ((rows.every((r) => r.length === 1) && rows[0][0].stage === "implementing") || performance.now() > until) break;
+      await sleep(250);
+    }
+    await t.net.idle(500);
+    rows = rowsOf();
+    const presses = rows.map((r) => (r[0] ? t.sql("SELECT kind FROM dashboard_presses WHERE task_id = ?", r[0].id) : []));
+    t.check("once", rows.every((r, i) => r.length === 1 && r[0].body === `Context ${i} under loss.`), rows.map((r, i) => `${titles[i]}: ${r.length} row(s) ${r.map((x) => JSON.stringify(x.body)).join(",")}`).join("; "));
+    t.check("sent", rows[0][0]?.stage === "implementing" && presses[0].length === 1 && presses[0][0].kind === "send", `stage ${rows[0][0]?.stage}, presses ${presses[0].map((p) => p.kind).join(",") || "none"}`);
+    t.check("kept", rows[1][0]?.stage === "todo" && presses[1].length === 0, `stage ${rows[1][0]?.stage}, presses ${presses[1].length}`);
+  },
+};
+
 // two replies under a note, the first one's answer lost: each lands once, in the order written
 const noteReplies = {
   name: "note-replies",
@@ -2057,4 +2096,4 @@ const padTwoTabs = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];

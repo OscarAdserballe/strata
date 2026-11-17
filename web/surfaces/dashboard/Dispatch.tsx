@@ -6,6 +6,7 @@ import LivePage from "../../capabilities/live/LivePage.tsx";
 import { switches } from "../../capabilities/fold/switches.ts";
 import type { View } from "./nav.ts";
 import { age, hm } from "./parts.tsx";
+import NewThread from "./NewThread.tsx";
 
 const latest = (t: DispatchThread): DispatchVersion | null => t.versions[t.versions.length - 1] ?? null;
 const label = (v: DispatchVersion): string => `v${v.n}${v.landed === "review" ? " · built" : v.landed === "finish" || v.landed === "done" ? " · finish" : ""}`;
@@ -78,6 +79,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
               </button>)}
         {pane && !here.length ? <p className="ws-none">{blank}</p> : null}
         {stage === "finish" ? <Archived /> : null}
+        <NewThread />
       </aside>
       <div className="ws-room">
         <div className="ws-caption"><span>{t && v ? caption(t, v) : ""}</span>{t && v ? <NotesSwitch /> : null}</div>

@@ -20,6 +20,17 @@ export function clampRect(r: Rect, vw: number, vh: number): Rect {
   return { x, y, w, h };
 }
 
+/** Edges is any of n, s, e, w: those sides follow the pointer, the others stay put, and no side passes the window or the minimum. */
+export function resize(start: Rect, edges: string, dx: number, dy: number, vw = Infinity, vh = Infinity): Rect {
+  const mw = Math.min(MIN_W, vw), mh = Math.min(MIN_H, vh);
+  let { x, y, w, h } = start;
+  if (edges.includes("e")) w = Math.max(mw, Math.min(start.w + dx, vw - start.x));
+  if (edges.includes("s")) h = Math.max(mh, Math.min(start.h + dy, vh - start.y));
+  if (edges.includes("w")) { const r = start.x + start.w; x = Math.min(Math.max(0, start.x + dx), r - mw); w = r - x; }
+  if (edges.includes("n")) { const b = start.y + start.h; y = Math.min(Math.max(0, start.y + dy), b - mh); h = b - y; }
+  return { x, y, w, h };
+}
+
 export function readRect(raw: string | null): Rect | null {
   if (!raw) return null;
   try {
