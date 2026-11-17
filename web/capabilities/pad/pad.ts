@@ -11,5 +11,6 @@ export const closePad = (): void => setPadOpen(false);
 const subscribe = (cb: () => void): (() => void) => { heard.add(cb); return () => { heard.delete(cb); }; };
 export const usePadOpen = (): boolean => useSyncExternalStore(subscribe, padOpen, () => false);
 
-/** ⌘; or Ctrl+; from anywhere, typing included: the pad is for a thought you don't want to lose your place over. */
-export const isPadKey = (e: KeyboardEvent): boolean => (e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && (e.key === ";" || e.code === "Semicolon");
+/** Alt+N (⌥N) from anywhere, typing included; by code, since ⌥N on a Mac types a dead "˜". */
+export const isPadKey = (e: KeyboardEvent): boolean => e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey && e.code === "KeyN";
+export const PAD_KEY_LABEL = typeof navigator !== "undefined" && /Mac|iP(hone|ad|od)/.test(navigator.platform) ? "⌥N" : "Alt+N";

@@ -1,12 +1,23 @@
-/* a tab on the left edge, clear of both apps' footers and bars */
-.pad-chip{position:fixed;left:0;top:50%;transform:translateY(-50%);z-index:var(--layer-pad);writing-mode:vertical-rl;rotate:180deg;border:1px solid #dedbe3;border-left:none;border-radius:8px 0 0 8px;padding:10px 4px;background:#fffdf7;color:#8a8693;font:500 11px/1 var(--sans,system-ui);letter-spacing:.04em;cursor:pointer;opacity:.75}
-.pad-chip:hover,.pad-chip.on{color:#141414;border-color:#bdb9c6;opacity:1}
-.pad-sheet{position:fixed;left:30px;top:50%;transform:translateY(-50%);z-index:var(--layer-pad);width:min(380px,calc(100vw - 28px));max-height:min(60vh,520px);display:flex;flex-direction:column;background:#fffdf7;border:1px solid #e6e1d2;border-radius:12px;box-shadow:0 10px 30px rgba(20,20,30,.14)}
-.pad-sheet header{display:flex;align-items:baseline;gap:8px;padding:10px 12px 6px 14px;font:13px var(--sans,system-ui)}
-.pad-sheet header span{color:#9a96a3;font-size:12px;flex:1}
+/* closed: a pill bottom right, above the save chip and a floating Ask line */
+.pad-chip{position:fixed;right:14px;bottom:calc(64px + env(safe-area-inset-bottom));z-index:var(--layer-pad);border:1px solid #dedbe3;border-radius:999px;padding:5px 11px;background:#fffdf7;color:#8a8693;font:500 11px/1.3 var(--sans,system-ui);letter-spacing:.02em;cursor:pointer;opacity:.8;box-shadow:0 2px 8px rgba(20,20,30,.06)}
+.pad-chip span{color:#aaa6b2}
+.pad-chip:hover{color:#141414;border-color:#bdb9c6;opacity:1}
+/* open: a window whose left/top/width/height Pad.tsx sets; this is only the first paint */
+.pad-sheet{position:fixed;right:14px;bottom:64px;z-index:var(--layer-pad);width:380px;height:360px;display:flex;flex-direction:column;background:#fffdf7;border:1px solid #e6e1d2;border-radius:12px;box-shadow:0 10px 30px rgba(20,20,30,.14);overflow:hidden}
+.pad-sheet[style*="left"]{right:auto;bottom:auto}
+.pad-sheet header{display:flex;align-items:baseline;gap:8px;padding:8px 10px 6px 14px;font:13px var(--sans,system-ui);cursor:move;user-select:none;touch-action:none;background:#f8f4e8;border-bottom:1px solid #efe9da}
+.pad-sheet header span{color:#9a96a3;font-size:11px;flex:1}
 .pad-x{border:none;background:none;font-size:18px;line-height:1;color:#9a96a3;cursor:pointer;padding:0 4px}
 .pad-x:hover{color:#141414}
-.pad-sheet .wr-box,.pad-sheet .wr-still,.pad-sheet textarea.wr{overflow:auto;padding:2px 14px 14px;min-height:140px}
-.pad-text{font:14px/1.5 var(--sans,system-ui);color:#222;min-height:130px}
+.pad-sheet .wr-box,.pad-sheet .wr-still,.pad-sheet textarea.wr{flex:1;min-height:0;overflow:auto;padding:8px 14px 16px}
+.pad-sheet .wr-box:empty{flex:0;padding:0}
+.pad-text{font:12.5px/18px var(--sans,system-ui);color:#222}
 textarea.wr.pad-text{border:none;resize:none;background:none;width:100%;box-sizing:border-box}
-.pad-wait{padding:6px 14px 14px;margin:0;color:#9a96a3;font:13px var(--sans,system-ui)}
+.pad-wait{padding:8px 14px 14px;margin:0;color:#9a96a3;font:12.5px var(--sans,system-ui)}
+.pad-grip{position:absolute;right:0;bottom:0;width:16px;height:16px;cursor:nwse-resize;touch-action:none;background:linear-gradient(135deg,transparent 55%,#cfc8b4 55%,#cfc8b4 62%,transparent 62%,transparent 75%,#cfc8b4 75%,#cfc8b4 82%,transparent 82%)}
+/* phone: no dragging, a bottom sheet */
+@media (max-width:640px){
+  .pad-sheet,.pad-sheet[style*="left"]{left:0;right:0;bottom:0;top:auto;width:auto;height:min(60vh,420px);border-radius:12px 12px 0 0;padding-bottom:env(safe-area-inset-bottom)}
+  .pad-sheet header{cursor:default}
+  .pad-grip{display:none}
+}
