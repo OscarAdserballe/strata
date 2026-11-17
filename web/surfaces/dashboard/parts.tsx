@@ -11,6 +11,12 @@ export function age(at: number): string {
 /** getRandomValues, not randomUUID: the room is also reached over plain http. */
 export const newThreadId = (): string => "t_" + Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) => b.toString(16).padStart(2, "0")).join("");
 
+/** Work or personal, as last chosen on this device: to-do's filter and a new thread's area. */
+export function useArea(): [string, (a: string) => void] {
+  const [area, setArea] = useState(() => { try { return localStorage.getItem("dashboard-area") === "personal" ? "personal" : "work"; } catch { return "work"; } });
+  return [area, (a) => { setArea(a); try { localStorage.setItem("dashboard-area", a); } catch { /* private mode: the choice lasts the visit */ } }];
+}
+
 const kindOf = (src: string): string => /linear|TRY-|RCP-|GD-/i.test(src) ? "linear" : /slack|#/i.test(src) ? "slack"
   : /github|PR\b/i.test(src) ? "github" : /notion/i.test(src) ? "notion" : /^you$/i.test(src) ? "you" : /agent|routine|claude/i.test(src) ? "agent" : "";
 /** Where a thing came from: a coloured square by kind, then its name, linked when it has a place. */

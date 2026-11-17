@@ -1797,6 +1797,46 @@ const dashboardAdd = {
   },
 };
 
+const dispatchNewThread = {
+  name: "dispatch-new-thread",
+  what: "from Dispatch's sidebar you keep one new thread in to-do and send another straight to Claude, on a lossy wire with the answers to both creates and the send lost; each thread lands once with its context, and the sent one is sent once",
+  checks: {
+    added: "each thread written in the sidebar is on the server once, with its context",
+    kept: "the kept thread is in to-do",
+    sent: "the sent thread is with Claude, sent exactly once",
+  },
+  async run(t) {
+    const tag = `${t.seed}-${Date.now().toString(36)}`;
+    const titles = [`Race keep ${tag}`, `Race make-and-send ${tag}`];
+    const writes = (e) => e.write && /\/api\/dashboard\/tasks(\/[^/]+\/send)?$/.test(e.path);
+    const page = await t.open({ latency: true, lostAck: { match: writes, pick: new Set([1, 2, 3]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    await page.goto(`${t.base}/dispatch?view=decide`);
+    for (const [i, title] of titles.entries()) {
+      await page.locator(".nt-row").click();
+      const form = page.getByRole("form", { name: "New thread" });
+      await form.getByLabel("Title").fill(title);
+      await form.getByLabel("Context").fill(`Context ${i} under loss.`);
+      await form.getByRole("button", { name: i ? "Send to Dispatch" : "Keep in to-do" }).click();
+    }
+    await page.evaluate(() => window.__strataSettled?.());
+    const read = () => titles.map((title) => t.sql("SELECT id, stage, body FROM dashboard_tasks WHERE title = ?", title));
+    const sends = (id) => t.sql("SELECT COUNT(*) n FROM dashboard_presses WHERE task_id = ? AND kind = 'send' AND version IS NULL", id)[0].n;
+    const until = performance.now() + GRACE_MS * 2;
+    let rows = [];
+    for (;;) {
+      rows = read();
+      if ((rows.every((r) => r.length === 1) && rows[1][0].stage === "implementing") || performance.now() > until) break;
+      await sleep(250);
+    }
+    await t.net.idle(500);
+    rows = read();
+    t.check("added", rows.every((r, i) => r.length === 1 && r[0].body === `Context ${i} under loss.`), rows.map((r, i) => `${titles[i]}: ${r.length} row(s) ${r.map((x) => JSON.stringify(x.body)).join(",")}`).join("; "));
+    t.check("kept", rows[0][0]?.stage === "todo", `stage ${rows[0][0]?.stage}`);
+    const n = rows[1][0] ? sends(rows[1][0].id) : 0;
+    t.check("sent", rows[1][0]?.stage === "implementing" && n === 1, `stage ${rows[1][0]?.stage}, ${n} send(s)`);
+  },
+};
+
 const dispatchPress = {
   name: "dispatch-press",
   what: "in Dispatch you press Send on one thread's page in Decide and Reopen then Send on another's in Finish, on a lossy wire with the first press's answer lost; each press is stored once, and Claude's next page lands once, where its post says",
@@ -2057,4 +2097,4 @@ const padTwoTabs = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchNewThread, dispatchPress, padTwoTabs];

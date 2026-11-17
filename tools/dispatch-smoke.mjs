@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
-// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, and drops threads from Decide and Thinking, and To-do opens from the header.
+// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, drops threads from Decide and Thinking, opens To-do from the header, and writes new threads from its sidebar.
 const base = (process.argv[2] || "http://127.0.0.1:8804").replace(/\/+$/, "");
 let n = 0;
 const key = () => `smoke-${Date.now().toString(36)}-${++n}`;
@@ -60,5 +60,34 @@ try {
   assert.match(page.url(), /view=triage&sub=todo/);
   assert.ok(await stageOf(kept));
   console.log("✓ To-do in the header opens the list");
+
+  // + New thread under the cards: N opens it, Esc keeps the draft, Keep files it in to-do with an Undo, Send hands it to Claude
+  await page.goto(`${base}/dispatch?view=decide`, { waitUntil: "networkidle" });
+  const shown = page.url();
+  await page.locator("body").press("n");
+  const form = page.getByRole("form", { name: "New thread" });
+  await form.getByLabel("Title").fill(`Smoke ${run}: kept from Dispatch`);
+  await form.getByLabel("Context").fill("Context written in the sidebar.");
+  await page.keyboard.press("Escape");
+  assert.equal(await form.count(), 0, "Esc closes the form");
+  await page.locator(".nt-row").click();
+  assert.equal(await form.getByLabel("Title").inputValue(), `Smoke ${run}: kept from Dispatch`, "Esc keeps the draft");
+  await form.getByRole("tab", { name: "Personal" }).click();
+  await form.getByRole("button", { name: "Keep in to-do" }).click();
+  await page.locator(".dash-toast", { hasText: "Kept in to-do" }).getByRole("button", { name: "Undo" }).waitFor();
+  assert.equal(page.url(), shown, "Keep leaves the page where it was");
+  const keptRow = async (title) => (await api("/api/dashboard")).tasks.find((t) => t.title === title) ?? null;
+  let made = null;
+  for (let i = 0; i < 20 && !made; i++) { made = await keptRow(`Smoke ${run}: kept from Dispatch`); if (!made) await page.waitForTimeout(250); }
+  assert.deepEqual(made && [made.stage, made.body, made.area], ["todo", "Context written in the sidebar.", "personal"], "Keep makes a to-do thread with its context and area");
+  console.log("✓ + New thread: N opens it, Esc keeps the draft, Keep files it in to-do");
+
+  await page.locator(".nt-row").click();
+  await form.getByLabel("Title").fill(`Smoke ${run}: sent from Dispatch`);
+  await form.getByRole("button", { name: "Send to Dispatch" }).click();
+  let sent = null;
+  for (let i = 0; i < 20 && sent?.stage !== "implementing"; i++) { sent = await keptRow(`Smoke ${run}: sent from Dispatch`); if (sent?.stage !== "implementing") await page.waitForTimeout(250); }
+  assert.equal(sent?.stage, "implementing", "Send to Dispatch makes the thread and sends it in one step");
+  console.log("✓ + New thread: Send to Dispatch makes and sends it");
   assert.deepEqual(errors, []);
 } finally { await browser.close(); }

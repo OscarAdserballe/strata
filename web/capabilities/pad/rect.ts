@@ -20,6 +20,20 @@ export function clampRect(r: Rect, vw: number, vh: number): Rect {
   return { x, y, w, h };
 }
 
+/** The edges a grip drags: a side, the bottom, or a corner (the top bar moves the window instead). */
+export type Edges = "e" | "w" | "s" | "nw" | "ne" | "sw" | "se";
+
+/** The rect after dragging `edges` by dx, dy: the far edges stay put, down to the minimum size and out to the window's edge. */
+export function resize(start: Rect, edges: Edges, dx: number, dy: number, vw: number, vh: number): Rect {
+  const mw = Math.min(MIN_W, vw), mh = Math.min(MIN_H, vh);
+  let { x, y, w, h } = start;
+  if (edges.includes("e")) w = Math.max(mw, Math.min(start.w + dx, vw - start.x));
+  if (edges.includes("w")) { const right = start.x + start.w; w = Math.max(mw, Math.min(start.w - dx, right)); x = right - w; }
+  if (edges.includes("s")) h = Math.max(mh, Math.min(start.h + dy, vh - start.y));
+  if (edges.includes("n")) { const bottom = start.y + start.h; h = Math.max(mh, Math.min(start.h - dy, bottom)); y = bottom - h; }
+  return { x: Math.round(x), y: Math.round(y), w: Math.round(w), h: Math.round(h) };
+}
+
 export function readRect(raw: string | null): Rect | null {
   if (!raw) return null;
   try {

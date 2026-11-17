@@ -140,7 +140,7 @@ try {
   assert.equal(await page.locator(".pad-sheet").count(), 0, "Alt+N closes it again");
   console.log("✓ the notepad opens on the dashboard and in the reader, and keeps what either wrote");
 
-  // the notepad floats bottom right, moves by its header, resizes from its corner, and reopens where it was left
+  // the notepad floats bottom right, moves by its header, resizes from its corners and edges, and reopens where it was left
   await page.keyboard.press("Alt+KeyN");
   const sheet = page.locator(".pad-sheet");
   await sheet.waitFor();
@@ -156,12 +156,23 @@ try {
   const moved = await sheet.boundingBox();
   assert.ok(Math.abs(moved.x - (b.x - 300)) < 3 && Math.abs(moved.y - (b.y - 200)) < 3, `moved by its header: ${JSON.stringify(moved)}`);
   assert.ok(Math.abs(moved.width - (b.width + 60)) < 3 && Math.abs(moved.height - (b.height + 40)) < 3, `resized from its corner: ${JSON.stringify(moved)}`);
+  // the top-left corner and the left edge resize too, the right and bottom edges staying where they were
+  const nw = await page.locator(".pad-edge.nw").boundingBox();
+  await page.mouse.move(nw.x + 4, nw.y + 4); await page.mouse.down();
+  await page.mouse.move(nw.x - 36, nw.y - 26, { steps: 6 }); await page.mouse.up();
+  const side = await page.locator(".pad-edge.w").boundingBox();
+  await page.mouse.move(side.x + 3, side.y + side.height / 2); await page.mouse.down();
+  await page.mouse.move(side.x + 23, side.y + side.height / 2, { steps: 6 }); await page.mouse.up();
+  const left = await sheet.boundingBox();
+  assert.ok(Math.abs(left.x - (moved.x - 20)) < 3 && Math.abs(left.y - (moved.y - 30)) < 3
+    && Math.abs(left.x + left.width - (moved.x + moved.width)) < 3 && Math.abs(left.y + left.height - (moved.y + moved.height)) < 3,
+    `resized from its top-left corner and left edge: ${JSON.stringify(left)} from ${JSON.stringify(moved)}`);
   await page.keyboard.press("Escape");
   await page.reload({ waitUntil: "networkidle" });
   await page.keyboard.press("Alt+KeyN");
   await sheet.waitFor();
   b = await sheet.boundingBox();
-  assert.deepEqual([b.x, b.y, b.width, b.height].map(Math.round), [moved.x, moved.y, moved.width, moved.height].map(Math.round), "reopens where it was left");
+  assert.deepEqual([b.x, b.y, b.width, b.height].map(Math.round), [left.x, left.y, left.width, left.height].map(Math.round), "reopens where it was left");
   await page.locator(".pad-sheet header b").dblclick();
   b = await sheet.boundingBox();
   assert.ok(b.x + b.width > vp.width - 40 && b.y + b.height > vp.height - 140, `double-click sends it back to the corner: ${JSON.stringify(b)}`);

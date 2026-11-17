@@ -71,8 +71,8 @@ export const dashOps = {
       optimistic: [{ key: DASH_KEY, apply: (v: DashBoard | undefined) => v && { ...v, inbox: v.inbox.map((i) => (i.id === id ? { ...i, area } : i)) } }],
       confirm: (res, meta) => takeState(res, meta, s) };
   },
-  create(task: { id: string; title: string; area: string; stage?: string; links?: DashLink[] }, now = Date.now(), s: Store = roomStore): Op<DashAnswer> {
-    const t: DashTask = { id: task.id, title: task.title, body: "", stage: task.stage ?? "todo", links: task.links ?? [],
+  create(task: { id: string; title: string; body?: string; area: string; stage?: string; links?: DashLink[] }, now = Date.now(), s: Store = roomStore): Op<DashAnswer> {
+    const t: DashTask = { id: task.id, title: task.title, body: task.body ?? "", stage: task.stage ?? "todo", links: task.links ?? [],
       createdFrom: { source: "You" }, createdAt: now, updatedAt: now, clearedAt: null, area: task.area, dispatched: false, updates: [] };
     return { label: "add that thread", lanes: [lane(task.id)], method: "POST", path: "/api/dashboard/tasks", body: { ...task, stage: t.stage },
       optimistic: [{ key: DASH_KEY, apply: (v: DashBoard | undefined) => v && { ...v, tasks: [...v.tasks.filter((x) => x.id !== t.id), t] } }],

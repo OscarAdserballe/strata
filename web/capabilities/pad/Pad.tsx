@@ -7,7 +7,9 @@ import { toast } from "../../shell/layers.ts";
 import Writer, { loadWriter } from "../write/Writer.tsx";
 import { PAD_KEY_LABEL, closePad, isPadKey, togglePad, usePadOpen } from "./pad.ts";
 import { zoomOf } from "../../engines/zoom/zoom.ts";
-import { type Rect, clampRect, cornerRect, loadRect, saveRect } from "./rect.ts";
+import { type Edges, type Rect, clampRect, cornerRect, loadRect, resize, saveRect } from "./rect.ts";
+
+const GRIPS: Edges[] = ["w", "e", "s", "nw", "ne", "sw", "se"];
 
 // One listener however many pads are mounted.
 let keys = 0;
@@ -56,7 +58,8 @@ function Sheet() {
       {held ? <Writer key={gen} className="pad-text" label="Notepad" value={text} onChange={set} {...focus}
         placeholder="Something in the way? Jot it here and stay on your thread." />
         : <p className="pad-wait">Opening…</p>}
-      <div className="pad-grip" aria-hidden="true" onPointerDown={grab("size")} />
+      {GRIPS.map((g) => <div key={g} className={`pad-edge ${g}`} aria-hidden="true" onPointerDown={grab(g)} />)}
+      <div className="pad-grip" aria-hidden="true" />
     </section>
   );
 }
@@ -64,7 +67,7 @@ function Sheet() {
 const phone = (): boolean => matchMedia("(max-width: 640px)").matches;
 
 // Moves and resizes by writing the sheet's style directly, a frame at a time, so a drag never re-renders the Writer.
-function usePlacement(box: { current: HTMLElement | null }): [(mode: "move" | "size") => (e: ReactPointerEvent<HTMLElement>) => void, () => void] {
+function usePlacement(box: { current: HTMLElement | null }): [(mode: "move" | Edges) => (e: ReactPointerEvent<HTMLElement>) => void, () => void] {
   // the reader scales the room, so the sheet's px are the room's, not the window's
   const z = useRef(1);
   const vw = () => innerWidth / z.current, vh = () => innerHeight / z.current;
@@ -82,7 +85,7 @@ function usePlacement(box: { current: HTMLElement | null }): [(mode: "move" | "s
     addEventListener("resize", fit);
     return () => removeEventListener("resize", fit);
   }, []);
-  const grab = (mode: "move" | "size") => (e: ReactPointerEvent<HTMLElement>) => {
+  const grab = (mode: "move" | Edges) => (e: ReactPointerEvent<HTMLElement>) => {
     if (e.button !== 0 || phone() || (e.target as HTMLElement).closest("button")) return;
     e.preventDefault();
     if (!rect.current) return;
@@ -91,8 +94,7 @@ function usePlacement(box: { current: HTMLElement | null }): [(mode: "move" | "s
     const draw = () => {
       raf = 0;
       const dx = (px - sx) / k, dy = (py - sy) / k;
-      rect.current = mode === "move" ? { ...start, x: start.x + dx, y: start.y + dy }
-        : { ...start, w: Math.min(start.w + dx, vw() - start.x), h: Math.min(start.h + dy, vh() - start.y) };
+      rect.current = mode === "move" ? { ...start, x: start.x + dx, y: start.y + dy } : resize(start, mode, dx, dy, vw(), vh());
       paint();
     };
     const move = (ev: PointerEvent) => { px = ev.clientX; py = ev.clientY; if (!raf) raf = requestAnimationFrame(draw); };
