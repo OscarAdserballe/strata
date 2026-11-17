@@ -20,8 +20,6 @@ import type {
 
 // A claim's depth in its source's tree, named for the card's context line.
 const LEVELS = ["pillar", "support", "detail"];
-// The cap only defers: `total` still reports the true backlog.
-const SESSION_CAP = 60;
 
 export const flatten = (nodes: TreeNode[] | undefined, depth: number, out: SessionClaim[]): SessionClaim[] => {
   for (const n of nodes || []) {
@@ -149,7 +147,7 @@ export const reviewRoutes: Route[] = [
     const ids = new Set(q.cardIds.all().map((c) => c.id));
     const selected = owed.filter(([id]) => ids.has(id)).sort((a,b) => a[1].dueAt-b[1].dueAt);
     const due: ReviewCard[] = [];
-    for (const [id, s] of selected.slice(0, SESSION_CAP)) {
+    for (const [id, s] of selected) {
       const c = q.cardAny.get(id);
       if (!c) continue; // card dropped since
       const payload = parseJson<Record<string, unknown>>(c.payload, {});
