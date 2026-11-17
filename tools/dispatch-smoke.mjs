@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
-// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, and drops threads from Decide and Thinking, and To-do opens from the header.
+// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, keeps the sheet when another arrives, and drops threads from Decide and Thinking, and To-do opens from the header.
 const base = (process.argv[2] || "http://127.0.0.1:8804").replace(/\/+$/, "");
 let n = 0;
 const key = () => `smoke-${Date.now().toString(36)}-${++n}`;
@@ -34,6 +34,23 @@ try {
   const frame = await (await page.waitForSelector(".ws-sheet iframe.html-frame", { timeout: 15000 })).contentFrame();
   await frame.waitForSelector("text=Posted while you looked", { timeout: 15000 });
   console.log("✓ a page posted while Decide is open draws without a reload");
+
+  // a thread that arrives while you read doesn't take over the sheet
+  const reading = await thread(`Smoke ${run}: the page being read`);
+  await api(`/api/dashboard/tasks/${reading}/send`, "POST", {});
+  await tool("dashboard_post", { key: key(), id: reading, page: "<!doctype html><html><body><h1>The page being read</h1></body></html>" });
+  await page.locator(".ws-list").getByText(`Smoke ${run}: the page being read`).click({ timeout: 40000 });
+  const before = await (await page.waitForSelector(".ws-sheet iframe.html-frame", { timeout: 15000 })).contentFrame();
+  await before.waitForSelector("text=The page being read", { timeout: 15000 });
+  const late = await thread(`Smoke ${run}: a page that arrives later`);
+  await api(`/api/dashboard/tasks/${late}/send`, "POST", {});
+  await tool("dashboard_post", { key: key(), id: late, page: "<!doctype html><html><body><h1>Arrived later</h1></body></html>" });
+  await page.locator(".ws-list").getByText(`Smoke ${run}: a page that arrives later`).waitFor({ timeout: 40000 });
+  const after = await (await page.waitForSelector(".ws-sheet iframe.html-frame", { timeout: 15000 })).contentFrame();
+  await after.waitForSelector("text=The page being read", { timeout: 5000 });
+  assert.equal(await page.locator(".ws-card.open .t").textContent(), `Smoke ${run}: the page being read`);
+  console.log("✓ a thread arriving while you read leaves the sheet alone");
+  await page.locator(".ws-list").getByText(`Smoke ${run}: a page posted while Decide is open`).click();
 
   // Drop on the open Decide card takes the thread off the board
   await page.getByRole("region", { name: `Smoke ${run}: a page posted while Decide is open` }).getByRole("button", { name: "Drop" }).click();
