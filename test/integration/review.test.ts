@@ -125,3 +125,20 @@ test("review chat: the turn is refused without a message, and without a card tha
   const gone = await api("/api/review/chat", { method: "POST", body: JSON.stringify({ card: "nope", course: "nope", message: "what is this?" }) });
   assert.equal(gone.status, 404);
 });
+
+test("review: every due kept card is sent, not just the first sixty", async () => {
+  // Kept months ago and never graded: each is past its first rung. More than the seed holds, copied from one seed card.
+  const db = new DatabaseSync(server.db, { timeout: 5000 });
+  const long = Date.now() - 90 * 864e5;
+  const seed = db.prepare("SELECT id, course, deck FROM cards LIMIT 1").get() as { id: string; course: string; deck: string };
+  for (let i = 0; i < 80; i++) {
+    const id = `${seed.id}-many-${i}`;
+    db.prepare("INSERT INTO cards (id,course,deck,type,payload,ord) SELECT ?,course,deck,type,payload,ord FROM cards WHERE id = ?").run(id, seed.id);
+    db.prepare("INSERT INTO card_keeps (id,course,deck,created_at) VALUES (?,?,?,?)").run(id, seed.course, seed.deck, long);
+  }
+  db.close();
+
+  const { body } = await api("/api/review");
+  assert.ok(body.total >= 80, `the eighty are due (${body.total})`);
+  assert.equal(body.cards.length, body.total, "…and every due card comes back to be reviewed");
+});
