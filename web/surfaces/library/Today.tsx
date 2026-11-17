@@ -6,7 +6,7 @@ import { plan, planGestures } from "../../data/entities/plan.ts";
 import { StrataWhy } from "../../data/api.ts";
 import { foldDays } from "../../capabilities/today/days.ts";
 import DayGrid from "../../capabilities/today/DayGrid.tsx";
-import { endLabel, projectView, readingList, starCount, STAR_CAP, type ProjectView, type ReadingRow } from "../../capabilities/today/projects.ts";
+import { activeProjects, endLabel, projectView, readingList, starCount, STAR_CAP, type ProjectView, type ReadingRow } from "../../capabilities/today/projects.ts";
 import { courseOf } from "../../shell/format.js";
 import "./today.css";
 
@@ -37,8 +37,8 @@ export default function Today({ reg, review, onReview, onOpen, onResume, onWarm,
   const days = useMemo(() => (reg ? foldDays(reg.hours ?? [], reg.daysBefore ?? 0) : null), [reg]);
   useEffect(() => { setUnstarred([]); }, [reg]);
   const reading = readingList(views, keptAt).filter((r) => !unstarred.includes(r.source.id));
-  const active = views.filter((v) => !v.project.archivedAt)
-    .sort((a, b) => (a.project.endsAt || "9999").localeCompare(b.project.endsAt || "9999") || (b.project.touchedAt ?? 0) - (a.project.touchedAt ?? 0));
+  const active = activeProjects(views);
+  const anyStar = active.some((v) => v.project.starredAt);
   const stars = starCount(views) - unstarred.length;
   const warm = (board: string) => (onWarm ? { onPointerEnter: () => onWarm(board), onPointerDown: () => onWarm(board) } : {});
 
@@ -116,13 +116,9 @@ export default function Today({ reg, review, onReview, onOpen, onResume, onWarm,
       </main>
 
       <aside className="td-side">
-        {days ? <div className="td-counter">
-          <div className="td-day"><b>Day {days.total}</b><span>{days.streak} in a row</span></div>
-          <DayGrid days={days} />
-        </div> : null}
         <div className="td-head small"><span>Projects</span><span>{active.length} active</span></div>
-        {active.map((v) => <button key={v.project.id} className="td-proj" {...warm(v.project.id)} onClick={() => onOpen(v.project.id)}>
-          <span className="td-proj-top"><span className="td-proj-name">{v.project.title}</span><span className="td-end">{endLabel(v.project)}</span></span>
+        {active.map((v) => <button key={v.project.id} className={"td-proj" + (v.project.starredAt ? " starred" : anyStar ? " quiet" : "")} {...warm(v.project.id)} onClick={() => onOpen(v.project.id)}>
+          <span className="td-proj-top"><span className="td-proj-name">{v.project.starredAt ? <i className="td-pstar" aria-label="starred">★ </i> : null}{v.project.title}</span><span className="td-end">{endLabel(v.project)}</span></span>
           {v.next || v.due || v.fresh ? <span className="td-next">{v.next ? <>Next: {v.next}</> : null}
             {v.due ? <i className="td-mark due">due {v.due}</i> : null}{v.fresh ? <i className="td-mark new">{v.fresh} new</i> : null}</span> : null}
           <span className="td-prog"><span className="td-bar"><b style={{ width: `${v.total ? (100 * v.done) / v.total : 0}%` }} /></span><span>{v.done}/{v.total}</span></span>
