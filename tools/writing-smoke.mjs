@@ -113,7 +113,7 @@ try {
   assert.equal(await bodyOf(rich), stored, "the reload changed nothing on the server");
   console.log("✓ bold, italics, a list and a pasted image survive a reload");
 
-  // the notepad: opened by its chip on the dashboard, by ⌘; in the reader; what one wrote, the other shows
+  // the notepad: opened by its chip on the dashboard, by Alt+N in the reader; what one wrote, the other shows
   const line = `friction ${run}`;
   await page.goto(`${base}/dashboard`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "Notepad", exact: true }).click();
@@ -129,14 +129,42 @@ try {
   const boards = await api("/api/boards");
   const reader = (boards.boards ?? boards)[0]?.id;
   await page.goto(`${base}/${reader ? `?board=${reader}` : ""}`, { waitUntil: "networkidle" });
-  await page.keyboard.press("ControlOrMeta+Semicolon");
+  await page.keyboard.press("Alt+KeyN");
   const there = page.locator(".pad-text[contenteditable=true]");
   await there.waitFor();
   assert.ok((await there.innerText()).includes(line), "the reader's notepad shows the dashboard's line");
   await page.keyboard.type(" and r o h b", { delay: 10 });
   assert.ok((await there.innerText()).includes(`${line} and r o h b`), "letters typed in the notepad stay out of the room's shortcuts");
-  await page.keyboard.press("ControlOrMeta+Semicolon");
-  assert.equal(await page.locator(".pad-sheet").count(), 0, "⌘; closes it again");
+  await page.keyboard.press("Alt+KeyN");
+  assert.equal(await page.locator(".pad-sheet").count(), 0, "Alt+N closes it again");
   console.log("✓ the notepad opens on the dashboard and in the reader, and keeps what either wrote");
+
+  // the notepad floats bottom right, moves by its header, resizes from its corner, and reopens where it was left
+  await page.keyboard.press("Alt+KeyN");
+  const sheet = page.locator(".pad-sheet");
+  await sheet.waitFor();
+  const vp = page.viewportSize();
+  let b = await sheet.boundingBox();
+  assert.ok(b.x + b.width > vp.width - 40 && b.y + b.height > vp.height - 140, `opens bottom right: ${JSON.stringify(b)}`);
+  const hd = await page.locator(".pad-sheet header b").boundingBox();
+  await page.mouse.move(hd.x + 5, hd.y + 5); await page.mouse.down();
+  await page.mouse.move(hd.x - 295, hd.y - 195, { steps: 6 }); await page.mouse.up();
+  const grip = await page.locator(".pad-grip").boundingBox();
+  await page.mouse.move(grip.x + 8, grip.y + 8); await page.mouse.down();
+  await page.mouse.move(grip.x + 68, grip.y + 48, { steps: 6 }); await page.mouse.up();
+  const moved = await sheet.boundingBox();
+  assert.ok(Math.abs(moved.x - (b.x - 300)) < 3 && Math.abs(moved.y - (b.y - 200)) < 3, `moved by its header: ${JSON.stringify(moved)}`);
+  assert.ok(Math.abs(moved.width - (b.width + 60)) < 3 && Math.abs(moved.height - (b.height + 40)) < 3, `resized from its corner: ${JSON.stringify(moved)}`);
+  await page.keyboard.press("Escape");
+  await page.reload({ waitUntil: "networkidle" });
+  await page.keyboard.press("Alt+KeyN");
+  await sheet.waitFor();
+  b = await sheet.boundingBox();
+  assert.deepEqual([b.x, b.y, b.width, b.height].map(Math.round), [moved.x, moved.y, moved.width, moved.height].map(Math.round), "reopens where it was left");
+  await page.locator(".pad-sheet header b").dblclick();
+  b = await sheet.boundingBox();
+  assert.ok(b.x + b.width > vp.width - 40 && b.y + b.height > vp.height - 140, `double-click sends it back to the corner: ${JSON.stringify(b)}`);
+  await page.keyboard.press("Escape");
+  console.log("✓ the notepad moves, resizes and reopens where it was left");
   assert.deepEqual(errors, []);
 } finally { await browser.close(); }
