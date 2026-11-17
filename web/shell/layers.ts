@@ -22,15 +22,18 @@ export const LAYERS = [
 export type LayerName = (typeof LAYERS)[number][0];
 
 // Toast state lives here, not in a screen, so showing one re-renders only the Toast component.
-let said = "";
+export interface Said { text: string; act?: { label: string; run(): void } }
+let said: Said = { text: "" };
 let timer: ReturnType<typeof setTimeout> | undefined;
 const heard = new Set<() => void>();
 const tell = () => { for (const cb of [...heard]) cb(); };
-export function toast(text: string, ms?: number): void {
-  said = text;
+export function toast(text: string, ms?: number, act?: Said["act"]): void {
+  said = { text, act };
   clearTimeout(timer);
-  timer = setTimeout(() => { said = ""; tell(); }, ms || 1300);
+  timer = setTimeout(() => { said = { text: "" }; tell(); }, ms || 1300);
   tell();
 }
-export const toastNow = (): string => said;
+export const toastNow = (): string => said.text;
+export const toastSaid = (): Said => said;
+export const hideToast = (): void => { clearTimeout(timer); said = { text: "" }; tell(); };
 export const subscribeToast = (cb: () => void): (() => void) => { heard.add(cb); return () => { heard.delete(cb); }; };

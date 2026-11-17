@@ -4,16 +4,11 @@ import { dash, useDashBoard, useRoutine, type DashItem, type DashTask } from "..
 import { toast } from "../../shell/layers.ts";
 import { go, type Mode, type Sub } from "./nav.ts";
 import Writer from "../../capabilities/write/Writer.tsx";
-import { Grow, Src, age, hm, newThreadId, useTyped } from "./parts.tsx";
+import { Grow, Src, age, hm, newThreadId, useArea, useTyped } from "./parts.tsx";
 import { move, saveText } from "./moves.ts";
 
 const OLD = 14 * 864e5;
 const said = (e: unknown, what: string) => toast(StrataWhy(e, what), 4200);
-
-function useArea(): [string, (a: string) => void] {
-  const [area, setArea] = useState(() => { try { return localStorage.getItem("dashboard-area") === "personal" ? "personal" : "work"; } catch { return "work"; } });
-  return [area, (a) => { setArea(a); try { localStorage.setItem("dashboard-area", a); } catch { /* private mode: the choice lasts the visit */ } }];
-}
 
 /** Triage: what came in, what you keep, and what is next. The same in both modes; Dispatch takes a thread from here. */
 export default function Triage({ mode, sub }: { mode: Mode; sub: Sub }) {

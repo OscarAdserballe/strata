@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { store } from "../../data/store.ts";
 import { DASH_KEY, DISPATCH_KEY, useDashBoard, useDispatch } from "../../data/entities/dashboard.ts";
-import { subscribeToast, toastNow } from "../../shell/layers.ts";
+import { hideToast, subscribeToast, toastSaid } from "../../shell/layers.ts";
 import { useDeploy } from "../../shell/session.ts";
 import { go, useNav, type Mode, type View } from "./nav.ts";
 import Triage from "./Triage.tsx";
@@ -132,6 +132,8 @@ function Poller() {
 }
 
 function Toast() {
-  const said = useSyncExternalStore(subscribeToast, toastNow, () => "");
-  return said ? <div className="dash-toast" role="status">{said}</div> : null;
+  const said = useSyncExternalStore(subscribeToast, toastSaid, toastSaid);
+  const act = said.act;
+  return said.text ? <div className="dash-toast" role="status">{said.text}
+    {act ? <> · <button onClick={() => { hideToast(); act.run(); }}>{act.label}</button></> : null}</div> : null;
 }

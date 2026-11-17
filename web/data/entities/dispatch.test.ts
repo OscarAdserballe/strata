@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Store } from "../store.ts";
 import { Mutator, type SendAnswer, type SendRequest } from "../mutate.ts";
-import { DISPATCH_KEY, dashOps as dispatchOps, type DispatchPane, type DispatchThread } from "./dashboard.ts";
+import { DASH_KEY, DISPATCH_KEY, dashOps as dispatchOps, type DashBoard, type DispatchPane, type DispatchThread } from "./dashboard.ts";
 
 const tick = async () => { for (let i = 0; i < 3; i++) await new Promise((resolve) => setImmediate(resolve)); };
 const thread = (id: string, stage: string): DispatchThread => ({ id, title: id, stage, links: [], updatedAt: 1, versions: [{ n: 1, resourceId: `res-${id}`, at: 1, landed: stage, notes: 0 }], press: null, lands: null });
@@ -46,4 +46,24 @@ test("a replayed answer to a resent press can't put back a thread a later press 
   const replayed: DispatchPane = { ...PANE, rev: 11, threads: [{ ...PANE.threads[0], stage: "implementing" }, PANE.threads[1]] };
   dispatchOps.press("t_d", "back", Date.now, store).confirm!({ press: {}, pane: replayed }, { rev: 7, epoch: "e" });
   assert.deepEqual(store.get<DispatchPane>(DISPATCH_KEY)!.threads.map((t) => t.stage), ["implementing", "implementing"]);
+});
+
+test("a thread made in Dispatch shows at once with its context, and Send to Dispatch waits behind its create", async () => {
+  const store = new Store();
+  const board: DashBoard = { rev: 3, tasks: [], inbox: [], archived: 0, links: [] };
+  store.apply(DASH_KEY, 3, board, "wire", { epoch: "e", stamp: 3 });
+  const sent: { req: SendRequest; reply: (a: SendAnswer) => void }[] = [];
+  const m = new Mutator({ store, transport: (req) => new Promise<SendAnswer>((resolve) => sent.push({ req, reply: resolve })), setTimer: () => 0, clearTimer: () => {} });
+  const made = m.mutate(dispatchOps.create({ id: "t_new1", title: "New", body: "Why it matters", area: "work" }, 5, store));
+  const send = m.mutate(dispatchOps.send("t_new1", store));
+  await tick();
+  const t = store.get<DashBoard>(DASH_KEY)!.tasks.find((x) => x.id === "t_new1")!;
+  assert.deepEqual([t.title, t.body, t.stage, t.dispatched], ["New", "Why it matters", "implementing", true]);
+  assert.equal(sent.length, 1, "the send waits for the create's answer");
+  assert.equal(JSON.parse(String(sent[0].req.body)).body, "Why it matters");
+  sent[0].reply({ status: 201, body: { id: "t_new1" }, rev: 4, epoch: "e" });
+  await made; await tick();
+  assert.deepEqual([sent.length, sent[1].req.path], [2, "/api/dashboard/tasks/t_new1/send"]);
+  sent[1].reply({ status: 200, body: { press: {} }, rev: 5, epoch: "e" });
+  await send;
 });
