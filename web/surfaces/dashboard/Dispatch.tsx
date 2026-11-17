@@ -29,6 +29,9 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   const t = here.find((x) => x.id === sel?.thread) ?? here[0] ?? null;
   const v = t ? (t.versions.find((x) => x.n === (sel?.thread === t.id ? sel.n : null)) ?? latest(t)) : null;
   useEffect(() => { setSel(null); }, [view]);
+  // a thread arriving later sorts above the one on the sheet, so pin what is shown
+  const pinned = here.some((x) => x.id === sel?.thread);
+  useEffect(() => { if (!pinned && t) setSel({ thread: t.id, n: null }); }, [pinned, t?.id]);
   // the sheet fits a short page; a long one fills the room and scrolls in its frame
   const [tall, setTall] = useState<{ rid: string; h: number } | null>(null);
   const fit = v && tall?.rid === v.resourceId ? Math.max(tall.h, 240) : null;

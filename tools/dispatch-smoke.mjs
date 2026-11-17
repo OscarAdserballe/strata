@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
-// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, and drops threads from Decide and Thinking, and To-do opens from the header.
+// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, keeps it on the sheet when another thread arrives, and drops threads from Decide and Thinking, and To-do opens from the header.
 const base = (process.argv[2] || "http://127.0.0.1:8804").replace(/\/+$/, "");
 let n = 0;
 const key = () => `smoke-${Date.now().toString(36)}-${++n}`;
@@ -34,6 +34,20 @@ try {
   const frame = await (await page.waitForSelector(".ws-sheet iframe.html-frame", { timeout: 15000 })).contentFrame();
   await frame.waitForSelector("text=Posted while you looked", { timeout: 15000 });
   console.log("✓ a page posted while Decide is open draws without a reload");
+
+  // a thread arriving while a page is on the sheet doesn't take the sheet, even one never clicked
+  await page.reload({ waitUntil: "networkidle" });
+  const shown = await (await page.waitForSelector(".ws-sheet iframe.html-frame", { timeout: 15000 })).contentFrame();
+  await shown.waitForSelector("text=Posted while you looked", { timeout: 15000 });
+  const later = await thread(`Smoke ${run}: a thread that arrives later`);
+  await api(`/api/dashboard/tasks/${later}/send`, "POST", {});
+  await tool("dashboard_post", { key: key(), id: later, page: "<!doctype html><html><body><h1>Arrived later</h1></body></html>" });
+  await page.locator(".ws-list").getByText(`Smoke ${run}: a thread that arrives later`).waitFor({ timeout: 40000 });
+  await page.waitForTimeout(500);
+  await shown.waitForSelector("text=Posted while you looked", { timeout: 2000 });
+  assert.equal(await page.locator(".ws-card.open .t").textContent(), `Smoke ${run}: a page posted while Decide is open`);
+  console.log("✓ a new thread doesn't replace the page being read");
+  await api(`/api/dashboard/tasks/${later}`, "PATCH", { stage: "dropped", cleared: true });
 
   // Drop on the open Decide card takes the thread off the board
   await page.getByRole("region", { name: `Smoke ${run}: a page posted while Decide is open` }).getByRole("button", { name: "Drop" }).click();
