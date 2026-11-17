@@ -29,6 +29,8 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   const t = here.find((x) => x.id === sel?.thread) ?? here[0] ?? null;
   const v = t ? (t.versions.find((x) => x.n === (sel?.thread === t.id ? sel.n : null)) ?? latest(t)) : null;
   useEffect(() => { setSel(null); }, [view]);
+  // what is on the sheet stays there: a newer thread or version never replaces it, and a note being written survives
+  useEffect(() => { if (t && v && (sel?.thread !== t.id || sel.n !== v.n)) setSel({ thread: t.id, n: v.n }); }, [t?.id, v?.n]);
   // the sheet fits a short page; a long one fills the room and scrolls in its frame
   const [tall, setTall] = useState<{ rid: string; h: number } | null>(null);
   const fit = v && tall?.rid === v.resourceId ? Math.max(tall.h, 240) : null;

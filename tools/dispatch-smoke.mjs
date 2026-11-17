@@ -35,6 +35,16 @@ try {
   await frame.waitForSelector("text=Posted while you looked", { timeout: 15000 });
   console.log("✓ a page posted while Decide is open draws without a reload");
 
+  // a page that arrives for another thread leaves the open sheet where it is
+  const other = await thread(`Smoke ${run}: a page that arrives while you read`);
+  await api(`/api/dashboard/tasks/${other}/send`, "POST", {});
+  await tool("dashboard_post", { key: key(), id: other, page: "<!doctype html><html><body><h1>Arrived later</h1></body></html>" });
+  await page.locator(".ws-list").getByText(`Smoke ${run}: a page that arrives while you read`).waitFor({ timeout: 40000 });
+  await page.waitForTimeout(500);
+  await frame.waitForSelector("text=Posted while you looked", { timeout: 2000 });
+  await page.getByRole("region", { name: `Smoke ${run}: a page posted while Decide is open` }).waitFor({ timeout: 2000 });
+  console.log("✓ a new page for another thread doesn't take the sheet");
+
   // Drop on the open Decide card takes the thread off the board
   await page.getByRole("region", { name: `Smoke ${run}: a page posted while Decide is open` }).getByRole("button", { name: "Drop" }).click();
   await page.waitForSelector(`text=Smoke ${run}: a page posted while Decide is open`, { state: "detached", timeout: 5000 });
