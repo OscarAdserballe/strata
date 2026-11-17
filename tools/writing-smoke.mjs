@@ -133,6 +133,7 @@ try {
   const there = page.locator(".pad-text[contenteditable=true]");
   await there.waitFor();
   assert.ok((await there.innerText()).includes(line), "the reader's notepad shows the dashboard's line");
+  await page.waitForFunction(() => document.activeElement?.classList.contains("pad-text"));
   await page.keyboard.type(" and r o h b", { delay: 10 });
   assert.ok((await there.innerText()).includes(`${line} and r o h b`), "letters typed in the notepad stay out of the room's shortcuts");
   await page.keyboard.press("Alt+KeyN");
