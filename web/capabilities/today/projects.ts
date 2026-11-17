@@ -113,15 +113,55 @@ export const starCount = (views: readonly ProjectView[]): number =>
 /** The same view from a board's own state, so the project page agrees with Today without the register. */
 export function boardProject(
   id: string, title: string,
-  plan: { purpose: string; endsAt?: string; archivedAt?: number | null; groups: ProjectEntry["groups"]; places: Record<string, { group: string | null; ord: number | null; pinned: boolean }> },
+  plan: { purpose: string; endsAt?: string; archivedAt?: number | null; starredAt?: number | null; groups: ProjectEntry["groups"]; places: Record<string, { group: string | null; ord: number | null; pinned: boolean }> },
   resources: readonly { id: string; filename: string; kind: string; readPct?: number; lastReadAt?: number | null; doneAt?: number | null; createdAt: number }[],
   now = new Date(),
 ): ProjectView {
-  const p: ProjectEntry = { id, title, purpose: plan.purpose, endsAt: plan.endsAt ?? "", archivedAt: plan.archivedAt ?? null, touchedAt: null,
+  const p: ProjectEntry = { id, title, purpose: plan.purpose, endsAt: plan.endsAt ?? "", archivedAt: plan.archivedAt ?? null, starredAt: plan.starredAt ?? null, touchedAt: null,
     groups: plan.groups.map((g) => ({ ...g, byDate: g.byDate ?? "" })), places: plan.places };
   const entries: RegisterEntry[] = resources.map((r) => ({
     resourceId: r.id, pairId: null, boardId: id, boardTitle: title, unfiled: false, filename: r.filename, kind: r.kind, originUrl: null,
     createdAt: r.createdAt, status: r.doneAt ? "done" : "reading", readPct: Math.round(r.readPct ?? 0), kept: 0, cards: 0, waiting: !r.doneAt, lastAt: r.lastReadAt ?? 0,
   }));
   return projectView(p, entries, now);
+}
+
+/** Active projects: starred first, then by end date, then most recently touched. */
+export function activeProjects(views: readonly ProjectView[]): ProjectView[] {
+  const star = (v: ProjectView) => (v.project.starredAt ? 0 : 1);
+  return views.filter((v) => !v.project.archivedAt)
+    .sort((a, b) => star(a) - star(b) || (a.project.endsAt || "9999").localeCompare(b.project.endsAt || "9999") || (b.project.touchedAt ?? 0) - (a.project.touchedAt ?? 0));
+}
+
+export interface DupSource { id: string; filename: string; originUrl?: string | null; readPct?: number; doneAt?: number | null; createdAt: number }
+
+const sameName = (n: string): string => n.toLowerCase()
+  .replace(/\.(pdf|md|markdown|txt|html?)$/, "")
+  .replace(/\s*(\(\d+\)|-\s*copy(\s*\d+)?|copy(\s*\d+)?)$/, "")
+  .replace(/[\s_\-]+/g, " ").trim();
+
+/** Sources that repeat another in the same project (same link, or the same name give or take " (1)"), mapped to the one to keep: finished, then furthest read, then oldest. */
+export function duplicates(sources: readonly DupSource[]): Map<string, string> {
+  const rank = (s: DupSource) => [s.doneAt ? 0 : 1, -(s.readPct ?? 0), s.createdAt];
+  const better = (a: DupSource, b: DupSource) => { const x = rank(a), y = rank(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i]; return a.id < b.id; };
+  const parent = new Map<string, string>();
+  const find = (id: string): string => { const p = parent.get(id) ?? id; return p === id ? id : find(p); };
+  const byKey = new Map<string, string>();
+  for (const s of sources) {
+    parent.set(s.id, s.id);
+    for (const k of [s.originUrl ? "u:" + s.originUrl.replace(/[#?].*$/, "").replace(/\/$/, "") : "", "n:" + sameName(s.filename)]) {
+      if (!k || k === "n:") continue;
+      const other = byKey.get(k);
+      if (other) parent.set(find(s.id), find(other)); else byKey.set(k, s.id);
+    }
+  }
+  const groups = new Map<string, DupSource[]>();
+  for (const s of sources) { const r = find(s.id); groups.set(r, [...(groups.get(r) ?? []), s]); }
+  const out = new Map<string, string>();
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    const keep = g.reduce((a, b) => (better(a, b) ? a : b));
+    for (const s of g) if (s.id !== keep.id) out.set(s.id, keep.id);
+  }
+  return out;
 }

@@ -6,7 +6,7 @@ import { plan as planWrites, planGestures, type planCalls } from "../../data/ent
 import { refreshRegister } from "../../data/entities/register.ts";
 import Verbs from "../../capabilities/sources/SourceVerbs.tsx";
 import type { BoardActions } from "../../capabilities/sources/useBoardActions.ts";
-import { boardProject, shortDay, STAR_CAP, type ProjectSource, type ProjectUnit } from "../../capabilities/today/projects.ts";
+import { boardProject, duplicates, shortDay, STAR_CAP, type ProjectSource, type ProjectUnit } from "../../capabilities/today/projects.ts";
 import { openTab } from "../../shell/screens.ts";
 import type { Tile } from "./boardTiles.ts";
 import "./project-page.css";
@@ -116,6 +116,10 @@ export default function ProjectPage(p: ProjectPageProps) {
   });
 
   const archived = !!plan.archivedAt;
+  const starred = !!plan.starredAt;
+  const dups = useMemo(() => duplicates(p.resources), [p.resources]);
+  const nameOf = (rid: string) => view.sources.find((s) => s.id === rid)?.name ?? "the other copy";
+  const delDups = () => { setArm(null); for (const rid of dups.keys()) { const t = tileOf.get(rid); if (t && p.onDel) p.onDel(t); } };
   const verbs = { onDel: p.onDel, onAside: p.onAside, onDistil: p.onDistil, onDistilWarm: p.onDistilWarm, onKeep: p.onKeep, onKeepWarm: p.onKeepWarm, onDone: p.onDone };
 
   const sourceRow = (s: ProjectSource) => {
@@ -131,6 +135,9 @@ export default function ProjectPage(p: ProjectPageProps) {
             onClick={() => t && p.onOpen(t)}>{s.name}</button>}
       {t?.busy ? <span className="dk-spin" title="the model is reading this in" /> : null}
       {issue ? <span className="pp-issue">{issue.error} {issue.verb}</span> : null}
+      {dups.has(s.id) && t && p.onDel ? <span className="pp-dup">duplicate of {nameOf(dups.get(s.id)!)}
+        <button className={"pp-dupdel" + (arm === "dup:" + s.id ? " arm" : "")} onBlur={() => setArm((a) => (a === "dup:" + s.id ? null : a))}
+          onClick={() => { if (arm === "dup:" + s.id) { setArm(null); p.onDel!(t); } else setArm("dup:" + s.id); }}>{arm === "dup:" + s.id ? "Delete this copy?" : "Delete"}</button></span> : null}
       <span className="pp-sright">
         <button className={"pp-star" + (s.pinned ? " on" : "")} aria-pressed={s.pinned} title={s.pinned ? "On Today — click to unstar" : "Star: keep it on Today"}
           aria-label={(s.pinned ? "Unstar " : "Star ") + s.name} onClick={() => star(s)}>{s.pinned ? "★" : "☆"}</button>
@@ -186,7 +193,11 @@ export default function ProjectPage(p: ProjectPageProps) {
           <div className="pp-titles">
             {renaming === "title"
               ? <Ghost className="pp-title edit" label="Project name" value={p.head} onCommit={(v) => { setRenaming(null); if (v) void p.boardActions.rename(boardId, v); }} />
-              : <h1 className="pp-title" onDoubleClick={() => setRenaming("title")}>{p.head}</h1>}
+              : <h1 className="pp-title" onDoubleClick={() => setRenaming("title")}>
+                {archived ? null : <button className={"pp-pstar" + (starred ? " on" : "")} aria-pressed={starred} aria-label={starred ? "Unstar this project" : "Star this project"}
+                  title={starred ? "Starred: sorts first on Today and Projects. Click to unstar" : "Star: sort it first on Today and Projects"}
+                  onClick={() => void planApi.project({ starred: !starred }).finally(() => refreshRegister())}>{starred ? "★" : "☆"}</button>}
+                {p.head}</h1>}
             <Ghost className="pp-goal" label="What is it for?" placeholder="What is it for?" value={plan.purpose} onCommit={(v) => planApi.purpose(v)} />
           </div>
           {archived ? null : <div className="pp-total">
@@ -210,6 +221,11 @@ export default function ProjectPage(p: ProjectPageProps) {
         {p.work}
 
         {archived ? <p className="pp-archived">Archived {dayLong(plan.archivedAt!)} · {view.sources.filter((s) => s.finished).length} sources read{kept ? ` · ${kept} cards kept` : ""}</p> : null}
+        {dups.size && p.onDel && !archived ? <div className="pp-dups" role="status">
+          <span>{dups.size === 1 ? "1 source is a duplicate" : `${dups.size} sources are duplicates`} of another here. The copy you've read furthest stays.</span>
+          <button className={"pp-dupdel" + (arm === "dups" ? " arm" : "")} onBlur={() => setArm((a) => (a === "dups" ? null : a))}
+            onClick={() => { if (arm === "dups") delDups(); else setArm("dups"); }}>{arm === "dups" ? `Delete ${dups.size} and their cards?` : `Delete ${dups.size === 1 ? "it" : `all ${dups.size}`}`}</button>
+        </div> : null}
         {view.units.length ? <div className="pp-colhead">sources read</div> : null}
         {view.units.map(unitRow)}
         {!archived ? <button className="pp-add" onClick={() => void planApi.addGroup("New unit").then((id) => { if (id) { setOpen(id); setRenaming(id); } })}>+ unit</button> : null}

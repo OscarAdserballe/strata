@@ -1,6 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { RegisterResponse } from "../../../shared/types/index.ts";
-import { daysUntil, projectView, shortDay, type ProjectView } from "../../capabilities/today/projects.ts";
+import { plan, planGestures } from "../../data/entities/plan.ts";
+import { refreshRegister } from "../../data/entities/register.ts";
+import { activeProjects, daysUntil, projectView, shortDay, type ProjectView } from "../../capabilities/today/projects.ts";
 import "./projects.css";
 
 export interface ProjectsIndexProps {
@@ -25,8 +27,15 @@ const Segments = ({ v }: { v: ProjectView }) => v.units.length ? <div className=
 export default function ProjectsIndex({ reg, onOpen, onWarm, onNew }: ProjectsIndexProps) {
   const [shelf, setShelf] = useState<"active" | "archived">("active");
   const views = useMemo<ProjectView[]>(() => (reg ? reg.projects.map((p) => projectView(p, reg.entries)) : []), [reg]);
-  const active = views.filter((v) => !v.project.archivedAt)
-    .sort((a, b) => (a.project.endsAt || "9999").localeCompare(b.project.endsAt || "9999") || (b.project.touchedAt ?? 0) - (a.project.touchedAt ?? 0));
+  const [starOver, setStarOver] = useState<Record<string, boolean>>({});
+  useEffect(() => { setStarOver({}); }, [reg]);
+  const starredViews = views.map((v) => (v.project.id in starOver ? { ...v, project: { ...v.project, starredAt: starOver[v.project.id] ? v.project.starredAt ?? Date.now() : null } } : v));
+  const active = activeProjects(starredViews);
+  const anyStar = active.some((v) => v.project.starredAt);
+  function star(id: string, on: boolean) {
+    setStarOver((o) => ({ ...o, [id]: on }));
+    plan.write(id, planGestures.project({ starred: on })).then(() => refreshRegister(), () => setStarOver((o) => { const n = { ...o }; delete n[id]; return n; }));
+  }
   const archived = views.filter((v) => v.project.archivedAt).sort((a, b) => (b.project.archivedAt ?? 0) - (a.project.archivedAt ?? 0));
   const shown = shelf === "active" ? active : archived;
   return (
@@ -45,7 +54,11 @@ export default function ProjectsIndex({ reg, onOpen, onWarm, onNew }: ProjectsIn
       {reg === null ? <p className="td-quiet">Reading the room…</p>
         : !shown.length ? <p className="td-quiet">{shelf === "active" ? "No projects yet. Start one with New project." : "Nothing archived. A finished project goes here, and its kept cards keep coming back on Review."}</p>
         : <div className="pj-grid">
-          {shown.map((v) => <button key={v.project.id} className="pj-card" onClick={() => onOpen(v.project.id)}
+          {shown.map((v) => <div key={v.project.id} className={"pj-cell" + (shelf === "active" && anyStar && !v.project.starredAt ? " quiet" : "")}>
+            {shelf === "active" ? <button className={"pj-star" + (v.project.starredAt ? " on" : "")} aria-pressed={!!v.project.starredAt}
+              aria-label={(v.project.starredAt ? "Unstar " : "Star ") + v.project.title} title={v.project.starredAt ? "Starred: sorts first. Click to unstar" : "Star: sort it first"}
+              onClick={() => star(v.project.id, !v.project.starredAt)}>{v.project.starredAt ? "★" : "☆"}</button> : null}
+            <button className={"pj-card" + (v.project.starredAt && shelf === "active" ? " starred" : "")} onClick={() => onOpen(v.project.id)}
             {...(onWarm ? { onPointerEnter: () => onWarm(v.project.id), onPointerDown: () => onWarm(v.project.id) } : {})}>
             <span className="td-eyebrow">{v.project.archivedAt ? `archived ${new Date(v.project.archivedAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}` : ends(v)}</span>
             <span className="pj-title">{v.project.title}</span>
@@ -54,7 +67,7 @@ export default function ProjectsIndex({ reg, onOpen, onWarm, onNew }: ProjectsIn
             <Segments v={v} />
             {v.next || v.loose.length ? <span className="pj-next">{v.next ? <>Next: <b>{v.next}</b></> : null}
               {v.units.length && v.loose.length ? `${v.next ? " · " : ""}${v.loose.length} in loose ends` : ""}</span> : null}
-          </button>)}
+          </button></div>)}
         </div>}
     </div>
   );
