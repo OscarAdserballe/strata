@@ -43,8 +43,6 @@ export function requestBoardPrimers(boardId: string): string[] {
   return p.lacking.all(boardId, BOARD_BATCH).filter((r) => p.request.run(r.id, boardId, now()).changes > 0).map((r) => r.id);
 }
 
-export const lackingCount = (boardId: string): number => isDispatch(boardId) ? 0 : p.lacking.all(boardId, BOARD_BATCH).length;
-
 /** Stores a written primer as ready. Runs inside a commit. */
 export function setPrimer(boardId: string, rid: string, html: string): void {
   if (isDispatch(boardId)) fail("Dispatch pages don't get primers.");

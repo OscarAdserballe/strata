@@ -109,6 +109,7 @@ CREATE TABLE IF NOT EXISTS primers (
   html TEXT, requested_at INTEGER, built_at INTEGER, rev INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_primers_status ON primers(status, board_id);
+CREATE INDEX IF NOT EXISTS idx_primers_board ON primers(board_id);
 -- a board's RESOURCE SET (0..N): the files it's reading. A board = one context window: the
 -- resources + chat are what the model sees at once, so there is no retrieval — every resource's
 -- text/bytes rides each turn, bounded by the budget (BUDGET_TOKENS). text is md/txt; a PDF's
