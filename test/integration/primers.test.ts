@@ -70,3 +70,42 @@ test("replacing a text source in place marks its primer out of date", async () =
   await setPrimer(`src_${live}`, PAGE);
   assert.match(await said(live), /^ready/, "a new primer is ready again");
 });
+
+const ask = (r: string, key = `ask-${++k}-${Date.now()}`) => server.api(`/api/boards/${board}/resources/${r}/primer`, { method: "POST", headers: { "Idempotency-Key": key } });
+
+test("asking records the ask and wakes the routine (stubbed) with the source and board", async () => {
+  const fresh = await addMarkdown(server, board, "convexity.md", MD);
+  assert.deepEqual((await server.api(`/api/boards/${board}/resources/${fresh}/primer`)).body, { status: "none", askedAt: null, builtAt: null, page: false });
+  const from = server.written();
+  const first = await ask(fresh, "ask-once-0001");
+  assert.equal(first.status, 200, JSON.stringify(first.body));
+  assert.equal(first.body.status, "asked");
+  assert.ok(first.body.askedAt > 0);
+  assert.match(server.output(from), new RegExp(`\\[routine stub\\] [^\\n]*Primer: convexity \\(src_${fresh} on board primed\\)`));
+  assert.deepEqual((await ask(fresh, "ask-once-0001")).body, first.body, "the same key replays the first answer");
+  assert.equal((await ask(fresh)).body.askedAt, first.body.askedAt, "asking again while asked changes nothing");
+  assert.match(await ok("get_context", { id: "primed/primers" }), new RegExp(`^- \\[asked\\] src_${fresh} "convexity" · asked`, "m"), "asked ones come first");
+  assert.match(await ok("get_context", { id: "primed" }), new RegExp(`## Primers the reader asked for\\n- src_${fresh} "convexity"`));
+
+  assert.equal((await server.fetch(`/api/boards/${board}/resources/${fresh}/primer/page`)).status, 404, "no page until Claude writes one");
+  await setPrimer(`src_${fresh}`, PAGE);
+  const ready = (await server.api(`/api/boards/${board}/resources/${fresh}/primer`)).body;
+  assert.deepEqual([ready.status, ready.page], ["ready", true]);
+  const served = await server.fetch(`/api/boards/${board}/resources/${fresh}/primer/page`);
+  assert.equal(served.status, 200);
+  assert.match(served.headers.get("content-security-policy") ?? "", /^sandbox allow-scripts/, "served under the live pages' sandbox");
+  assert.equal(served.headers.get("x-frame-options"), null);
+  const html = await served.text();
+  assert.equal(html, PAGE, "served as written, without the live page bridge");
+  const remake = await ask(fresh);
+  assert.deepEqual([remake.body.status, remake.body.page], ["asked", true], "a remake keeps the page it replaces until the new one lands");
+});
+
+test("asking about a source that isn't there is a 404, and deleting a source takes its primer", async () => {
+  assert.equal((await ask("nope")).status, 404);
+  assert.equal((await server.api(`/api/boards/${board}/resources/nope/primer`)).status, 404);
+  const gone = await addMarkdown(server, board, "gone.md", MD);
+  await setPrimer(`src_${gone}`, PAGE);
+  assert.equal((await server.api(`/api/boards/${board}/resources/${gone}`, { method: "DELETE" })).status, 200);
+  assert.doesNotMatch(await ok("get_context", { id: "primed/primers" }), new RegExp(`src_${gone}`));
+});
