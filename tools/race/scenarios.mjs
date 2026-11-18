@@ -431,8 +431,8 @@ function deleteOpenSource({ name, last }) {
       const row = page.locator(".pp-src").filter({ has: page.locator(".pp-sname", { hasText: doomed.filename }) });
       await row.hover();
       await row.locator(".tl-more").click();
-      await row.getByRole("button", { name: "delete this source", exact: true }).click();
-      await row.getByRole("button", { name: "the source, its pages and its cards — all of it?", exact: true }).click();
+      await row.getByRole("button", { name: "Delete", exact: true }).click();
+      await row.getByRole("button", { name: /^Delete it/ }).click();
       await row.waitFor({ state: "detached" });
       await t.net.idle(500);
       await sleep(500);

@@ -1,8 +1,10 @@
 import { useEffect, useState, type MouseEvent } from "react";
+import { deleteAsk } from "./deleteAsk.ts";
 
 export interface VerbTarget {
   rid?: string | null; doneAt?: number | null; keep?: string | null; keepBoard?: boolean; sections?: number;
   aside?: { live: number; out: number } | null; del?: { res?: string; pair?: string };
+  marksN?: number; kp?: { kept: number } | null;
 }
 
 export interface SourceVerbsProps<T extends VerbTarget> {
@@ -64,9 +66,7 @@ export default function SourceVerbs<T extends VerbTarget>({ t, onDel, onAside, o
             : row("aside", "set the deck aside", "ignore " + aside.live + (aside.live === 1 ? " card?" : " cards?"), () => onAside(t, false))
           : null}
         {t.del && onDel
-          ? row("del", "delete this " + (t.del.res ? "source" : "pair"),
-              (t.del.res ? "the source, its pages and its cards" : "the pair and its cards") + " — all of it?",
-              () => onDel(t), "bad")
+          ? row("del", "Delete", deleteAsk(t), () => onDel(t), "bad")
           : null}
       </span> : null}
     </span>
