@@ -216,7 +216,7 @@ test("journey: an agent replaces a section's cards with its own, then sets the d
   const bare = await add("deck-add-000a", { cards: [dipCard, shape, term] });
   assert.ok(bare.isError && /has no concept tree yet, so send one with the deck as tree/.test(bare.text), bare.text);
   const rootless = await add("deck-add-000b", { tree: { ...tree, nodes: [{ ...tree.nodes[0], kind: "concept" }] }, cards: [dipCard, shape, term] });
-  assert.ok(rootless.isError && /does not fit its tree:\ntree: the top-level node must have kind synthesis/.test(rootless.text), rootless.text);
+  assert.ok(rootless.isError && /does not fit its tree:\ntree: it has exactly one top-level node, of kind synthesis/.test(rootless.text), rootless.text);
   const thin = await add("deck-add-000c", { tree, cards: [dipCard, { ...shape, node: "n9", asks: ["n1#1"] }] });
   assert.ok(thin.isError && /cards\[1\]: n9 is not a node of the tree/.test(thin.text) && /cards\[1\]: n1#1 is not a question of the tree, or another card already answers it/.test(thin.text)
     && /no card answers n1\.1#1/.test(thin.text) && /no card introduces DV01/.test(thin.text), thin.text);

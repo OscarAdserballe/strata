@@ -7,7 +7,7 @@ import { genId, now } from "../../platform/db/sql.ts";
 import { HANDLE, idOf, parseRef } from "../../../shared/agent/ids.ts";
 import { dropDeck, genSlug, installDeck, quoteTextOf, quoteTextOfDeck, writeCardEdit } from "../decks/decks.ts";
 import { compileQuote, quoteAnchor } from "../../../shared/reading/compile-quote.ts";
-import { KINDS, flattenTree, normalizeTree, orderByLadder, synthesisRootError, treeToAscii, type ConceptTree } from "../distil/distil.ts";
+import { KINDS, flattenTree, normalizeTree, orderByLadder, treeToAscii, type ConceptTree } from "../distil/distil.ts";
 import { agentRepo as a } from "./repo.ts";
 import { AgentError, type Board } from "./kinds.ts";
 
@@ -30,14 +30,13 @@ const orNull = (about: string) => ({ type: ["string", "null"], description: abou
 const CARDS_MAX = 200, FACE_MAX = 4000;
 const AT = text(600, "Where the card sits: 4 to 40 consecutive words of the source, copied verbatim, that occur once in its passage (on one page, for a PDF): the words the card asks about.");
 const BUSY = ["queued", "preparing", "running", "carding"];
-const NODES_MAX = 120, QUESTIONS_MAX = 6, ASKS_MAX = 2;
 const list = (about: string) => ({ type: "array", items: { type: "string" }, description: about });
 const NODE = { type: "object", required: ["label", "kind", "at", "questions"],
   properties: {
-    label: text(200, "The claim, in about 14 words: something that makes sense read cold, never a topic heading."),
+    label: text(400, "The claim: something that makes sense read cold, never a topic heading."),
     kind: { type: "string", enum: KINDS },
     at: AT,
-    questions: { ...list("What a reader who holds this claim can answer; each is one act of recall. The deck owes a card to every one."), maxItems: QUESTIONS_MAX },
+    questions: list("What a reader who holds this claim can answer; each is one act of recall. The deck owes a card to every one."),
     children: { type: "array", description: "Claims that explain, support, qualify or apply this one, each the same shape as this node.", items: { type: "object" } },
   } };
 const TREE = { type: "object", required: ["question", "nodes"],
@@ -45,10 +44,10 @@ const TREE = { type: "object", required: ["question", "nodes"],
   properties: {
     title: text(160, "The deck's name; the section's own by default."),
     question: text(300, "The one question the whole section answers."),
-    glossary: { type: "array", maxItems: 40, description: "The vocabulary the tree leans on, in dependency order. The deck opens with one definition card per term.",
-      items: { type: "object", required: ["term", "kernel"], properties: { term: text(120, "The term."), kernel: text(300, "Its definition, in at most 20 words."), at: AT } } },
+    glossary: { type: "array", description: "The vocabulary the tree leans on, in dependency order. The deck opens with one definition card per term.",
+      items: { type: "object", required: ["term", "kernel"], properties: { term: text(120, "The term."), kernel: text(600, "Its definition, kept short."), at: AT } } },
     nodes: { type: "array", minItems: 1, maxItems: 1, items: NODE,
-      description: "Exactly one root, of kind synthesis: its label answers the question, it has 1 to 3 questions, and 3 to 8 pillars sit beneath it." },
+      description: "Exactly one root, of kind synthesis: its label answers the question, and the claims that carry it sit beneath as children." },
   } };
 
 /** fields are JSON Schema properties; a name ending in "?" is optional. */
@@ -176,10 +175,10 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
           properties: {
             front: text(FACE_MAX, "The question."), back: text(FACE_MAX, "The answer."), at: AT,
             node: { type: "string", description: "The tree node the card comes from: n1 is the root, n1.2 its second child, n1.2.1 that child's first." },
-            asks: { ...list("The tree questions this card answers, e.g. [\"n1.2#1\"] for n1.2's first question. Empty on a definition card."), maxItems: ASKS_MAX },
+            asks: list("The tree questions this card answers, e.g. [\"n1.2#1\"] for n1.2's first question. Empty on a definition card."),
             introduces: text(120, "The one glossary term this card defines, on a definition card."),
             uses: list("The glossary terms its faces lean on, each introduced by an earlier card."),
-            tags: { ...list("1 to 3 short topical tags."), maxItems: 3 },
+            tags: list("Short topical tags."),
           } } },
     },
     does: "Gives a section a deck of your cards, replacing the cards it has, in the shape Strata's own generation makes: a concept tree, a definition card for each glossary term, and a card for every question the tree asks. Each card names its tree node and sits at a verbatim quote of the words it asks about (at). A card whose front is unchanged keeps its reviews and keep. A deck that doesn't fit its tree, or a quote that doesn't compile, is an error naming why, and nothing is written.",
@@ -190,7 +189,7 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
       (o.cards as Record<string, unknown>[]).forEach((c, i) => {
         str(c?.front, `cards[${i}].front`, FACE_MAX); str(c?.back, `cards[${i}].back`, FACE_MAX); str(c?.at, `cards[${i}].at`, 600);
         str(c.node, `cards[${i}].node`, 80); str(c.introduces, `cards[${i}].introduces`, 120, false);
-        strs(c.asks, `cards[${i}].asks`, ASKS_MAX); strs(c.uses, `cards[${i}].uses`, 40); strs(c.tags, `cards[${i}].tags`, 3);
+        strs(c.asks, `cards[${i}].asks`); strs(c.uses, `cards[${i}].uses`); strs(c.tags, `cards[${i}].tags`);
       });
     },
     run(b, o) {
@@ -208,14 +207,13 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
       const had = t?.json ? normalizeTree(JSON.parse(t.json), t.title || sec.label) : null;
       if (o.tree === undefined && !had?.nodes.length) fail(`${idOf("section", sid)} has no concept tree yet, so send one with the deck as tree (get_guide({ topic: "apply" }) shows its shape)`);
       const tree = o.tree === undefined ? had! : placedTree(o.tree, t?.title || sec.label, (at, where) => place(at, where, unfit));
-      const shape = synthesisRootError(tree);
-      if (shape) unfit.push(`tree: ${shape}.`);
+      if (tree.nodes.length !== 1 || tree.nodes[0].kind !== "synthesis") unfit.push("tree: it has exactly one top-level node, of kind synthesis, whose label answers the tree's question");
       const nodes = new Set(flattenTree(tree).map((n) => n.id));
       const owed = new Set(flattenTree(tree).flatMap((n) => n.questions.map((_q, i) => `${n.id}#${i + 1}`)));
       const terms = new Map(tree.glossary.map((g) => [g.term.toLowerCase(), g.term]));
       const defined = new Set<string>();
       const cards = (o.cards as Record<string, unknown>[]).map((c, i) => {
-        const node = String(c.node).trim(), asks = strs(c.asks, "asks", ASKS_MAX), introduces = str(c.introduces, "introduces", 120, false) ?? "";
+        const node = String(c.node).trim(), asks = strs(c.asks, "asks"), introduces = str(c.introduces, "introduces", 120, false) ?? "";
         if (!nodes.has(node)) unfit.push(`cards[${i}]: ${node} is not a node of the tree.`);
         for (const ask of asks) if (!owed.delete(ask)) unfit.push(`cards[${i}]: ${ask} is not a question of the tree, or another card already answers it.`);
         if (introduces) {
@@ -224,7 +222,7 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
           else if (defined.has(key)) unfit.push(`cards[${i}]: "${introduces}" already has its definition card.`);
           defined.add(key);
         }
-        return { type: "flashcard", node, asks, introduces, uses: strs(c.uses, "uses", 40), tags: strs(c.tags, "tags", 3),
+        return { type: "flashcard", node, asks, introduces, uses: strs(c.uses, "uses"), tags: strs(c.tags, "tags"),
           front: str(c.front, "front", FACE_MAX), back: str(c.back, "back", FACE_MAX), source: place(c.at, `cards[${i}]`, errors) };
       });
       if (owed.size) unfit.push(`no card answers ${[...owed].join(", ")}: every question the tree asks gets a card that lists it in asks.`);
@@ -322,9 +320,9 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
   },
 };
 
-const strs = (v: unknown, field: string, max: number): string[] => {
+const strs = (v: unknown, field: string): string[] => {
   if (v === undefined || v === null) return [];
-  if (!Array.isArray(v) || v.length > max) return fail(`${field} is a list of at most ${max}.`);
+  if (!Array.isArray(v)) return fail(`${field} is a list.`);
   return v.map((x) => String(x).trim()).filter(Boolean);
 };
 
@@ -332,21 +330,19 @@ function checkTree(raw: unknown): void {
   const t = (raw ?? {}) as Record<string, unknown>;
   if (typeof raw !== "object" || raw === null || !Array.isArray(t.nodes)) fail("tree is { question, glossary, nodes }.");
   str(t.question, "tree.question", 300); str(t.title, "tree.title", 160, false);
-  if (t.glossary !== undefined && (!Array.isArray(t.glossary) || t.glossary.length > 40)) fail("tree.glossary is a list of at most 40 terms.");
+  if (t.glossary !== undefined && !Array.isArray(t.glossary)) fail("tree.glossary is a list of terms.");
   ((t.glossary ?? []) as Record<string, unknown>[]).forEach((g, i) => {
-    str(g?.term, `tree.glossary[${i}].term`, 120); str(g.kernel, `tree.glossary[${i}].kernel`, 300); str(g.at, `tree.glossary[${i}].at`, 600, false);
+    str(g?.term, `tree.glossary[${i}].term`, 120); str(g.kernel, `tree.glossary[${i}].kernel`, 600); str(g.at, `tree.glossary[${i}].at`, 600, false);
   });
-  let count = 0;
   const walk = (nodes: unknown, path: string): void => {
     if (nodes === undefined) return;
     if (!Array.isArray(nodes)) return fail(`${path} is a list of nodes.`);
     nodes.forEach((n, i) => {
       const x = (n ?? {}) as Record<string, unknown>, at = `${path}[${i}]`;
-      if (++count > NODES_MAX) fail(`a tree has at most ${NODES_MAX} nodes.`);
-      str(x.label, `${at}.label`, 200); str(x.at, `${at}.at`, 600);
+      str(x.label, `${at}.label`, 400); str(x.at, `${at}.at`, 600);
       if (!KINDS.includes(String(x.kind))) fail(`${at}.kind is one of ${KINDS.join(", ")}.`);
       if (!Array.isArray(x.questions)) fail(`${at}.questions is a list, empty when the node asks nothing.`);
-      strs(x.questions, `${at}.questions`, QUESTIONS_MAX);
+      strs(x.questions, `${at}.questions`);
       walk(x.children, `${at}.children`);
     });
   };
