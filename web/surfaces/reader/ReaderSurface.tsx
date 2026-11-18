@@ -31,6 +31,7 @@ import { answered } from "../../capabilities/fold/answered.ts";
 import { barSlot } from "./barSlot.ts";
 import FoldSays from "../../capabilities/fold/FoldSays.tsx";
 import CardFace from "../../capabilities/card/CardFace.tsx";
+import Primer from "./Primer.tsx";
 
 type Ref<T> = MutableRefObject<T>;
 
@@ -206,6 +207,7 @@ export default function ReaderSurface(props: ReaderSurfaceProps) {
         {/* the cards being made for this source: over the page they will fold into, not in a column of their own */}
         {cardWork && !solo && !onHome && !showTree ? <div className="gen-progress"><CardProgress key={cardWork.r.id} work={cardWork} compact /></div> : null}
         <DrillGradeAlert />
+        {activeId && src && !onHome ? <Primer key={src.id} board={activeId} rid={src.id} scale={props.ui * ROOM} /> : null}
         {/* nav buttons swallow mousedown so the input keeps focus */}
         {find && !onHome && src
           ? <div className="findbar">
