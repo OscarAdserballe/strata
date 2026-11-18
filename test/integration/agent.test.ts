@@ -204,36 +204,54 @@ test("journey: an agent replaces a section's cards with its own, then sets the d
   const up = await server.api(`/api/boards/${board}/resources`, { method: "POST", body: JSON.stringify({ filename: "decks.md", base64: Buffer.from(MD).toString("base64"), pair: true }) });
   assert.equal(up.status, 201, JSON.stringify(up.body));
   const src = `src_${up.body.id}`;
-  const unplaced = await call("apply", { board: "thesis", key: "deck-add-0000", ops: [{ op: "add_deck", section: src, title: "Recall", cards: [
-    { front: "Where in a long context does recall dip?", back: "In the middle.", at: "a hedge protects against everything" },
-  ] }] });
+  const tree = { title: "Recall", question: "What does a DV01-neutral hedge leave exposed?",
+    glossary: [{ term: "DV01", kernel: "The price change for a one basis point move in yield." }],
+    nodes: [{ label: "A DV01-neutral hedge covers small parallel shifts and fails on convexity", kind: "synthesis", at: "A DV01-neutral hedge protects only against small",
+      questions: ["Where in a long context does recall dip?"],
+      children: [{ label: "Convexity is where the hedge fails", kind: "boundary", at: "Convexity is the failure mode", questions: ["What does the U-shape mean?"] }] }] };
+  const term = { front: "What is DV01?", back: "The price change for one basis point.", at: "DV01-neutral hedge protects only", node: "n1", introduces: "DV01" };
+  const dipCard = { front: "Where in a long context does recall dip?", back: "In the middle.", at: "A DV01-neutral hedge protects only against small", node: "n1", asks: ["n1#1"] };
+  const shape = { front: "What does the U-shape mean?", back: "Start and end are recalled best.", at: "Convexity is the failure mode", node: "n1.1", asks: ["n1.1#1"], uses: ["DV01"] };
+  const add = (key: string, body: object) => call("apply", { board: "thesis", key, ops: [{ op: "add_deck", section: src, ...body }] });
+  const bare = await add("deck-add-000a", { cards: [dipCard, shape, term] });
+  assert.ok(bare.isError && /has no concept tree yet, so send one with the deck as tree/.test(bare.text), bare.text);
+  const rootless = await add("deck-add-000b", { tree: { ...tree, nodes: [{ ...tree.nodes[0], kind: "concept" }] }, cards: [dipCard, shape, term] });
+  assert.ok(rootless.isError && /does not fit its tree:\ntree: it has exactly one top-level node, of kind synthesis/.test(rootless.text), rootless.text);
+  const thin = await add("deck-add-000c", { tree, cards: [dipCard, { ...shape, node: "n9", asks: ["n1#1"] }] });
+  assert.ok(thin.isError && /cards\[1\]: n9 is not a node of the tree/.test(thin.text) && /cards\[1\]: n1#1 is not a question of the tree, or another card already answers it/.test(thin.text)
+    && /no card answers n1\.1#1/.test(thin.text) && /no card introduces DV01/.test(thin.text), thin.text);
+  const adrift = await add("deck-add-000d", { tree: { ...tree, nodes: [{ ...tree.nodes[0], at: "a hedge protects against everything" }] }, cards: [dipCard, term] });
+  assert.ok(adrift.isError && /tree node n1: the quote .* is not in the source verbatim/.test(adrift.text), adrift.text);
+  const unplaced = await add("deck-add-0000", { tree, cards: [{ ...dipCard, at: "a hedge protects against everything" }, shape, term] });
   assert.ok(unplaced.isError && /did not compile:\ncards\[0\]: the quote .* is not in the source verbatim/.test(unplaced.text), unplaced.text);
-  const made = await ok("apply", { board: "thesis", key: "deck-add-0001", ops: [{ op: "add_deck", section: src, title: "Recall", cards: [
-    { front: "Where in a long context does recall dip?", back: "In the middle.", at: "A DV01-neutral hedge protects only against small" },
-    { front: "What does the U-shape mean?", back: "Start and end are recalled best.", at: "Convexity is the failure mode" },
-  ] }] });
+  const made = await ok("apply", { board: "thesis", key: "deck-add-0001", ops: [{ op: "add_deck", section: src, tree, cards: [dipCard, shape, term] }] });
   const deck = /(deck_[a-z0-9-]+)/.exec(made)?.[1];
   assert.ok(deck, made);
   const slug = deck.replace(/^deck_/, "");
-  const cards = (await server.api(`/api/decks/${slug}`)).body.cards as { id: string; front: string }[];
-  assert.deepEqual(cards.map((c) => c.front), ["Where in a long context does recall dip?", "What does the U-shape mean?"]);
+  const cards = (await server.api(`/api/decks/${slug}`)).body.cards as { id: string; front: string; node: string; asks: string[]; introduces: string }[];
+  assert.deepEqual(cards.map((c) => c.front), ["What is DV01?", "Where in a long context does recall dip?", "What does the U-shape mean?"], "the definition card leads, as in a generated deck");
+  assert.deepEqual(cards.map((c) => [c.node, c.asks, c.introduces]), [["n1", [], "DV01"], ["n1", ["n1#1"], ""], ["n1.1", ["n1.1#1"], ""]]);
+  const stored = (await server.api(`/api/boards/${board}/resources/${up.body.id}/tree`)).body;
+  assert.equal(stored.tree.nodes[0].children[0].anchor, 'quote: "Convexity is the failure mode"');
+  assert.match(await ok("get_context", { id: src }), /## Concept tree[\s\S]*vocabulary \(1\)[\s\S]*└─ Convexity is where the hedge fails/);
   assert.match(await ok("get_context", { id: deck }), /recall dip[\s\S]*at "A DV01-neutral hedge protects only against small" · compiles/);
-  const dip = cards[0].id;
+  const dip = cards[1].id;
   await server.api(`/api/decks/${slug}/keeps`, { method: "POST", body: JSON.stringify({ add: [dip] }) });
 
   await ok("apply", { board: "thesis", key: "deck-add-0002", ops: [{ op: "add_deck", section: src, cards: [
-    { front: "Where in a long context does recall dip?", back: "In the middle, worst near the centre.", at: "A DV01-neutral hedge protects only against small" },
-    { front: "Why does position matter at all?", back: "Attention favours the ends.", at: "small, parallel shifts. Convexity is" },
+    { ...dipCard, back: "In the middle, worst near the centre." },
+    { front: "Why does position matter at all?", back: "Attention favours the ends.", at: "small, parallel shifts. Convexity is", node: "n1.1", asks: ["n1.1#1"] },
+    term,
   ] }] });
   const again = (await server.api(`/api/decks/${slug}`)).body.cards as { id: string; front: string; back: string }[];
-  assert.deepEqual(again.map((c) => c.front), ["Where in a long context does recall dip?", "Why does position matter at all?"], "the new deck replaces the old");
-  assert.equal(again[0].id, dip, "an unchanged front is the same card");
-  assert.match(again[0].back, /worst near the centre/);
+  assert.deepEqual(again.map((c) => c.front), ["What is DV01?", "Where in a long context does recall dip?", "Why does position matter at all?"], "the new deck replaces the old, on the tree the section already has");
+  assert.equal(again[1].id, dip, "an unchanged front is the same card");
+  assert.match(again[1].back, /worst near the centre/);
   assert.ok(((await server.api(`/api/decks/${slug}/keeps`)).body.ids as string[]).includes(dip), "and keeps its keep");
 
   // a card moves to other words and is rewritten in place: same card, same keep; a quote that doesn't compile writes nothing
   const bad = await call("apply", { board: "thesis", key: "card-edit-0001", ops: [{ op: "edit_cards", cards: [
-    { id: `card_${dip}`, at: "Convexity is the failure mode" }, { id: `card_${again[1].id}`, at: "parallel shifts" },
+    { id: `card_${dip}`, at: "Convexity is the failure mode" }, { id: `card_${again[2].id}`, at: "parallel shifts" },
   ] }] });
   assert.ok(bad.isError && /1 of 2 cards did not compile:\ncards\[1\]: .* is 2 words/.test(bad.text) && /Nothing was written/.test(bad.text), bad.text);
   assert.match(await ok("get_context", { id: `card_${dip}` }), /at: "A DV01-neutral hedge protects only against small" · compiles/, "a failed batch moved nothing");
@@ -241,20 +259,20 @@ test("journey: an agent replaces a section's cards with its own, then sets the d
     { id: `card_${dip}`, at: "Convexity is the failure mode", back: "In the middle, worst at the centre." },
   ] }] });
   const moved = (await server.api(`/api/decks/${slug}`)).body.cards as { id: string; back: string; source: string }[];
-  assert.equal(moved[0].id, dip, "the same card");
-  assert.equal(moved[0].source, 'quote: "Convexity is the failure mode"');
-  assert.match(moved[0].back, /worst at the centre/);
+  assert.equal(moved[1].id, dip, "the same card");
+  assert.equal(moved[1].source, 'quote: "Convexity is the failure mode"');
+  assert.match(moved[1].back, /worst at the centre/);
   assert.ok(((await server.api(`/api/decks/${slug}/keeps`)).body.ids as string[]).includes(dip), "still kept");
   const stranger = await call("apply", { board: "thesis", key: "card-edit-0003", ops: [{ op: "edit_cards", cards: [{ id: "card_nope/flashcard/x", at: "Convexity is the failure mode" }] }] });
   assert.ok(stranger.isError && /is not a card on thesis/.test(stranger.text), stranger.text);
 
-  const wrong = await call("apply", { board: "thesis", key: "deck-add-0003", ops: [{ op: "add_deck", section: "src_nope", cards: [{ front: "a", back: "b", at: "Convexity is the failure mode" }] }] });
+  const wrong = await call("apply", { board: "thesis", key: "deck-add-0003", ops: [{ op: "add_deck", section: "src_nope", cards: [{ front: "a", back: "b", at: "Convexity is the failure mode", node: "n1" }] }] });
   assert.ok(wrong.isError && /not a section or source/.test(wrong.text), wrong.text);
 
-  assert.match(await ok("apply", { board: "thesis", key: "deck-del-0001", ops: [{ op: "delete_deck", id: deck }] }), /set aside 2 cards/);
+  assert.match(await ok("apply", { board: "thesis", key: "deck-del-0001", ops: [{ op: "delete_deck", id: deck }] }), /set aside 3 cards/);
   assert.deepEqual((await server.api(`/api/decks/${slug}`)).body.cards, []);
   const back = await server.api(`/api/decks/${slug}/restore`, { method: "POST", body: "{}" });
-  assert.equal(back.body.cards, 2, "the reader puts it back");
+  assert.equal(back.body.cards, 3, "the reader puts it back");
   assert.ok(((await server.api(`/api/decks/${slug}/keeps`)).body.ids as string[]).includes(dip), "keep and all");
   const notOurs = await call("apply", { board: "thesis", key: "deck-del-0002", ops: [{ op: "delete_deck", id: "deck_csharp-nope" }] });
   assert.ok(notOurs.isError && /not a deck on/.test(notOurs.text), notOurs.text);

@@ -39,7 +39,7 @@ export interface ConceptTree {
   nodes: TreeNode[];
 }
 
-const KINDS = ["synthesis", "concept", "mechanism", "move", "distinction", "procedure", "boundary"];
+export const KINDS = ["synthesis", "concept", "mechanism", "move", "distinction", "procedure", "boundary"];
 
 // Retry here, not in the shared client: chat turns have a person waiting, a background distil does not.
 async function withRetry<T>(what: string, fn: () => Promise<T>): Promise<T> {
@@ -128,7 +128,7 @@ export function normalizeTree(raw: unknown, fallbackTitle: string): ConceptTree 
         label: String(x.label ?? "").trim(),
         kind: KINDS.includes(String(x.kind)) ? String(x.kind) : "concept",
         anchor: String(x.anchor ?? "").trim(),
-        questions: Array.isArray(x.questions) ? x.questions.map((q) => String(q).trim()).filter(Boolean).slice(0, 6) : [],
+        questions: Array.isArray(x.questions) ? x.questions.map((q) => String(q).trim()).filter(Boolean) : [],
         excerpt: String(x.excerpt ?? "").trim().slice(0, 400),
         children: walk(x.children, id),
       };
@@ -153,8 +153,7 @@ export function normalizeGlossary(raw: unknown): GlossTerm[] {
     const key = term.toLowerCase();
     if (!term || seen.has(key)) continue;
     seen.add(key);
-    out.push({ term, kernel: String(g.kernel ?? "").trim().slice(0, 300), anchor: String(g.anchor ?? "").trim() });
-    if (out.length >= 40) break;
+    out.push({ term, kernel: String(g.kernel ?? "").trim(), anchor: String(g.anchor ?? "").trim() });
   }
   return out;
 }

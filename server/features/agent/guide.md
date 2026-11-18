@@ -45,7 +45,28 @@ Agents add and arrange. They never delete for good: `delete_deck` sets a deck as
 
 {{OPS}}
 
-A card sits at a verbatim quote of the words it asks about (`at`), and nowhere else: 4 to 40 consecutive words copied exactly from its source, that occur once in its passage (on one page, for a PDF). `add_deck` and `edit_cards` compile every quote before anything is written; one that doesn't compile is an error naming why (not verbatim, occurs twice, outside the passage, too short), and the batch writes nothing, so fix the quotes it names and send it again. A deck's or a card's context shows each card's place and whether it compiles; `get_text` on its section gives the words to quote. `edit_cards` moves a card or rewrites its faces in place: its id, reviews and keep stay.
+A deck you add has the shape of one Strata generates, so the reader gets the same concept map, the same order and the same Review page from either. Build it in the generator's order: the tree first, then the cards the tree asks for.
+
+1. **The tree** (`tree` on `add_deck`). `question` is the one question the whole section answers. `nodes` holds exactly one root of kind `synthesis`: its `label` answers that question as a claim, and its `questions` ask for the highest-level takeaways. Under it sit the claims that carry it, with the detail beneath them as `children`. Every node is a claim that makes sense read cold (never a topic heading), has a `kind` (synthesis, concept, mechanism, move, distinction, procedure or boundary), sits `at` a verbatim quote like a card, and lists the `questions` a reader who holds it can answer: one act of recall each, answerable in the head, never a list or a derivation. `glossary` is the vocabulary the tree leans on, in dependency order, each with a short `kernel`. Cover the section from start to end, in proportion; how deep the tree goes and how many questions it asks is your judgement of the material.
+2. **The cards.** One definition card per glossary term (`introduces: "<term>"`, a front that asks for the term and nothing else), then one card per question. Each card names its `node` (`n1` is the root, `n1.2` its second child, `n1.2.1` that child's first) and lists in `asks` the questions it answers (`n1.2#1` is the first question of `n1.2`; each question is answered by one card). `uses` lists the glossary terms its faces lean on. A back is the answer, not a lesson. Definition cards are put first for you, in the glossary's order.
+
+`add_deck` refuses a deck that doesn't fit: no synthesis root, a card on a node the tree lacks, a question no card answers, a term no card introduces. A section that already has a tree (`get_context` on it shows the tree) takes new cards without `tree`; send `tree` to replace it.
+
+```json
+{ "op": "add_deck", "section": "sec_4c1d",
+  "tree": { "question": "What does a DV01-neutral hedge leave exposed?",
+    "glossary": [{ "term": "DV01", "kernel": "The price change for a one basis point move in yield." }],
+    "nodes": [{ "label": "A DV01-neutral hedge covers small parallel shifts and fails on convexity", "kind": "synthesis",
+      "at": "A DV01-neutral hedge protects only against small", "questions": ["What does a DV01-neutral hedge protect against?"],
+      "children": [{ "label": "Convexity is where the hedge fails", "kind": "boundary", "at": "Convexity is the failure mode", "questions": ["Where does a DV01-neutral hedge fail?"] }] }] },
+  "cards": [
+    { "front": "What is DV01?", "back": "The price change for a one basis point move in yield.", "at": "DV01-neutral hedge protects only", "node": "n1", "introduces": "DV01" },
+    { "front": "What does a DV01-neutral hedge protect against?", "back": "Small, parallel shifts in the curve.", "at": "protects only against small, parallel shifts", "node": "n1", "asks": ["n1#1"], "uses": ["DV01"] },
+    { "front": "Where does a DV01-neutral hedge fail?", "back": "On convexity: large moves.", "at": "Convexity is the failure mode", "node": "n1.1", "asks": ["n1.1#1"], "uses": ["DV01"] }
+  ] }
+```
+
+A card, a tree node and a glossary term each sit at a verbatim quote of the words they are about (`at`), and nowhere else: 4 to 40 consecutive words copied exactly from its source, that occur once in its passage (on one page, for a PDF). `add_deck` and `edit_cards` compile every quote before anything is written; one that doesn't compile is an error naming why (not verbatim, occurs twice, outside the passage, too short), and the batch writes nothing, so fix what it names and send it again. A deck's or a card's context shows each card's place and whether it compiles; `get_text` on its section gives the words to quote. `edit_cards` moves a card or rewrites its faces in place: its id, reviews and keep stay.
 
 Example:
 
