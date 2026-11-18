@@ -28,7 +28,7 @@ export function fileSource(db: DatabaseSync, resourceId: string, to: string): vo
   let idx = Number(db.prepare("SELECT COALESCE(MAX(idx)+1,0) n FROM messages WHERE board_id = ?").get(to)!.n);
   const messages = db.prepare("SELECT id FROM messages WHERE resource_id = ? AND board_id != ? ORDER BY idx, id").all(resourceId, to);
   for (const m of messages) db.prepare("UPDATE messages SET board_id = ?, idx = ? WHERE id = ?").run(to, idx++, m.id);
-  for (const table of ["sections", "trees", "source_trees", "marks", "mark_replies", "asks", "page_states"]) {
+  for (const table of ["sections", "trees", "source_trees", "marks", "mark_replies", "asks", "page_states", "primers"]) {
     db.prepare(`UPDATE ${table} SET board_id = ? WHERE resource_id = ?`).run(to, resourceId);
   }
   db.prepare("UPDATE resources SET board_id = ?, generation = generation + 1 WHERE id = ?").run(to, resourceId);

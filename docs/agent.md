@@ -59,6 +59,8 @@ Every write tool takes a `key`: the batch commits in one `ctx.commit` together w
 key, so a resent call replays the first answer. `apply`'s operations are in `server/features/agent/ops.ts`;
 a new one is a new entry there, and both apply's schema and the guide list it automatically.
 
+A primer (`server/features/primers`) is one page an agent draws for a source, to read before page 1. The reader's **primer** chip asks for one, which wakes the routine with `Primer: src_… on <board>`; `whoami` and `get_outline` mark what is still asked for, and the routine answers with the `set_primer` op. The page is stored in `primers`, served in the same sandbox as a live source (without the save bridge), and opens in a panel beside the source.
+
 The dashboard (`server/features/dashboard`, page at `<room>/dashboard`) is a separate app the room only
 hosts: no board owns it, so it has its own tools instead of `apply` ops. A thread moves by the reader's
 hand through three stages, to-do → thinking → review, then done or dropped (`stage`); an older

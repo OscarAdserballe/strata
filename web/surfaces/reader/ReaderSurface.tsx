@@ -22,6 +22,7 @@ import { useSourceColumn } from "./useSourceColumn.ts";
 import type { HeldPlace, SourceRoom } from "./useSourceColumn.ts";
 import { useReaderHere } from "./here.ts";
 import HtmlSource from "../../capabilities/live/HtmlSource.tsx";
+import Primer from "./Primer.tsx";
 import { drawnAs } from "../../engines/html/drawn.ts";
 import { ROOM } from "../../engines/zoom/zoom.ts";
 import { switches } from "../../capabilities/fold/switches.ts";
@@ -205,6 +206,7 @@ export default function ReaderSurface(props: ReaderSurfaceProps) {
         {onGenerate && bare && !find && !showTree ? <GenerateCards onGenerate={onGenerate} /> : null}
         {/* the cards being made for this source: over the page they will fold into, not in a column of their own */}
         {cardWork && !solo && !onHome && !showTree ? <div className="gen-progress"><CardProgress key={cardWork.r.id} work={cardWork} compact /></div> : null}
+        {src && activeId && !solo ? <Primer board={activeId} rid={src.id} bar={bar} hidden={onHome || showTree} /> : null}
         <DrillGradeAlert />
         {/* nav buttons swallow mousedown so the input keeps focus */}
         {find && !onHome && src

@@ -13,6 +13,7 @@ import { noteOfThread } from "../../../shared/reading/notes.ts";
 import { compileAnchor, quoteOfAnchor, type QuoteText } from "../../../shared/reading/compile-quote.ts";
 import { quoteTextOfDeck } from "../decks/decks.ts";
 import { pageTextStatus } from "../imports/pump.ts";
+import { primersRepo } from "../primers/repo.ts";
 
 export class AgentError extends Error {}
 const fail = (msg: string): never => { throw new AgentError(msg); };
@@ -21,7 +22,7 @@ const fail = (msg: string): never => { throw new AgentError(msg); };
 export const KINDS: { kind: string; tables: string[] }[] = [
   { kind: "board", tables: ["boards", "board_notes", "board_prefs"] },
   { kind: "plan", tables: ["board_groups", "board_milestones", "board_places"] },
-  { kind: "source", tables: ["resources", "resource_blobs", "pairs", "imports", "page_states"] },
+  { kind: "source", tables: ["resources", "resource_blobs", "pairs", "imports", "page_states", "primers"] },
   { kind: "section", tables: ["sections", "trees", "source_trees"] },
   { kind: "card", tables: ["cards", "card_edits", "card_drops", "courses", "review_receipts"] },
   { kind: "kept", tables: ["card_keeps"] },
@@ -62,7 +63,8 @@ export function boardList(): string {
     const c = a.sourceCounts.get(b.id)!;
     const kept = a.keptCount.get(b.id)?.n ?? 0;
     const name = b.handle ? `${b.handle} (${b.id})` : b.id;
-    return `- ${name} — ${b.title} · ${c.n} sources · ${kept} kept · last touched ${when.day(b.touched_at ?? b.created_at)}`;
+    const asked = primersRepo.askedOf.all(b.id).length;
+    return `- ${name} — ${b.title} · ${c.n} sources · ${kept} kept${asked ? ` · ${count(asked, "primer")} asked for` : ""} · last touched ${when.day(b.touched_at ?? b.created_at)}`;
   });
   return `# Your boards\n\n${lines.join("\n") || "No boards yet."}\n\nPass a board's handle or id as \`board\`.`;
 }
@@ -77,6 +79,7 @@ function boardOutline(b: Board): string {
   const minted = a.mintedFull.all(b.id);
   const marks = a.marksFull.all(b.id);
   const srcs = a.sourcesOf.all(b.id);
+  const primers = new Map(primersRepo.primersOf.all(b.id).map((p) => [p.resource_id, p.status === "asked" ? " · primer asked" : " · has a primer"]));
   const keptBy = new Map(a.keptCountsByCourse.all(b.id).map((r) => [r.course, r.n]));
   const cardsBy = new Map(a.cardCountsByCourse.all(b.id).map((r) => [r.course, r.n]));
   const decks = [...decksOf(b.id).entries()];
@@ -102,7 +105,7 @@ function boardOutline(b: Board): string {
     `- ${b.ref}/chat — ${count(chat.n, "message")} with the board's model${chat.cleared ? ` (${chat.cleared} cleared)` : ""}`,
     "",
     "## Sources",
-    ...(srcs.length ? srcs.map((s) => `- ${idOf("source", s.id)} "${titleOf(s)}" · ${count(sectionsBy.get(s.id) ?? 0, "section")} · ${sourceStatus(s, per(s.id, keptBy), per(s.id, cardsBy))}`) : ["None yet."]),
+    ...(srcs.length ? srcs.map((s) => `- ${idOf("source", s.id)} "${titleOf(s)}" · ${count(sectionsBy.get(s.id) ?? 0, "section")} · ${sourceStatus(s, per(s.id, keptBy), per(s.id, cardsBy))}${primers.get(s.id) ?? ""}`) : ["None yet."]),
   ].join("\n");
 }
 

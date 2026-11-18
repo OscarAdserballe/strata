@@ -10,6 +10,8 @@ import { compileQuote, quoteAnchor } from "../../../shared/reading/compile-quote
 import { KINDS, flattenTree, normalizeTree, orderByLadder, treeToAscii, type ConceptTree } from "../distil/distil.ts";
 import { agentRepo as a } from "./repo.ts";
 import { AgentError, type Board } from "./kinds.ts";
+import { primersRepo } from "../primers/repo.ts";
+import { PRIMER_MAX, primerProblem } from "../primers/primers.ts";
 
 const fail = (msg: string): never => { throw new AgentError(msg); };
 const str = (v: unknown, field: string, max: number, required = true): string | undefined => {
@@ -319,6 +321,18 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
         q.putPlaceMark.run(b.id, rid, ms, o.pinned === undefined ? (cur?.pinned ?? 0) : o.pinned ? 1 : 0);
       }
       return `placed ${idOf("source", rid)}`;
+    },
+  },
+  set_primer: {
+    fields: { source: { type: "string", description: "The source's src_ id." },
+      html: { type: "string", maxLength: PRIMER_MAX, description: "The whole primer: one self-contained, light HTML page (inline CSS and JS; scripts and fonts only from https CDNs; no fetch, no localStorage)." } },
+    does: "Gives a source its primer: one page the reader opens before page 1, to see what the source is about and what to follow through it. Replaces the one it has. get_guide({ topic: \"primer\" }) says what makes a good one.",
+    check: (o) => { str(o.source, "source", 200); const why = primerProblem(o.html); if (why) fail(why); },
+    run(b, o) {
+      const rid = String(o.source).replace(/^src_/, "");
+      if (a.resourceBoard.get(rid)?.board_id !== b.id) fail(`${String(o.source)} is not a source on ${b.ref}.`);
+      primersRepo.setPrimer.run(rid, b.id, String(o.html), now());
+      return `primer set on ${idOf("source", rid)}`;
     },
   },
 };

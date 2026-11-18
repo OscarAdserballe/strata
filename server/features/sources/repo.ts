@@ -40,6 +40,8 @@ export const sourcesRepo = {
   setPageState: stmt("INSERT INTO page_states (resource_id, board_id, value, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(resource_id) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at"),
   delPageState: stmt("DELETE FROM page_states WHERE resource_id = ?"),
   delBoardPageStates: stmt("DELETE FROM page_states WHERE board_id = ?"),
+  delPrimer: stmt("DELETE FROM primers WHERE resource_id = ?"),
+  delBoardPrimers: stmt("DELETE FROM primers WHERE board_id = ?"),
   insBlob: stmt("INSERT OR REPLACE INTO resource_blobs (resource_id, bytes, page_text) VALUES (?,?,?)"),
   blobOf: stmt<{ bytes: Uint8Array | null }>("SELECT bytes FROM resource_blobs WHERE resource_id = ?"),
   // substr() on a blob reads only the overflow pages it needs, so one page of a big book costs a page.

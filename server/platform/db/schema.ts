@@ -102,6 +102,14 @@ CREATE TABLE IF NOT EXISTS page_states (
   resource_id TEXT PRIMARY KEY, board_id TEXT NOT NULL, value TEXT NOT NULL, updated_at INTEGER NOT NULL, rev INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_page_states_board ON page_states(board_id);
+-- a source's primer: one page an agent draws to read before page 1. asked = waiting on the routine.
+CREATE TABLE IF NOT EXISTS primers (
+  resource_id TEXT PRIMARY KEY, board_id TEXT NOT NULL,
+  status TEXT NOT NULL,                          -- asked | ready
+  html TEXT,                                     -- null until the first one is written
+  asked_at INTEGER, built_at INTEGER, rev INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_primers_board ON primers(board_id, status);
 -- a board's RESOURCE SET (0..N): the files it's reading. A board = one context window: the
 -- resources + chat are what the model sees at once, so there is no retrieval — every resource's
 -- text/bytes rides each turn, bounded by the budget (BUDGET_TOKENS). text is md/txt; a PDF's
