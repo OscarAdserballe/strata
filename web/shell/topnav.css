@@ -7,8 +7,6 @@
 .tn-tab.on{background:var(--paper-3);color:var(--ink);font-weight:500;}
 .tn-badge{display:inline-block;min-width:12px;padding:2px 6px;border-radius:9px;background:var(--accent-deep);color:var(--card-bg);font:500 11px/1.1 var(--sans);text-align:center;}
 .tn-grow{flex:1;}
-.tn-days{font:400 11px/1 var(--mono);color:var(--ink-soft);margin-right:12px;white-space:nowrap;}
-.tn-days b{font-weight:600;color:var(--ink);}
 .tn-jump{display:inline-flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:8px;background:var(--card-bg);padding:7px 10px;font:400 13px/1 var(--sans);color:var(--ink-faint);}
 .tn-jump kbd{border:1px solid var(--line);border-radius:4px;padding:2px 4px;font:400 9px/1 var(--mono);color:var(--ink-faint);}
 .tn-pop{position:relative;display:inline-flex;}
@@ -30,6 +28,6 @@
   .topnav{padding:0 14px;gap:2px;}
   .tn-mark{padding-right:10px;font-size:19px;}
   .tn-tab{padding:8px;}
-  .tn-days,.tn-jump{display:none;}
+  .tn-jump{display:none;}
 }
 .tn-solo{font:400 11px/1 var(--mono);color:var(--ink-faint);margin-right:8px;max-width:22vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
