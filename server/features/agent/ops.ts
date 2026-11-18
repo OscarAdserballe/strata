@@ -27,7 +27,7 @@ const dayOf = (v: unknown): string => v === null || v === undefined || v === "" 
 const text = (max: number, about: string) => ({ type: "string", maxLength: max, description: about });
 const flag = (about: string) => ({ type: "boolean", description: about });
 const orNull = (about: string) => ({ type: ["string", "null"], description: about });
-const CARDS_MAX = 200, FACE_MAX = 4000;
+const CARDS_MAX = 200, FACE_MAX = 4000, PRIMER_MAX = 400 * 1024;
 const AT = text(600, "Where the card sits: 4 to 40 consecutive words of the source, copied verbatim, that occur once in its passage (on one page, for a PDF): the words the card asks about.");
 const BUSY = ["queued", "preparing", "running", "carding"];
 const list = (about: string) => ({ type: "array", items: { type: "string" }, description: about });
@@ -297,6 +297,18 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
       return `set aside ${dropDeck(slug)} cards of ${idOf("deck", slug)}`;
     },
   },
+  set_primer: {
+    fields: { source: { type: "string", description: "The source's src_ id." },
+      html: { type: "string", maxLength: PRIMER_MAX, description: "The whole page: one self-contained HTML file, at most 400 KB." } },
+    does: "Gives a source its primer, the page the reader opens beside it before reading it, replacing any it had. The reader sees it at once; get_guide({ topic: \"routine\" }) says what goes in one.",
+    check: (o) => { str(o.source, "source", 200); primerHtml(o.html); },
+    run(b, o) {
+      const rid = String(o.source).trim().replace(/^src_/, "");
+      if (a.resourceBoard.get(rid)?.board_id !== b.id) fail(`${String(o.source)} is not a source on ${b.ref}.`);
+      q.setPrimer.run(b.id, rid, primerHtml(o.html), now());
+      return `primer ready on ${idOf("source", rid)}`;
+    },
+  },
   place: {
     fields: { id: { type: "string", description: "The source's src_ id." }, "group?": orNull("A group's name or grp_ id; null ungroups."),
       "milestone?": orNull("A milestone's name or ms_ id; null clears it."), "pinned?": flag("Pins or unpins the source.") },
@@ -319,6 +331,13 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
     },
   },
 };
+
+function primerHtml(v: unknown): string {
+  if (typeof v !== "string" || !v.trim()) return fail("html is the whole page, as a string.");
+  if (Buffer.byteLength(v, "utf8") > PRIMER_MAX) fail(`html is at most 400 KB; this one is ${Math.ceil(Buffer.byteLength(v, "utf8") / 1024)} KB.`);
+  if (!/<(!doctype\s+html|html|head|body|main|article|section|div|svg|h[1-6]|p)[\s>]/i.test(v)) fail("html is an HTML page: it has no <html>, <body> or other element.");
+  return v;
+}
 
 const strs = (v: unknown, field: string): string[] => {
   if (v === undefined || v === null) return [];

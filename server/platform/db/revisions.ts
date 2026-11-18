@@ -26,6 +26,7 @@ export const REVISIONED: readonly Revisioned[] = [
   { table: "mark_replies", key: "board_id", scope: "board" },
   { table: "asks", key: "board_id", scope: "board" },
   { table: "minted", key: "board_id", scope: "board", row: true },
+  { table: "primers", key: "board_id", scope: "board" },
   { table: "board_groups", key: "board_id", scope: "plan" },
   { table: "board_milestones", key: "board_id", scope: "plan" },
   { table: "board_places", key: "board_id", scope: "plan" },

@@ -1,6 +1,6 @@
 // The ids an agent sees: a prefix that says what a thing is, then the room's own id for it.
 
-export const COLLECTIONS = ["log", "plan", "kept", "questions", "highlights", "comments", "sources", "chat"] as const;
+export const COLLECTIONS = ["log", "plan", "kept", "questions", "highlights", "comments", "sources", "primers", "chat"] as const;
 export type Collection = (typeof COLLECTIONS)[number];
 
 const PREFIXES = {

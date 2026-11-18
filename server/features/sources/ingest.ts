@@ -135,6 +135,7 @@ export function reviseSource(boardId: string, rid: string, p: PreparedSource): b
       for (const m of q.marksOfResource.all(rid)) q.setMarkOffsets.run(...reanchor(was.text, r.text ?? "", m.start_off, m.end_off), m.id);
     }
     if (bytes) q.insBlob.run(rid, bytes, null); else q.delBlob.run(rid);
+    q.stalePrimer.run(boardId, rid);
     q.dropImportsOf.run(rid);
     if (r.importId) finishImport(r.importId, rid);
     return true;

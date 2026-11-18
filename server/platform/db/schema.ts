@@ -356,6 +356,14 @@ CREATE TABLE IF NOT EXISTS board_places (
   ord INTEGER,                            -- position inside its group; null = never placed
   PRIMARY KEY (board_id, item)
 );
+-- A primer: the page Claude writes about one source, read before page 1; never a resources row, so never a source.
+CREATE TABLE IF NOT EXISTS primers (
+  board_id TEXT NOT NULL, resource_id TEXT NOT NULL,
+  html TEXT,                              -- null until Claude has written one
+  status TEXT NOT NULL,                   -- asked | ready | stale
+  asked_at INTEGER, built_at INTEGER,
+  PRIMARY KEY (board_id, resource_id)
+);
 -- THE DASHBOARD (features/dashboard): a separate app the room only hosts, so nothing here has a
 -- board_id. A task is like a Linear issue: a body, dated updates appended to it, one level of
 -- subtasks. Agents never touch tasks directly; they add inbox items, and you keep or drop each.
