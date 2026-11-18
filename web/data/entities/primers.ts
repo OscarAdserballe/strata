@@ -28,6 +28,8 @@ export const primerOps = {
       method: "POST",
       path: primerPath(board, rid),
       body: {},
+      // the routine may write the page before the answer lands, so the answer is never the last word
+      invalidates: [key],
       optimistic: [{ key, apply: (held: PrimerEntity | undefined) => ({ requestedAt: null, builtAt: null, rev: 0, ...held, status: "requested" }) }],
       confirm: (res, meta) => {
         const p = res?.primer;
