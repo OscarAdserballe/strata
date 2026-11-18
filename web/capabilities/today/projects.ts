@@ -85,6 +85,11 @@ export function projectView(p: ProjectEntry, entries: readonly RegisterEntry[], 
   };
 }
 
+/** Active projects, starred first; then the soonest end, then the most recently touched. */
+export const activeProjects = (views: readonly ProjectView[]): ProjectView[] => views.filter((v) => !v.project.archivedAt)
+  .sort((a, b) => Number(!!b.project.starredAt) - Number(!!a.project.starredAt)
+    || (a.project.endsAt || "9999").localeCompare(b.project.endsAt || "9999") || (b.project.touchedAt ?? 0) - (a.project.touchedAt ?? 0));
+
 /** "ends 14 Dec" or "no end" */
 export const endLabel = (p: ProjectEntry): string => (p.endsAt ? `ends ${shortDay(p.endsAt)}` : "no end");
 

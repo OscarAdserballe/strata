@@ -61,6 +61,8 @@
 .rbar-menu .suggest-button{color:var(--ink) !important;}
 .rbar-menu > button:hover,.rbar-menu .suggest-button:hover{background:var(--paper-2) !important;}
 .rbar-menu .rbar-study{padding-left:16px !important;}
+.rbar-menu > .rbar-del b{color:var(--warn);}
+.rbar-menu > .rbar-del.arm{background:var(--warn-soft) !important;}
 .rbar-slot{display:contents;}
 .rbar-keep{border:1px solid var(--line) !important;border-radius:7px;padding:2px 7px !important;background:none !important;color:var(--ink-soft) !important;font:500 10px var(--mono) !important;cursor:pointer;margin-right:4px;}
 .rbar-keep.next{background:var(--accent) !important;border-color:var(--accent) !important;color:var(--card-bg) !important;}

@@ -541,3 +541,59 @@ test("a writer owing text outside the save path keeps the unsaved prompt armed w
   owes = true; tell(); unhold();
   assert.equal(prompts(), false, "a holder gone holds nothing");
 });
+
+test("a held op paints at once, holds its lane and leaves only when its hold is up; withdraw inside the hold sends nothing", async () => {
+  const { m, sent, store, fire, timers } = harness();
+  store.apply("list", 3, ["a", "b"], "wire");
+  const drop = (id: string) => (l: string[]) => l.filter((x) => x !== id);
+  const goes = m.mutate(op(["source:a"], { method: "DELETE", key: "del-a", holdMs: 8000, optimistic: [{ key: "list", apply: drop("a") }] }));
+  const behind = m.mutate(op(["source:a"], { body: "after" }));
+  assert.deepEqual(store.get("list"), ["b"], "painted before anything is sent");
+  assert.equal(sent.length, 0, "nothing on the wire inside the hold, nor behind it in its lane");
+  assert.deepEqual(m.pending().map((p) => p.state), ["held", "queued"]);
+  fire(8000);
+  assert.equal(sent.length, 1, "the hold is up: it goes");
+  assert.equal(sent[0].req.headers["Idempotency-Key"], "del-a");
+  assert.equal(m.withdraw("del-a"), false, "once on its way it can't be taken back");
+  sent[0].reply.resolve(answer(200));
+  await goes; await tick();
+  assert.equal(sent.length, 2, "then the op behind it");
+  sent[1].reply.resolve(answer(200));
+  await behind;
+
+  const taken = failure(m.mutate(op(["source:b"], { method: "DELETE", key: "del-b", holdMs: 8000, optimistic: [{ key: "list", apply: drop("b") }] })));
+  assert.deepEqual(store.get("list"), ["a"], "painted: b is gone from the page");
+  assert.equal(m.withdraw("del-b"), true);
+  const e = await taken;
+  assert.equal(e.withdrawn, true, "the caller hears it was taken back");
+  assert.deepEqual(store.get("list"), ["a", "b"], "its layer is gone");
+  assert.equal(timers.filter((t) => t.ms === 8000).length, 0, "its hold timer is cleared");
+  assert.equal(m.pending().length, 0);
+  assert.equal(sent.length, 2, "never sent");
+});
+
+test("a held flush op goes with the pagehide flush, keeps its key when the hold is up, and arms no unsaved prompt", async () => {
+  const { m, sent, fire } = harness();
+  const win = new EventTarget() as EventTarget & { __strataSettled?: () => Promise<void> };
+  m.install(win as unknown as Window);
+  const prompts = () => {
+    let prompted = false;
+    const look = (e: Event) => { prompted = e.defaultPrevented; };
+    win.addEventListener("beforeunload", look);
+    win.dispatchEvent(new Event("beforeunload", { cancelable: true }));
+    win.removeEventListener("beforeunload", look);
+    return prompted;
+  };
+  const goes = m.mutate(op(["source:a"], { method: "DELETE", key: "del-a", holdMs: 8000, flush: true }));
+  assert.equal(prompts(), false, "the undo window alone asks nothing: pagehide sends it");
+  m.flush();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].req.keepalive, true);
+  assert.equal(m.withdraw("del-a"), false, "flushed: too late to take back");
+  fire(8000);
+  assert.equal(sent.length, 2, "a page that lived on sends it again when the hold is up");
+  assert.equal(sent[1].req.headers["Idempotency-Key"], "del-a", "under the same key, so it lands once");
+  assert.equal(prompts(), true, "on its way: the prompt is armed");
+  sent[1].reply.resolve(answer(200));
+  await goes;
+});

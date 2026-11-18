@@ -39,6 +39,9 @@ and every read must be ordered against the writes it may have missed.
   retry, and is retried on a lost answer, timeout, 408/425/429 or 5xx. A 409 rebuilds the op once
   from the current value; any other 4xx rolls back and says why. Offline, writes are refused rather
   than queued. Unsent writes flush with `keepalive` when the page hides.
+- **Undo.** An op may be held (`holdMs`): its layers paint at once, it leaves only when the hold is
+  up, and until then `withdraw(key)` takes it back unsent. The pagehide flush sends a held op early.
+  A source's delete is held 8 s for the Undo in its toast; the server keeps that source's kept cards.
 
 ## Checked by
 

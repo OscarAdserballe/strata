@@ -10,6 +10,8 @@ export const ROOM_ENV = { STRATA_FAKE_STREAM_MS: "70", STRATA_ROUTINE_STUB: "1" 
 
 // where the fix is a retry, a check waits up to this long for it rather than judging after a fixed beat
 const GRACE_MS = 10_000;
+// a source's delete waits out its Undo (UNDO_MS in web/capabilities/sources/useSourceActions.ts) before it is sent
+const UNDO_MS = 8_000;
 
 async function board(t, title) {
   const { board: b } = await t.api("/api/boards", "POST", { title: `${title} · seed ${t.seed} · ${Date.now().toString(36)}` });
@@ -431,12 +433,14 @@ function deleteOpenSource({ name, last }) {
       const row = page.locator(".pp-src").filter({ has: page.locator(".pp-sname", { hasText: doomed.filename }) });
       await row.hover();
       await row.locator(".tl-more").click();
-      await row.getByRole("button", { name: "delete this source", exact: true }).click();
-      await row.getByRole("button", { name: "the source, its pages and its cards — all of it?", exact: true }).click();
+      await row.getByRole("button", { name: "delete", exact: true }).click();
+      await row.getByRole("button", { name: "delete this source?", exact: true }).click();
       await row.waitFor({ state: "detached" });
+      // the delete leaves once its Undo has had its time
+      const until = performance.now() + UNDO_MS + GRACE_MS;
+      let state = await t.api(`/api/boards/${b.id}`);
+      while (state.resources.some((r) => r.id === doomed.rid) && performance.now() < until) { await sleep(250); state = await t.api(`/api/boards/${b.id}`); }
       await t.net.idle(500);
-      await sleep(500);
-      const state = await t.api(`/api/boards/${b.id}`);
       if (state.resources.some((r) => r.id === doomed.rid)) throw new Error("the delete never reached the server");
       const seen = await page.evaluate((key) => {
         const q = new URLSearchParams(location.search);
@@ -463,6 +467,73 @@ function deleteOpenSource({ name, last }) {
 }
 const pageDeleteSource = deleteOpenSource({ name: "page-delete-source", last: false });
 const pageDeleteLastSource = deleteOpenSource({ name: "page-delete-last-source", last: true });
+
+// Undo is the send held back: an undone delete never reaches the wire; a sent one lands once though its answer is lost
+const sourceDeleteUndo = {
+  name: "source-delete-undo",
+  what: "on the project page, delete a source that has a note and a kept card and press Undo; then delete it again and lose the delete's answer; the first never reaches the server, the second lands once and the kept card stays",
+  checks: {
+    confirm: "the confirm names the source's note and its kept card",
+    undone: "an undone delete sends nothing: the source is still on the server and back on the page",
+    once: "the second delete is on the server once, under one key, though its answer was lost",
+    kept: "the kept card stays (and so stays in Review); the unkept cards and the note are gone",
+    shown: "the page no longer lists the source after the resend's answer, and says no error",
+  },
+  async run(t) {
+    const b = await board(t, "Race source delete");
+    const doomed = await prose(t, b.id, `race-undo-${t.seed}.md`, essay("The source deleted twice", "This source is deleted, brought back, and deleted again."));
+    await prose(t, b.id, `race-undo-other-${t.seed}.md`, essay("The source that stays", "This source is never touched."));
+    const slug = await deck(t, b.id, doomed.rid, ["Undo card one: what is held back?", "Undo card two: what lands once?"]);
+    const cards = (await t.api(`/api/decks/${slug}`)).cards.map((c) => c.id);
+    await t.api(`/api/decks/${slug}/keeps`, "POST", { add: [cards[0]] });
+    await t.api(`/api/boards/${b.id}/marks`, "POST", { resourceId: doomed.rid, start: 0, end: 0, quote: "The page draws what it was last told", note: "Kept as a note." });
+    const isDelete = (e) => e.method === "DELETE" && e.path.split("?")[0] === `/api/boards/${b.id}/resources/${doomed.rid}`;
+    const page = await t.open({ latency: true, lostAck: { match: isDelete, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    await page.goto(`${t.base}/?board=${b.id}`);
+    const row = page.locator(".pp-src").filter({ has: page.locator(".pp-sname", { hasText: doomed.filename }) });
+    await row.waitFor({ timeout: 60_000 });
+    await t.net.idle(400);
+    const del = async () => {
+      await row.hover();
+      await row.locator(".tl-more").click();
+      await row.getByRole("button", { name: "delete", exact: true }).click();
+      const ask = row.locator(".tl-row.arm");
+      const said = squash(await ask.innerText());
+      await ask.click();
+      await row.waitFor({ state: "detached" });
+      return said;
+    };
+    const said = await del();
+    t.check("confirm", said === "delete it and its 1 note? (1 kept card stays in Review)", `the confirm said "${said}"`);
+    await page.locator(".toast-act", { hasText: "Undo" }).click();
+    await row.waitFor();
+    await sleep(UNDO_MS + 1500);
+    await t.net.idle(400);
+    const sentEarly = t.net.entries.filter(isDelete).length;
+    const stillThere = t.sql("SELECT id FROM resources WHERE id = ?", doomed.rid).length === 1;
+    t.check("undone", !sentEarly && stillThere && await row.isVisible(),
+      `${sentEarly} delete request(s) sent; ${stillThere ? "on" : "gone from"} the server; ${await row.isVisible() ? "listed" : "not listed"}`);
+
+    await del();
+    const until = performance.now() + UNDO_MS + GRACE_MS;
+    while (t.sql("SELECT id FROM resources WHERE id = ?", doomed.rid).length && performance.now() < until) await sleep(250);
+    await page.evaluate(() => window.__strataSettled?.());
+    await t.net.idle(500);
+    const sent = t.net.entries.filter(isDelete);
+    const keys = new Set(sent.map((e) => e.headers["idempotency-key"]));
+    const removed = t.sql("SELECT id FROM events WHERE event = 'resource_remove' AND json_extract(props, '$.resource') = ?", doomed.rid).length;
+    t.check("once", removed === 1 && keys.size === 1 && sent.length >= 2,
+      `${removed} remove(s) on the server from ${sent.length} request(s) under ${keys.size} key(s)`);
+    const left = t.sql("SELECT id FROM cards WHERE course = ?", slug).map((r) => r.id);
+    const notes = t.sql("SELECT id FROM marks WHERE resource_id = ?", doomed.rid).length;
+    t.check("kept", left.length === 1 && left[0] === cards[0] && t.sql("SELECT id FROM card_keeps WHERE id = ?", cards[0]).length === 1 && !notes,
+      `cards left: ${left.map((x) => x.split("/").pop()).join(", ") || "none"}; ${notes} note(s) left`);
+    const listed = await page.locator(".pp-sname").allInnerTexts();
+    const toast = squash(await page.locator(".toast").allInnerTexts().then((x) => x.join(" ")));
+    t.check("shown", !listed.some((x) => x.includes(doomed.filename)) && !/couldn.t delete/.test(toast),
+      `listed: ${listed.map(squash).join(" · ")}${toast ? `; toast: ${toast}` : ""}`);
+  },
+};
 
 const chatSwitch = {
   name: "chat-switch",
@@ -2095,5 +2166,5 @@ const padTwoTabs = {
   },
 };
 
-export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, chatSwitch, sourceRename503, keepsToggle,
+export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
   planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];

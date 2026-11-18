@@ -1,12 +1,19 @@
 import { useMemo, useRef } from "react";
 import type { BoardState } from "../../../shared/types/index.ts";
 import { boards, sources } from "../../data/entities/sources.ts";
+import type { SaveError } from "../../data/mutate.ts";
+import { toast } from "../../shell/layers.ts";
 
 export type SourceVerbName = "rename" | "done" | "delete" | "file";
+
+/** How long a deleted source can be brought back before the delete is sent. */
+export const UNDO_MS = 8000;
 
 export interface SourceActionOptions {
   onState?: (boardId: string, state: BoardState, verb: SourceVerbName) => void;
   onError?: (error: unknown, said: string) => void;
+  /** a source is about to go: whoever shows it steps off it first */
+  onLeaving?: (boardId: string, rid: string) => void;
 }
 
 export interface Fileable { boardId: string; pairId: string | null; resourceId: string; filename?: string }
@@ -29,8 +36,13 @@ export function useSourceActions(options: SourceActionOptions = {}) {
       done(board: string, rid: string, done: boolean) {
         return sources.done(board, rid, done).then(landed(board, "done"), said(done ? "couldn't mark that done" : "couldn't take that back"));
       },
-      remove(board: string, rid: string) {
-        return sources.remove(board, rid).then(landed(board, "delete"), said("couldn't delete that"));
+      /** Gone at once; sent once the Undo in the toast has had UNDO_MS. Resolves null when undone or refused. */
+      remove(board: string, rid: string, name?: string) {
+        latest.current.onLeaving?.(board, rid);
+        const { done, undo } = sources.removeLater(board, rid, UNDO_MS);
+        const what = name ? `“${name}”` : "the source";
+        toast(`Deleted ${what}`, UNDO_MS, { label: "Undo", run: () => toast(undo() ? `${what} is back` : `too late: ${what} is already deleted`, 2400) });
+        return done.then(landed(board, "delete"), (e: SaveError) => (e?.withdrawn ? null : said("couldn't delete that")(e)));
       },
       removePair(board: string, pid: string) {
         return sources.removePair(board, pid).then(landed(board, "delete"), said("couldn't delete that"));

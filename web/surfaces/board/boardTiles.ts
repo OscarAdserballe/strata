@@ -30,7 +30,7 @@ export interface Tile {
   pdf?: boolean; rid?: string | null; page?: number; pages?: number | null; sections?: number;
   pair?: number; cur?: boolean; at?: boolean; dim?: boolean | null; busy?: boolean; read?: unknown;
   cards?: number; seen?: number; done?: number; last?: number;
-  aside?: Aside | null; kp?: Kept | null; keep?: string | null; del?: { res?: string; pair?: string };
+  aside?: Aside | null; kp?: Kept | null; keep?: string | null; del?: { res?: string; pair?: string; notes?: number; kept?: number };
   qgroup?: QGroup; ignoredPile?: boolean; add?: "file" | "link";
   addedAt?: number; readAt?: number; doneAt?: number | null; file?: string; origin?: string | null; marksN?: number;
 }
@@ -93,6 +93,9 @@ export function boardTiles({ board, touchLive, decks, pairs, pairIdx, bookView, 
     }
     return any ? { kept, total, benched } : null;
   };
+  // what deleting the whole source takes with it, said in its confirm: its notes, and its kept cards (which stay in Review)
+  const delRes = (r: Resource) => ({ res: r.id, notes: marksBy[r.id] || 0,
+    kept: keepOf(pairs.filter((p2) => p2.resourceId === r.id).map((p2) => p2.deck))?.kept ?? 0 });
   const asideAlone = (a: Aside | null) => (a && !a.live && a.out ? a.out + " set aside" : "");
   const asideSaid = (a: Aside | null) => (asideAlone(a) ? " · " + asideAlone(a) : "");
   const followRid = (() => {
@@ -142,6 +145,8 @@ export function boardTiles({ board, touchLive, decks, pairs, pairIdx, bookView, 
   pairs.forEach((p, i) => {
     if (p.isHome) return;
     const r = p.resourceId ? res.find((x) => x.id === p.resourceId) : null;
+    // its source is being deleted (the delete's guess): no tile, rather than a blank "cards only" one
+    if (p.resourceId && !r) return;
     const kin = p.resourceId ? secs.filter((s) => s.resourceId === p.resourceId) : [];
     const d = decks.find((x) => x.slug === p.deck);
     const n = d ? d.total : 0;
@@ -183,7 +188,7 @@ export function boardTiles({ board, touchLive, decks, pairs, pairIdx, bookView, 
           : errK ? kin.length + " sections · distil failed"
           : kin.length + " sections" + asideSaid(aside),
         title: name + " — " + kin.length + " sections; click to step inside",
-        enter: r.id, del: { res: r.id }, sections: kin.length,
+        enter: r.id, del: delRes(r), sections: kin.length,
         cards: agg.cards, seen: agg.seen, done: agg.done, last: agg.last, read: r.read, cur: inIt,
       });
       return;
@@ -197,7 +202,7 @@ export function boardTiles({ board, touchLive, decks, pairs, pairIdx, bookView, 
         keep: n ? p.deck : null, kp: keepOf([p.deck]),
         label: name, meta: (total ? total + " pages" : "pdf") + (n ? " · " + n + " cards" : ds ? " · " + ds : asideSaid(aside)),
         busy: busyMeta(ds), ...whenOf(r), pages: total || null,
-        title: r.filename, cards: n, read: r.read, pair: i, cur: here, del: { res: r.id }, sections: 1,
+        title: r.filename, cards: n, read: r.read, pair: i, cur: here, del: delRes(r), sections: 1,
         seen: (touched[p.deck] || {}).seen || 0, done: (touched[p.deck] || {}).done || 0,
         last: (touched[p.deck] || {}).last || 0,
       });
@@ -213,7 +218,7 @@ export function boardTiles({ board, touchLive, decks, pairs, pairIdx, bookView, 
       cover: r ? r.kind : "cards only", title: (r && r.filename) || p.label || "",
       busy: !!r && busyMeta(ds), ...whenOf(r),
       cards: n, read: r ? r.read : null, pair: i, cur: here,
-      del: r ? { res: r.id } : { pair: p.id },
+      del: r ? delRes(r) : { pair: p.id },
       seen: (touched[p.deck] || {}).seen || 0, done: (touched[p.deck] || {}).done || 0,
       last: (touched[p.deck] || {}).last || 0,
     });

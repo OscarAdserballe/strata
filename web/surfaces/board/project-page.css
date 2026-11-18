@@ -6,7 +6,10 @@
 .pp-crumb .pp-back{margin-left:auto;color:var(--accent-deep);}
 .pp-head{display:flex;align-items:flex-start;gap:28px;margin-bottom:28px;}
 .pp-titles{flex:1;min-width:0;}
+.pp-trow{display:flex;align-items:flex-start;gap:6px;margin-left:-34px;}
+.pp-trow > :last-child{flex:1;min-width:0;}
 .pp-title{font:600 40px/1.15 var(--serif);letter-spacing:-.01em;margin:0;color:var(--ink);}
+.pp-pstar{font-size:22px;width:28px;margin-top:12px;}
 input.pp-title{width:100%;border:none;border-bottom:1px solid var(--accent-line);background:none;padding:0;}
 .pp-goal{display:block;width:100%;border:none;background:none;padding:6px 0 0;font:italic 400 17px/1.4 var(--serif);color:var(--ink-soft);}
 .pp-goal:focus,.pp-uname.edit:focus,.pp-rename:focus{outline:none;border-bottom:1px solid var(--accent-line);}
@@ -81,6 +84,7 @@ input.pp-title{width:100%;border:none;border-bottom:1px solid var(--accent-line)
   .pp-wrap{padding:22px 18px 50px;}
   .pp-head{flex-wrap:wrap;gap:12px;}
   .pp-total{width:100%;padding-top:0;}
+  .pp-trow{margin-left:0;}
   .pp-pop{position:absolute;right:18px;top:20px;padding:0;}
   .pp-ubar,.pp-colhead,.pp-udate{display:none;}
   .pp-srcs{padding-left:24px;}
