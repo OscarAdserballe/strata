@@ -198,6 +198,10 @@ test("apply is all or nothing, and a resent key writes once", async () => {
   assert.match(await ok("get_context", { id: "thesis/plan" }), /\*\*RQ2\*\*\n {2}- src_/);
   assert.match(await ok("get_context", { id: "thesis/questions", filter: { state: "open" } }), /recall dip/);
   assert.ok((await call("apply", { board: "thesis", key: "apply-test-0003", ops: [{ op: "delete_board" }] })).isError, "there is no op that deletes");
+  assert.match(await ok("apply", { board: "thesis", key: "apply-test-0004", ops: [{ op: "set_project", starred: true }] }), /starred/);
+  assert.match(await ok("get_context", { id: "thesis/plan" }), /^ends: .* · starred$/m, "the plan says the project is starred");
+  await ok("apply", { board: "thesis", key: "apply-test-0005", ops: [{ op: "set_project", starred: false }] });
+  assert.doesNotMatch(await ok("get_context", { id: "thesis/plan" }), /starred/);
 });
 
 test("journey: an agent replaces a section's cards with its own, then sets the deck aside, and the reader can put it back", async () => {

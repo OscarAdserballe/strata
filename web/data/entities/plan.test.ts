@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { BoardPlan } from "../../../shared/types/index.ts";
+import type { BoardPlan, RegisterResponse } from "../../../shared/types/index.ts";
 import { Store } from "../store.ts";
 import { ATTEMPT_DEADLINE_MS, Mutator, RETRY_DELAYS_MS, type SendAnswer, type SendRequest } from "../mutate.ts";
-import { plan as planCalls, planGestures, planOps, planOrder } from "./plan.ts";
+import { plan as planCalls, planGestures, planOps, planOrder, starOp } from "./plan.ts";
 import type { PlanEntity } from "./boards.ts";
 
 const tick = async () => { for (let i = 0; i < 3; i++) await new Promise((resolve) => setImmediate(resolve)); };
@@ -158,4 +158,28 @@ test("the plan rail's gestures: a reorder rebuilt over theirs keeps what the oth
   assert.deepEqual(gone.groups, []);
   assert.deepEqual(gone.places.a, { group: null, milestone: null, pinned: false, ord: null });
   assert.equal(planGestures.purpose("  read it  ").guess!(p).purpose, "read it");
+});
+
+test("a star from a list of projects paints the plan and the register at once, and the answer keeps the register starred", async () => {
+  const { store, sent, m } = room();
+  const reg = { entries: [], projects: [{ id: "b1", title: "One", starredAt: null }, { id: "b2", title: "Two", starredAt: null }] } as unknown as RegisterResponse;
+  store.apply<RegisterResponse>("register", 10, reg, "wire");
+  const starred = () => store.get<RegisterResponse>("register")!.projects.map((p) => !!p.starredAt);
+  const saving = m.mutate(starOp("b1", true, store));
+  assert.deepEqual(starred(), [true, false], "the register shows the star before any answer");
+  assert.ok(store.get<PlanEntity>("plan:b1")?.starredAt, "and so does the board's plan");
+  assert.equal(sent[0].req.method, "PATCH");
+  assert.equal(sent[0].req.path, "/api/boards/b1/plan/project");
+  assert.deepEqual(JSON.parse(sent[0].req.body!), { starred: true });
+  sent[0].reply({ status: 200, body: { plan: { ...plan(4, "A", "B", "C"), starredAt: 99 }, rev: 11 }, rev: 11, epoch: "" });
+  await saving;
+  assert.equal(store.entry("register")?.layers.length, 0);
+  assert.deepEqual(starred(), [true, false], "the register keeps the star until its own reread");
+  assert.equal(store.get<PlanEntity>("plan:b1")?.starredAt, 99, "the plan is the server's");
+
+  const refused = m.mutate(starOp("b2", true, store)).catch((e) => e);
+  assert.deepEqual(starred(), [true, true]);
+  sent[1].reply({ status: 404, body: { error: "no such board" }, rev: 0, epoch: "" });
+  assert.equal((await refused).status, 404);
+  assert.deepEqual(starred(), [true, false], "a refused star is taken back");
 });
