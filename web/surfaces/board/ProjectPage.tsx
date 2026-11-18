@@ -187,8 +187,8 @@ export default function ProjectPage(p: ProjectPageProps) {
           <div className="pp-titles">
             {renaming === "title"
               ? <Ghost className="pp-title edit" label="Project name" value={p.head} onCommit={(v) => { setRenaming(null); if (v) void p.boardActions.rename(boardId, v); }} />
-              : <h1 className="pp-title" onDoubleClick={() => setRenaming("title")}>{p.head}
-                {archived ? null : <ProjectStar on={!!plan.starredAt} onToggle={() => void planApi.project({ starred: !plan.starredAt }).finally(() => refreshRegister())} />}</h1>}
+              : <div className="pp-tline"><h1 className="pp-title" onDoubleClick={() => setRenaming("title")}>{p.head}</h1>
+                {archived ? null : <ProjectStar on={!!plan.starredAt} onToggle={() => void planApi.project({ starred: !plan.starredAt }).finally(() => refreshRegister())} />}</div>}
             <Ghost className="pp-goal" label="What is it for?" placeholder="What is it for?" value={plan.purpose} onCommit={(v) => planApi.purpose(v)} />
           </div>
           {archived ? null : <div className="pp-total">

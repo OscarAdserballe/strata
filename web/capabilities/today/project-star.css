@@ -10,4 +10,5 @@
 .pj-cell>.pj-card{flex:1;padding-right:44px;}
 .pj-cell>.proj-star{position:absolute;right:12px;top:14px;}
 .pj-cell.starred>.pj-card{border-color:#e8d19a;background:#fffaf0;}
-.pp-titles .proj-star{font-size:20px;vertical-align:4px;margin-left:6px;}
+.pp-tline{display:flex;align-items:flex-start;gap:6px;}
+.pp-tline>.proj-star{font-size:22px;margin-top:10px;flex:none;}
