@@ -149,7 +149,7 @@ test("after a restore onto a backup, a refusal is taken at its lower rev and the
 });
 
 test("the plan rail's gestures: a reorder rebuilt over theirs keeps what the other device added, a deleted group lets go of its places", () => {
-  const p = { purpose: "", endsAt: "", archivedAt: null, groups: [{ id: "g", name: "G", ord: 0, byDate: "" }], milestones: [], places: { a: { group: "g", milestone: null, pinned: false, ord: 1 } } } as BoardPlan;
+  const p = { purpose: "", endsAt: "", archivedAt: null, starredAt: null, groups: [{ id: "g", name: "G", ord: 0, byDate: "" }], milestones: [], places: { a: { group: "g", milestone: null, pinned: false, ord: 1 } } } as BoardPlan;
   const w = planOrder("g", ["b", "a"]);
   assert.deepEqual(Object.entries(w.guess!(p).places).map(([k, v]) => [k, v.group, v.ord]), [["a", "g", 1], ["b", "g", 0]]);
   const theirs = { ...p, places: { ...p.places, c: { group: "g", milestone: null, pinned: false, ord: 0 } } } as BoardPlan;

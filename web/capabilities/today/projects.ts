@@ -86,6 +86,11 @@ export function projectView(p: ProjectEntry, entries: readonly RegisterEntry[], 
 }
 
 /** "ends 14 Dec" or "no end" */
+/** Active projects in the order Today and Projects list them: starred first, then the nearest end, then the latest touched. */
+export const byFocus = (starred: (p: ProjectEntry) => boolean) => (a: ProjectView, b: ProjectView): number =>
+  Number(starred(b.project)) - Number(starred(a.project))
+  || (a.project.endsAt || "9999").localeCompare(b.project.endsAt || "9999") || (b.project.touchedAt ?? 0) - (a.project.touchedAt ?? 0);
+
 export const endLabel = (p: ProjectEntry): string => (p.endsAt ? `ends ${shortDay(p.endsAt)}` : "no end");
 
 export interface ReadingRow { source: ProjectSource; project: ProjectView; unit: ProjectUnit | null; stale: boolean }
@@ -113,11 +118,11 @@ export const starCount = (views: readonly ProjectView[]): number =>
 /** The same view from a board's own state, so the project page agrees with Today without the register. */
 export function boardProject(
   id: string, title: string,
-  plan: { purpose: string; endsAt?: string; archivedAt?: number | null; groups: ProjectEntry["groups"]; places: Record<string, { group: string | null; ord: number | null; pinned: boolean }> },
+  plan: { purpose: string; endsAt?: string; archivedAt?: number | null; starredAt?: number | null; groups: ProjectEntry["groups"]; places: Record<string, { group: string | null; ord: number | null; pinned: boolean }> },
   resources: readonly { id: string; filename: string; kind: string; readPct?: number; lastReadAt?: number | null; doneAt?: number | null; createdAt: number }[],
   now = new Date(),
 ): ProjectView {
-  const p: ProjectEntry = { id, title, purpose: plan.purpose, endsAt: plan.endsAt ?? "", archivedAt: plan.archivedAt ?? null, touchedAt: null,
+  const p: ProjectEntry = { id, title, purpose: plan.purpose, endsAt: plan.endsAt ?? "", archivedAt: plan.archivedAt ?? null, starredAt: plan.starredAt ?? null, touchedAt: null,
     groups: plan.groups.map((g) => ({ ...g, byDate: g.byDate ?? "" })), places: plan.places };
   const entries: RegisterEntry[] = resources.map((r) => ({
     resourceId: r.id, pairId: null, boardId: id, boardTitle: title, unfiled: false, filename: r.filename, kind: r.kind, originUrl: null,

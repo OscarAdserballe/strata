@@ -1,6 +1,8 @@
 import { useMemo, useState } from "react";
 import type { RegisterResponse } from "../../../shared/types/index.ts";
-import { daysUntil, projectView, shortDay, type ProjectView } from "../../capabilities/today/projects.ts";
+import { byFocus, daysUntil, projectView, shortDay, type ProjectView } from "../../capabilities/today/projects.ts";
+import { useProjectStars } from "../../capabilities/today/useProjectStars.ts";
+import ProjectStar from "../../capabilities/today/ProjectStar.tsx";
 import "./projects.css";
 
 export interface ProjectsIndexProps {
@@ -25,8 +27,10 @@ const Segments = ({ v }: { v: ProjectView }) => v.units.length ? <div className=
 export default function ProjectsIndex({ reg, onOpen, onWarm, onNew }: ProjectsIndexProps) {
   const [shelf, setShelf] = useState<"active" | "archived">("active");
   const views = useMemo<ProjectView[]>(() => (reg ? reg.projects.map((p) => projectView(p, reg.entries)) : []), [reg]);
-  const active = views.filter((v) => !v.project.archivedAt)
-    .sort((a, b) => (a.project.endsAt || "9999").localeCompare(b.project.endsAt || "9999") || (b.project.touchedAt ?? 0) - (a.project.touchedAt ?? 0));
+  const [why, setWhy] = useState("");
+  const pstar = useProjectStars(reg, setWhy);
+  const active = views.filter((v) => !v.project.archivedAt).sort(byFocus(pstar.starred));
+  const anyStarred = active.some((v) => pstar.starred(v.project));
   const archived = views.filter((v) => v.project.archivedAt).sort((a, b) => (b.project.archivedAt ?? 0) - (a.project.archivedAt ?? 0));
   const shown = shelf === "active" ? active : archived;
   return (
@@ -42,10 +46,12 @@ export default function ProjectsIndex({ reg, onOpen, onWarm, onNew }: ProjectsIn
           <button className="td-primary small" onClick={onNew}>New project</button>
         </div>
       </div>
+      {why ? <div className="rg-err" role="alert">{why}</div> : null}
       {reg === null ? <p className="td-quiet">Reading the room…</p>
         : !shown.length ? <p className="td-quiet">{shelf === "active" ? "No projects yet. Start one with New project." : "Nothing archived. A finished project goes here, and its kept cards keep coming back on Review."}</p>
         : <div className="pj-grid">
-          {shown.map((v) => <button key={v.project.id} className="pj-card" onClick={() => onOpen(v.project.id)}
+          {shown.map((v) => <div key={v.project.id} className={"pj-cell" + (v.project.archivedAt ? "" : pstar.starred(v.project) ? " starred" : anyStarred ? " quiet" : "")}>
+          <button className="pj-card" onClick={() => onOpen(v.project.id)}
             {...(onWarm ? { onPointerEnter: () => onWarm(v.project.id), onPointerDown: () => onWarm(v.project.id) } : {})}>
             <span className="td-eyebrow">{v.project.archivedAt ? `archived ${new Date(v.project.archivedAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}` : ends(v)}</span>
             <span className="pj-title">{v.project.title}</span>
@@ -54,7 +60,9 @@ export default function ProjectsIndex({ reg, onOpen, onWarm, onNew }: ProjectsIn
             <Segments v={v} />
             {v.next || v.loose.length ? <span className="pj-next">{v.next ? <>Next: <b>{v.next}</b></> : null}
               {v.units.length && v.loose.length ? `${v.next ? " · " : ""}${v.loose.length} in loose ends` : ""}</span> : null}
-          </button>)}
+          </button>
+          {v.project.archivedAt ? null : <ProjectStar on={pstar.starred(v.project)} onToggle={() => pstar.toggle(v.project)} />}
+          </div>)}
         </div>}
     </div>
   );

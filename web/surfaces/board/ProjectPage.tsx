@@ -7,6 +7,7 @@ import { refreshRegister } from "../../data/entities/register.ts";
 import Verbs from "../../capabilities/sources/SourceVerbs.tsx";
 import type { BoardActions } from "../../capabilities/sources/useBoardActions.ts";
 import { boardProject, shortDay, STAR_CAP, type ProjectSource, type ProjectUnit } from "../../capabilities/today/projects.ts";
+import ProjectStar from "../../capabilities/today/ProjectStar.tsx";
 import { openTab } from "../../shell/screens.ts";
 import type { Tile } from "./boardTiles.ts";
 import "./project-page.css";
@@ -34,7 +35,7 @@ export interface ProjectPageProps {
   tools?: ReactNode;
 }
 
-const EMPTY: BoardPlan = { purpose: "", endsAt: "", archivedAt: null, groups: [], milestones: [], places: {} };
+const EMPTY: BoardPlan = { purpose: "", endsAt: "", archivedAt: null, starredAt: null, groups: [], milestones: [], places: {} };
 const dayLong = (ts: number) => new Date(ts).toLocaleDateString(undefined, { day: "numeric", month: "long" });
 
 function Dot({ s }: { s: ProjectSource }) {
@@ -186,7 +187,8 @@ export default function ProjectPage(p: ProjectPageProps) {
           <div className="pp-titles">
             {renaming === "title"
               ? <Ghost className="pp-title edit" label="Project name" value={p.head} onCommit={(v) => { setRenaming(null); if (v) void p.boardActions.rename(boardId, v); }} />
-              : <h1 className="pp-title" onDoubleClick={() => setRenaming("title")}>{p.head}</h1>}
+              : <h1 className="pp-title" onDoubleClick={() => setRenaming("title")}>{p.head}
+                {archived ? null : <ProjectStar on={!!plan.starredAt} onToggle={() => void planApi.project({ starred: !plan.starredAt }).finally(() => refreshRegister())} />}</h1>}
             <Ghost className="pp-goal" label="What is it for?" placeholder="What is it for?" value={plan.purpose} onCommit={(v) => planApi.purpose(v)} />
           </div>
           {archived ? null : <div className="pp-total">

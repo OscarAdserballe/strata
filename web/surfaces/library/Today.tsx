@@ -6,7 +6,9 @@ import { plan, planGestures } from "../../data/entities/plan.ts";
 import { StrataWhy } from "../../data/api.ts";
 import { foldDays } from "../../capabilities/today/days.ts";
 import DayGrid from "../../capabilities/today/DayGrid.tsx";
-import { endLabel, projectView, readingList, starCount, STAR_CAP, type ProjectView, type ReadingRow } from "../../capabilities/today/projects.ts";
+import { useProjectStars } from "../../capabilities/today/useProjectStars.ts";
+import ProjectStar from "../../capabilities/today/ProjectStar.tsx";
+import { byFocus, endLabel, projectView, readingList, starCount, STAR_CAP, type ProjectView, type ReadingRow } from "../../capabilities/today/projects.ts";
 import { courseOf } from "../../shell/format.js";
 import "./today.css";
 
@@ -37,8 +39,9 @@ export default function Today({ reg, review, onReview, onOpen, onResume, onWarm,
   const days = useMemo(() => (reg ? foldDays(reg.hours ?? [], reg.daysBefore ?? 0) : null), [reg]);
   useEffect(() => { setUnstarred([]); }, [reg]);
   const reading = readingList(views, keptAt).filter((r) => !unstarred.includes(r.source.id));
-  const active = views.filter((v) => !v.project.archivedAt)
-    .sort((a, b) => (a.project.endsAt || "9999").localeCompare(b.project.endsAt || "9999") || (b.project.touchedAt ?? 0) - (a.project.touchedAt ?? 0));
+  const pstar = useProjectStars(reg, setWhy);
+  const active = views.filter((v) => !v.project.archivedAt).sort(byFocus(pstar.starred));
+  const anyStarred = active.some((v) => pstar.starred(v.project));
   const stars = starCount(views) - unstarred.length;
   const warm = (board: string) => (onWarm ? { onPointerEnter: () => onWarm(board), onPointerDown: () => onWarm(board) } : {});
 
@@ -115,12 +118,15 @@ export default function Today({ reg, review, onReview, onOpen, onResume, onWarm,
 
       <aside className="td-side">
         <div className="td-head small"><span>Projects</span><span>{active.length} active</span></div>
-        {active.map((v) => <button key={v.project.id} className="td-proj" {...warm(v.project.id)} onClick={() => onOpen(v.project.id)}>
+        {active.map((v) => <div key={v.project.id} className={"td-proj-cell" + (pstar.starred(v.project) ? " starred" : anyStarred ? " quiet" : "")}>
+        <button className="td-proj" {...warm(v.project.id)} onClick={() => onOpen(v.project.id)}>
           <span className="td-proj-top"><span className="td-proj-name">{v.project.title}</span><span className="td-end">{endLabel(v.project)}</span></span>
           {v.next || v.due || v.fresh ? <span className="td-next">{v.next ? <>Next: {v.next}</> : null}
             {v.due ? <i className="td-mark due">due {v.due}</i> : null}{v.fresh ? <i className="td-mark new">{v.fresh} new</i> : null}</span> : null}
           <span className="td-prog"><span className="td-bar"><b style={{ width: `${v.total ? (100 * v.done) / v.total : 0}%` }} /></span><span>{v.done}/{v.total}</span></span>
-        </button>)}
+        </button>
+        <ProjectStar on={pstar.starred(v.project)} onToggle={() => pstar.toggle(v.project)} />
+        </div>)}
         {reg && !active.length ? <p className="td-quiet">No projects yet. <button className="td-link" onClick={onProjects}>Start one</button></p> : null}
       </aside>
     </div>

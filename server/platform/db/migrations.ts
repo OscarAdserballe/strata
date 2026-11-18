@@ -293,6 +293,8 @@ const MIGRATIONS: [name: string, run: () => void][] = [
     addColumn("boards", "archived_at", "INTEGER");
     addColumn("board_groups", "by_date", "TEXT");
   }],
+  // A starred project sorts first on Today and Projects.
+  ["project-star", () => addColumn("boards", "starred_at", "INTEGER")],
 ];
 
 // A comment thread is now a note with replies: the reader's first words are the note, everything after a reply.
