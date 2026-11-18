@@ -7,6 +7,7 @@ import { db } from "../../platform/db/db.ts";
 import { now } from "../../platform/db/sql.ts";
 import { cleanImportedMarkdown } from "./markdown-clean.ts";
 import { q } from "../repo.ts";
+import { primersRepo } from "../primers/repo.ts";
 import type { ResourceRow, SectionRow } from "../../platform/db/rows.ts";
 import { isPdf, kindOf, bytesOf, sliceOf, rawOpen, rawCache, sectionsCount, pagesOf } from "./blobs.ts";
 import { sourceFor, htmlSource, prepareSource, writeSource, pairForResource, type IncomingSection } from "./ingest.ts";
@@ -80,7 +81,7 @@ export const resourceRoutes: Route[] = [
       if (url.searchParams.get("pairs") === "1") q.delPairsOfResource.run(boardId, rid);
       q.clearPairResource.run(boardId, rid);
       q.delSectionsOf.run(rid); q.delTreesOfResource.run(rid); q.delSourceTree.run(rid);
-      q.delMarksOfResource.run(rid); q.delRepliesOfResource.run(rid); q.delAsksOfResource.run(rid); q.delPageState.run(rid);
+      q.delMarksOfResource.run(rid); q.delRepliesOfResource.run(rid); q.delAsksOfResource.run(rid); q.delPageState.run(rid); primersRepo.delPrimer.run(rid);
       logEvent(db, APP, "resource_remove", { board: boardId, resource: rid, pairs: url.searchParams.get("pairs") === "1", kept }, ssn);
       return { status: 200, body: { state: stateOf(boardId) } };
     });

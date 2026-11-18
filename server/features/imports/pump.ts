@@ -11,6 +11,7 @@ import { runJob } from '../../platform/jobs.ts';
 import { countGeminiTokens } from '../../platform/llm/gemini.ts';
 import { cleanImportedMarkdown } from '../sources/markdown-clean.ts';
 import { htmlSource, prepareSource, reviseSource, revisedBy, writeSource } from '../sources/ingest.ts';
+import { nudgeRoutine, requestPrimer } from '../primers/primers.ts';
 import { importStore, type ImportRow } from './store.ts';
 import { enqueueDistil, retrySourceTree } from '../distil/queue.ts';
 import { httpError } from '../../platform/http/http.ts';
@@ -177,6 +178,11 @@ export async function pumpImports(): Promise<void> {
           const revises = revisedBy(row.board_id,row.id,row.origin_ref,row.filename);
           const landed = revises ? reviseSource(row.board_id,revises,source) : !!writeSource(row.board_id,source,null);
           if (landed) logEvent(db,APP,revises ? 'resource_revise' : 'resource_add',{board:row.board_id,kind:isPdf?'pdf':html?.kind ?? 'text',via:'upload',import:row.id,sections:q.sectionsOf.all(revises ?? `res-${row.id}`).length},null);
+          // the source has landed whatever happens here, so a refused primer must not fail its import
+          if (landed && (row as ImportRow & {primer?:number}).primer) {
+            try { if (requestPrimer(row.board_id,revises ?? `res-${row.id}`)) nudgeRoutine(`Primer: ${row.filename}`); }
+            catch (e) { console.error(`[import ${row.id}] primer not queued:`, (e as Error).message); }
+          }
         }
       } catch (error) {
         // Recording the failure can fail too; recover() picks the row up at next boot.

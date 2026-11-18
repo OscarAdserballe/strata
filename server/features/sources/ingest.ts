@@ -6,6 +6,7 @@ import { db } from "../../platform/db/db.ts";
 import { SECTION_TO_END } from "../../platform/db/schema.ts";
 import { tx } from "../../platform/db/tx.ts";
 import { q } from "../repo.ts";
+import { primersRepo } from "../primers/repo.ts";
 import { now, genId } from "../../platform/db/sql.ts";
 import type { SectionRow } from "../../platform/db/rows.ts";
 import { classifyThenQueue } from "../distil/queue.ts";
@@ -135,6 +136,7 @@ export function reviseSource(boardId: string, rid: string, p: PreparedSource): b
       for (const m of q.marksOfResource.all(rid)) q.setMarkOffsets.run(...reanchor(was.text, r.text ?? "", m.start_off, m.end_off), m.id);
     }
     if (bytes) q.insBlob.run(rid, bytes, null); else q.delBlob.run(rid);
+    primersRepo.markStale.run(rid);
     q.dropImportsOf.run(rid);
     if (r.importId) finishImport(r.importId, rid);
     return true;

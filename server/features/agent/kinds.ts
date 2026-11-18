@@ -13,6 +13,8 @@ import { noteOfThread } from "../../../shared/reading/notes.ts";
 import { compileAnchor, quoteOfAnchor, type QuoteText } from "../../../shared/reading/compile-quote.ts";
 import { quoteTextOfDeck } from "../decks/decks.ts";
 import { pageTextStatus } from "../imports/pump.ts";
+import { primerView, waitingByBoard } from "../primers/primers.ts";
+import { primersRepo } from "../primers/repo.ts";
 
 export class AgentError extends Error {}
 const fail = (msg: string): never => { throw new AgentError(msg); };
@@ -28,6 +30,7 @@ export const KINDS: { kind: string; tables: string[] }[] = [
   { kind: "highlight", tables: ["marks", "mark_replies"] },
   { kind: "question", tables: ["minted"] },
   { kind: "chat", tables: ["messages", "card_messages", "asks"] },
+  { kind: "primer", tables: ["primers"] },
 ];
 export const HIDDEN: Record<string, string> = {};
 
@@ -58,11 +61,13 @@ function sourceStatus(s: SourceRow, kept: number, cards: number): string {
 }
 
 export function boardList(): string {
+  const waiting = waitingByBoard();
   const lines = a.boardsAll.all().filter((b) => b.type !== "inbox" || a.sourceCounts.get(b.id)!.n > 0).map((b) => {
     const c = a.sourceCounts.get(b.id)!;
     const kept = a.keptCount.get(b.id)?.n ?? 0;
     const name = b.handle ? `${b.handle} (${b.id})` : b.id;
-    return `- ${name} — ${b.title} · ${c.n} sources · ${kept} kept · last touched ${when.day(b.touched_at ?? b.created_at)}`;
+    const primers = waiting.get(b.id) ? ` · ${count(waiting.get(b.id)!, "primer")} waiting (${b.handle ?? b.id}/primers)` : "";
+    return `- ${name} — ${b.title} · ${c.n} sources · ${kept} kept${primers} · last touched ${when.day(b.touched_at ?? b.created_at)}`;
   });
   return `# Your boards\n\n${lines.join("\n") || "No boards yet."}\n\nPass a board's handle or id as \`board\`.`;
 }
@@ -100,6 +105,7 @@ function boardOutline(b: Board): string {
     `- ${b.ref}/comments — ${commentTally(talksOf(b, sourcesOf(b.id)))}`,
     `- ${b.ref}/sources — ${srcs.length} (${srcs.filter((s) => s.done_at).length} finished)`,
     `- ${b.ref}/chat — ${count(chat.n, "message")} with the board's model${chat.cleared ? ` (${chat.cleared} cleared)` : ""}`,
+    `- ${b.ref}/primers — ${primerTally(b.id)}`,
     "",
     "## Sources",
     ...(srcs.length ? srcs.map((s) => `- ${idOf("source", s.id)} "${titleOf(s)}" · ${count(sectionsBy.get(s.id) ?? 0, "section")} · ${sourceStatus(s, per(s.id, keptBy), per(s.id, cardsBy))}`) : ["None yet."]),
@@ -253,6 +259,14 @@ function collection(b: Board, name: Collection, f: Filter, cursor: unknown, budg
       return paged(`# Highlights · ${b.title}${f.noted ? " · with notes" : ""}`, items, cursor, budget, again, "No highlights match.");
     }
     case "comments": return commentsCollection(b, f, srcs, cursor, budget, short, again);
+    case "primers": {
+      if (f.state && !["requested", "ready", "stale"].includes(f.state)) fail("On primers, state is one of requested, ready, stale.");
+      let rows = primersRepo.primersOf.all(b.id).filter((p) => srcs.has(p.resource_id));
+      if (f.state) rows = rows.filter((p) => p.status === f.state);
+      const items = rows.map((p) => `- ${idOf("source", p.resource_id)} "${titleOf(srcs.get(p.resource_id))}" · ${primerWords(p.status)}${p.requested_at ? ` · asked ${when.minute(p.requested_at)}` : ""}${p.built_at ? ` · written ${when.minute(p.built_at)}` : ""}`);
+      const head = [`# Primers · ${b.title}${f.state ? ` · ${f.state}` : ""}`, "A primer is a page read before a source. Write each requested one with apply: set_primer { source, html }; get_guide({ topic: \"primer\" }) says how."].join("\n");
+      return paged(head, items, cursor, budget, again, "No primers match.");
+    }
     case "chat": {
       const decks = decksOf(b.id);
       let rows = a.chatOf.all(b.id, b.id);
@@ -264,6 +278,14 @@ function collection(b: Board, name: Collection, f: Filter, cursor: unknown, budg
       return paged(`# Chat · ${b.title} · newest first${f.source ? ` · ${f.source}` : ""}`, items, cursor, budget, again, "No chat matches.");
     }
   }
+}
+
+const PRIMER_WORDS: Record<string, string> = { requested: "requested: waiting to be written", ready: "ready", stale: "stale: the source changed since it was written" };
+const primerWords = (status: string): string => PRIMER_WORDS[status] ?? status;
+function primerTally(board: string): string {
+  const rows = primersRepo.primersOf.all(board);
+  const n = (s: string) => rows.filter((p) => p.status === s).length;
+  return `${n("requested")} requested · ${n("ready")} ready · ${n("stale")} stale`;
 }
 
 const speaker = (m: ChatRow): string => m.role === "user" ? "you" : "model";
@@ -433,6 +455,8 @@ function sourceContext(rid: string, cursor: unknown, budget: number, short: bool
   if (noted.length) lines.push("", "## Your highlights with notes", ...noted.map((m) => `- > ${oneLine(m.quote, 300)}\n  note: ${m.note}`));
   const talk = talksOf(b, sourcesOf(b.id)).filter((t) => t.m.resource_id === rid);
   if (talk.length) lines.push("", "## Comments", `${commentTally(talk)}: get_context({ id: "${b.ref}/comments", filter: { source: "${idOf("source", rid)}" } })`);
+  const primer = primerView(rid);
+  if (primer.status !== "none") lines.push("", `## Primer`, `${primerWords(primer.status)}${primer.status === "requested" ? `: write it with apply: set_primer { source: "${idOf("source", rid)}", html }` : ""}`);
   const kept = a.pageStateOf.get(rid);
   if (kept) lines.push("", `## What the page saved · ${when.day(kept.updated_at)}`, "The reader's own state in this live page (window.strata.save):", "```json", prettyJson(kept.value), "```");
   return pagedText("", lines.join("\n"), cursor, budget, (c) => `get_context({ id: "${idOf("source", rid)}", cursor: "${c}" })`);

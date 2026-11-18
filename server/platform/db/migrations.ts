@@ -295,6 +295,8 @@ const MIGRATIONS: [name: string, run: () => void][] = [
   }],
   // A starred project sorts first on Today and Projects; null = not starred.
   ["project-star", () => addColumn("boards", "starred_at", "INTEGER")],
+  // An agent's upload can ask for a primer, queued once the source lands.
+  ["imports-primer", () => addColumn("imports", "primer", "INTEGER NOT NULL DEFAULT 0")],
 ];
 
 // A comment thread is now a note with replies: the reader's first words are the note, everything after a reply.
