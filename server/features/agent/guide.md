@@ -22,7 +22,7 @@ Every id says what it is:
 | id | what |
 |---|---|
 | `thesis` or `b-1a2b3c4d` | a board, by its handle or id |
-| `thesis/log`, `thesis/plan`, `thesis/kept`, `thesis/questions`, `thesis/highlights`, `thesis/comments`, `thesis/sources`, `thesis/chat` | a board's collections |
+| `thesis/log`, `thesis/plan`, `thesis/kept`, `thesis/questions`, `thesis/highlights`, `thesis/comments`, `thesis/sources`, `thesis/chat`, `thesis/primers` | a board's collections |
 | `src_…` | a source |
 | `sec_…` | a section (chapter) of a source |
 | `deck_…` | a deck of cards |
@@ -35,7 +35,7 @@ Every id says what it is:
 
 A link copied from Strata (with `?board=…` or `&resource=…`) works anywhere an id does.
 
-Filters narrow a collection without new ids: `{ group, source, since }` on kept, `{ state: "open" | "answered" }` on questions, `{ noted, source }` on highlights, `{ source, state: "open" | "with_agent" | "your_turn" | "resolved" }` on comments (open by default), `{ source, since }` on chat.
+Filters narrow a collection without new ids: `{ group, source, since }` on kept, `{ state: "open" | "answered" }` on questions, `{ noted, source }` on highlights, `{ source, state: "open" | "with_agent" | "your_turn" | "resolved" }` on comments (open by default), `{ source, since }` on chat, `{ source, state: "wanted" | "requested" | "stale" | "ready" }` on primers (with a source, that source's primer and its HTML).
 
 ## apply
 
@@ -116,9 +116,10 @@ You are the reader's routine: a Claude session that Strata wakes (a press in Dis
 
 1. **Dispatch.** `dashboard_board`, then for each thread in `implementing`, `dashboard_open`. The reader has one button, Send, so the notes before it say what they want, and you decide what comes next and where the page lands (`lands` on `dashboard_post`). No page yet: write a proposal. Notes asking for changes: revise the page and answer each note in `replies`. Notes that pick an option, or "go": build it and post the built page to `review`. Send on a built page with no objection: merge, then post a finish page. Reopen (Send on a Finish page): read the notes and pick again.
 2. **The inbox.** On a scheduled run, look through the connectors for new work meant for the reader and add it with `dashboard_add_items`, after `dashboard_read`, so nothing is added twice. Skip anything its **Handled in the last 7 days** section lists: the reader already dealt with it.
-3. Before stopping, call `dashboard_board` once more: a press made while you worked doesn't wake a second run. Never move or edit a thread yourself: a page's `lands` is the only way you move one.
+3. **Primers.** `whoami` marks each board with primers wanted; for each, `get_context({ id: "<board>/primers", filter: { state: "wanted" } })` lists the requested and stale ones. Write each as `get_guide({ topic: "primer" })` says. A wake that says "Primer: …" names one of them.
+4. Before stopping, call `dashboard_board` once more: a press made while you worked doesn't wake a second run. Never move or edit a thread yourself: a page's `lands` is the only way you move one.
 
-A wake from Strata names its press and thread ("Send: …", "Reopen: …", "Sent to Dispatch: …"; older ones say "Go: …" or "Send back: …"); a run with no such line is the scheduled one. Build in the repository the thread's links or text name; if none of the routine's repositories fits, say so in the page instead of guessing.
+A wake from Strata names its press and thread ("Send: …", "Reopen: …", "Sent to Dispatch: …"; older ones say "Go: …" or "Send back: …"), or a source that wants a primer ("Primer: <title> (src_…) on <board>"); a run with no such line is the scheduled one. Build in the repository the thread's links or text name; if none of the routine's repositories fits, say so in the page instead of guessing.
 
 Where a page lands is your call, not a fixed order:
 
@@ -145,3 +146,18 @@ A proposal lands in `decide`. It always offers two or three real options and say
 ## built
 
 A built page lands in `review`. It says what works now and how you know (what was red and is green, which checks ran, what you could not run), what you left out, and which PRs Send merges. Show the change the way the task is about it. Everything else follows from the task.
+
+## primer
+
+A primer is one page the reader opens before page 1 of a source, to read the source better: what it is about, the threads to follow through it, what to keep track of along the way, and where it lands. The reader asks for one from the reader's Primer button, or an agent asks with `primer: true` on `request_upload` or `capture`; `<board>/primers` lists the requested ones, and the stale ones, whose source was revised after their primer was written.
+
+Read the source first: `get_outline` and `get_context` on it, its concept tree if it has one, and its text with `get_text` (a section at a time for a book). Then decide how best to show this particular source. A proof, a survey, a lecture, a novel and a dataset each want a different page; nothing here prescribes a section, an order or a shape. Make it visual and spatial rather than a summary in prose: a map of how the parts depend on each other, the strands drawn as strands, a timeline, the main results where the eye lands first. It prepares the reading, so leave the reading to the source.
+
+What does hold:
+
+- One self-contained HTML file: CSS and JavaScript inline, scripts and fonts only from CDNs over `https:`. It runs sandboxed: no `fetch`, no `localStorage`, nothing loaded from elsewhere.
+- Light only: no dark-mode styles.
+- Readable in a narrow side panel as well as a wide one; at most {{PRIMER_KB}} KB, so draw with SVG and CSS rather than embedded images.
+- A claim can point at its page: a link with `href="#page=12"` closes the primer and opens the source at page 12 (a PDF's page numbers, as `get_text` marks them).
+
+Post it with `apply` and `set_primer { source: "src_…", html }`. The reader sees it at once; sending it again replaces it.

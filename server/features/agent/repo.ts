@@ -96,5 +96,5 @@ export const agentRepo = {
     FROM imports WHERE board_id = ? AND sha256 = ? AND stage NOT IN ('cancelled','error') ORDER BY created_at DESC LIMIT 1`),
   importByRef: stmt<{ id: string }>("SELECT id FROM imports WHERE board_id = ? AND origin_ref = ? AND stage <> 'cancelled' LIMIT 1"),
   importOfResource: stmt<{ origin: string | null; origin_ref: string | null }>("SELECT origin,origin_ref FROM imports WHERE resource_id = ?"),
-  setImportOrigin: stmt("UPDATE imports SET auto = 1, origin = ?, origin_ref = ?, sha256 = ?, study = ? WHERE id = ?"),
+  setImportOrigin: stmt("UPDATE imports SET auto = 1, origin = ?, origin_ref = ?, sha256 = ?, study = ?, primer = ? WHERE id = ?"),
 };

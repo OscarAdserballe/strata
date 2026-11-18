@@ -20,6 +20,8 @@ import { publicOrigin, uploadUrl, type Caller, type Scope } from "./tokens.ts";
 import { addItems, checkItem, DashError, LINK_KINDS, STAGES as DASH_STAGES } from "../dashboard/dashboard.ts";
 import { renderDashboard } from "../dashboard/render.ts";
 import { board as dispatchBoard, open as openThread, preparePost } from "../dashboard/dispatch.ts";
+import { recordRun } from "../dashboard/routine.ts";
+import { isDispatchBoard, PRIMER_MAX, wakeFor } from "../primers/primers.ts";
 
 export interface Env { req: IncomingMessage; caller: Caller }
 type Args = Record<string, unknown>;
@@ -35,12 +37,14 @@ const BOARD = { type: "string", description: "The board's handle or id, as whoam
 const CURSOR = { type: "string", description: "The cursor from the end of a previous answer, to get the next part." };
 const MAX = { type: "integer", minimum: 500, maximum: 24000, description: "Size limit in tokens (default 6000)." };
 const STUDY = { type: "boolean", description: "Default false: the source arrives without flashcards, and the reader can make them later with a button on the page. Pass true only when the reader wants cards from it now (a book takes minutes)." };
+const PRIMER = { type: "boolean", description: "Default false. true asks for a primer: one page the reader opens before page 1. The routine is woken to write it (get_guide({ topic: \"primer\" }))." };
 const KEY = { type: "string", pattern: "^[A-Za-z0-9-]{8,80}$", description: "A fresh id for this write, 8–80 letters, digits or dashes. Resending the same key returns the first answer instead of writing twice." };
 
 const GUIDE = (() => {
   const raw = readFileSync(new URL("./guide.md", import.meta.url), "utf8")
     .replace("{{MAX_MB}}", String(Math.floor(MAX_UPLOAD_BYTES / 1024 / 1024)))
-    .replace("{{OPS}}", Object.keys(OPS).map(opLine).join("\n"));
+    .replace("{{OPS}}", Object.keys(OPS).map(opLine).join("\n"))
+    .replace("{{PRIMER_KB}}", String(PRIMER_MAX / 1024));
   const topics = new Map<string, string>();
   for (const part of raw.split(/^## /m).slice(1)) topics.set(part.slice(0, part.indexOf("\n")).trim(), `## ${part.trim()}`);
   return topics;
@@ -80,11 +84,11 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "get_context", title: "Context", scope: "read",
-    description: "Everything about one thing, as Markdown: a board (overview: purpose, milestones, recent changes, open questions, log tail), a collection (<board>/kept, /questions, /highlights, /comments, /plan, /log, /sources, /chat), a source, section, deck, card, question, highlight, group or milestone. Long answers end with a cursor for the next part.",
+    description: "Everything about one thing, as Markdown: a board (overview: purpose, milestones, recent changes, open questions, log tail), a collection (<board>/kept, /questions, /highlights, /comments, /plan, /log, /sources, /chat, /primers), a source, section, deck, card, question, highlight, group or milestone. Long answers end with a cursor for the next part.",
     inputSchema: schema({
       id: { type: "string", description: "An id such as thesis, thesis/kept, src_…, card_…, or a pasted Strata link." },
-      filter: { type: "object", additionalProperties: false, description: "kept: { group, source, since }; questions: { state: open | answered }; highlights: { noted, source }; comments (the reader's notes on live pages): { source, state: open | with_agent | your_turn }; chat: { source, since }.",
-        properties: { group: STR, source: STR, since: { type: "string", description: "A date, e.g. 2026-10-01." }, state: { type: "string", enum: ["open", "answered", "with_agent", "your_turn"] }, noted: { type: "boolean" } } },
+      filter: { type: "object", additionalProperties: false, description: "kept: { group, source, since }; questions: { state: open | answered }; highlights: { noted, source }; comments (the reader's notes on live pages): { source, state: open | with_agent | your_turn }; chat: { source, since }; primers: { source, state: wanted | requested | stale | ready }.",
+        properties: { group: STR, source: STR, since: { type: "string", description: "A date, e.g. 2026-10-01." }, state: { type: "string", enum: ["open", "answered", "with_agent", "your_turn", "wanted", "requested", "stale", "ready"] }, noted: { type: "boolean" } } },
       cursor: CURSOR, max_tokens: MAX,
     }, ["id"]),
     read: (x, { req }) => {
@@ -128,7 +132,7 @@ export const TOOLS: Tool[] = [
     name: "request_upload", title: "Upload files", scope: "write",
     description: "Step one of adding local files (PDF, Markdown, text, HTML) to a board, or of revising one. New files arrive without flashcards unless study is true. An HTML, Markdown or text file sent again under the same origin.ref replaces that source in place (same src_ id, highlights and cards kept); a changed PDF is added as a new source. An HTML page with scripts or drawings opens live in the reader. Returns, per file, either the existing source (same bytes already there) or a one-time upload_url to PUT the raw bytes to, e.g. with curl --data-binary. Read get_guide({ topic: \"uploads\" }) first.",
     inputSchema: schema({
-      board: BOARD, key: KEY, study: STUDY,
+      board: BOARD, key: KEY, study: STUDY, primer: PRIMER,
       files: { type: "array", minItems: 1, maxItems: 20, items: schema({ name: STR, bytes: { type: "integer", minimum: 1 }, sha256: { type: "string", pattern: "^[0-9a-f]{64}$" } }, ["name", "bytes", "sha256"]) },
       origin: schema({ from: { type: "string", description: "Where the files came from, e.g. canvas." }, ref: { type: "string", description: "The file's id there, e.g. course/4411/file/9921, the same each time." } }),
     }, ["board", "key", "files"]),
@@ -140,6 +144,8 @@ export const TOOLS: Tool[] = [
       const from = origin.from ? String(origin.from).slice(0, 40) : null;
       const ref = origin.ref ? String(origin.ref).slice(0, 300) : null;
       const study = x.study === true ? 1 : 0;
+      const primer = x.primer === true ? 1 : 0;
+      if (primer && isDispatchBoard(b.id)) fail("A Dispatch page is read as it is, without a primer.");
       if (ref && files.length > 1) fail("origin.ref names one file; send files with a ref one at a time.");
       for (const f of files) {
         const name = String(f.name ?? "").trim();
@@ -162,10 +168,11 @@ export const TOOLS: Tool[] = [
         const updated = !revises && ref && a.importByRef.get(b.id, ref) ? name.replace(/(\.[^.]+)$/, " (updated)$1") : name;
         const id = genId("agent-") + genId();
         imports.create(id, b.id, updated, Number(f.bytes));
-        a.setImportOrigin.run(from, ref, sha, study, id);
+        a.setImportOrigin.run(from, ref, sha, study, primer, id);
         logEvent(db, APP, "agent_upload", { board: b.id, from, bytes: Number(f.bytes), revise: !!revises }, null);
         const link = uploadUrl(req, id);
-        const cards = revises ? "replaces it in place, its highlights and cards kept" : study ? "flashcards: made as it arrives" : "flashcards: none (study: false; the reader can make them later)";
+        const cards = (revises ? "replaces it in place, its highlights and cards kept" : study ? "flashcards: made as it arrives" : "flashcards: none (study: false; the reader can make them later)")
+          + (primer && !revises ? " · primer: asked for once it lands" : "");
         return `- ${updated}: ${revises ? `revises ${idOf("source", revises)} · open: ${openLink(publicOrigin(req), b.id, revises)} · ` : ""}import ${idOf("import", id)} · upload_url: ${link.url} · method: PUT · expires ${new Date(link.expiresAt).toISOString()} · ${cards}`;
         });
         const put = lines.some((l) => l.includes("upload_url:")) ? `\n\nPUT each file's raw bytes to its upload_url (curl -sf -X PUT --data-binary @<file> "<upload_url>"), then check get_import.` : "";
@@ -182,7 +189,7 @@ export const TOOLS: Tool[] = [
   {
     name: "capture", title: "Capture a link", scope: "write",
     description: "Adds a web article, arXiv page or YouTube video (as its transcript, with title, channel and date; this can take a minute or two) to a board as a source, the same way the app's capture does, but without flashcards unless study is true. Not for local files (use request_upload).",
-    inputSchema: schema({ board: BOARD, key: KEY, url: STR, study: STUDY }, ["board", "key", "url"]),
+    inputSchema: schema({ board: BOARD, key: KEY, url: STR, study: STUDY, primer: PRIMER }, ["board", "key", "url"]),
     write: async (x) => {
       const b = boardOf(x.board);
       const url = String(x.url ?? "").trim();
@@ -194,11 +201,15 @@ export const TOOLS: Tool[] = [
         ? "YouTube shows no transcript for this video. If it has captions, download them on your machine (yt-dlp) and add the video from the app."
         : `Couldn't fetch that ${video ? "video's transcript" : "page"}: ${e.message}`));
       prepared.input.study = x.study === true;
+      prepared.input.primer = x.primer === true && !isDispatchBoard(b.id);
+      // woken before the commit, as a press in the app is; the run reads the board, where the request is by then
+      const w = prepared.input.primer ? await wakeFor(b.id, prepared.rid, filename) : null;
       return () => {
+        if (w?.ran) recordRun(w.ran);
         const rid = writeSource(b.id, prepared, null);
         pairForResource(b.id, filename, rid);
         logEvent(db, APP, "capture_done", { board: b.id, kind: video ? "youtube" : "article", via: "agent" }, null);
-        return `Captured "${title}" as ${idOf("source", rid)} on ${b.ref}. ${x.study === true ? "Flashcards are being made." : "No flashcards (study: false); the reader can make them later."}`;
+        return `Captured "${title}" as ${idOf("source", rid)} on ${b.ref}. ${x.study === true ? "Flashcards are being made." : "No flashcards (study: false); the reader can make them later."}${prepared.input.primer ? " A primer is asked for." : ""}`;
       };
     },
   },

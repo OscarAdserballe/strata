@@ -12,6 +12,7 @@ import { countGeminiTokens } from '../../platform/llm/gemini.ts';
 import { cleanImportedMarkdown } from '../sources/markdown-clean.ts';
 import { htmlSource, prepareSource, reviseSource, revisedBy, writeSource } from '../sources/ingest.ts';
 import { importStore, type ImportRow } from './store.ts';
+import { wakeAfterArrival } from '../primers/primers.ts';
 import { enqueueDistil, retrySourceTree } from '../distil/queue.ts';
 import { httpError } from '../../platform/http/http.ts';
 import { pageGroups, sourceTokens, studyTokens } from '../../../shared/imports/budget.ts';
@@ -172,11 +173,12 @@ export async function pumpImports(): Promise<void> {
           const prepared = JSON.parse(row.prepared!) as Prepared;
           const source = await prepareSource({filename:row.filename,kind:isPdf?'pdf':html?.kind ?? 'text',data:isPdf?bytes.toString('base64'):html?.data,
             mime:isPdf?'application/pdf':html?.mime ?? 'text/plain',text:prepared.text,sections:prepared.sections,pageText:prepared.pageText,
-            importPlan:row.plan ? JSON.parse(row.plan) : undefined,outline:isPdf ? prepared.outline : undefined,tokens:prepared.tokens,createPair:true,importId:row.id,study:row.study!==0});
+            importPlan:row.plan ? JSON.parse(row.plan) : undefined,outline:isPdf ? prepared.outline : undefined,tokens:prepared.tokens,createPair:true,importId:row.id,study:row.study!==0,primer:row.primer===1});
           // Decided at finalize: the first version may still have been uploading when this one was asked for.
           const revises = revisedBy(row.board_id,row.id,row.origin_ref,row.filename);
           const landed = revises ? reviseSource(row.board_id,revises,source) : !!writeSource(row.board_id,source,null);
           if (landed) logEvent(db,APP,revises ? 'resource_revise' : 'resource_add',{board:row.board_id,kind:isPdf?'pdf':html?.kind ?? 'text',via:'upload',import:row.id,sections:q.sectionsOf.all(revises ?? `res-${row.id}`).length},null);
+          if (landed && !revises && row.primer === 1) background(`primer wake ${row.id}`, wakeAfterArrival(row.board_id,source.rid));
         }
       } catch (error) {
         // Recording the failure can fail too; recover() picks the row up at next boot.

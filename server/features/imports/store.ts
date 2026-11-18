@@ -4,7 +4,7 @@ import { httpError } from '../../platform/http/http.ts';
 import { transaction } from '../../platform/db/transaction.ts';
 
 export interface ImportRow extends ImportStatus {
-  prepared: string | null; plan: string | null; attempts: number; created_at: number; study: number; origin_ref: string | null;
+  prepared: string | null; plan: string | null; attempts: number; created_at: number; study: number; origin_ref: string | null; primer?: number;
 }
 
 export function importStore(db: DatabaseSync) {

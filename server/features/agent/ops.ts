@@ -10,6 +10,7 @@ import { compileQuote, quoteAnchor } from "../../../shared/reading/compile-quote
 import { KINDS, flattenTree, normalizeTree, orderByLadder, treeToAscii, type ConceptTree } from "../distil/distil.ts";
 import { agentRepo as a } from "./repo.ts";
 import { AgentError, type Board } from "./kinds.ts";
+import { isDispatchBoard, PRIMER_MAX } from "../primers/primers.ts";
 
 const fail = (msg: string): never => { throw new AgentError(msg); };
 const str = (v: unknown, field: string, max: number, required = true): string | undefined => {
@@ -295,6 +296,23 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
       const slug = String(o.id).replace(/^deck_/, "");
       if (!a.decksOf.all(b.id).some((d) => d.deck === slug)) fail(`${String(o.id)} is not a deck on ${b.ref}.`);
       return `set aside ${dropDeck(slug)} cards of ${idOf("deck", slug)}`;
+    },
+  },
+  set_primer: {
+    fields: { source: { type: "string", description: "The src_ id the primer is for." },
+      html: { type: "string", description: `The primer: one whole, self-contained HTML page, at most ${PRIMER_MAX / 1024} KB. get_guide({ topic: "primer" }) says what it is for.` } },
+    does: "Stores a source's primer, the page a reader opens before page 1, and marks it ready. It replaces any primer the source had, requested or out of date.",
+    check: (o) => {
+      str(o.source, "source", 200);
+      const html = typeof o.html === "string" && /<[a-z!]/i.test(o.html) ? o.html : fail("html is the primer's whole HTML page.");
+      if (Buffer.byteLength(html) > PRIMER_MAX) fail(`html is ${Math.ceil(Buffer.byteLength(html) / 1024)} KB; a primer is at most ${PRIMER_MAX / 1024} KB. Draw with SVG and CSS rather than embedded images.`);
+    },
+    run(b, o) {
+      const rid = String(o.source).replace(/^src_/, "");
+      if (a.resourceBoard.get(rid)?.board_id !== b.id) fail(`${String(o.source)} is not a source on ${b.ref}.`);
+      if (isDispatchBoard(b.id)) fail("A Dispatch page is read as it is, without a primer.");
+      q.setPrimer.run(rid, b.id, o.html as string, now());
+      return `primer for ${idOf("source", rid)} is ready`;
     },
   },
   place: {
