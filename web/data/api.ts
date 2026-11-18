@@ -410,6 +410,7 @@ export const StrataAPI = {
   seen: (id: string) => api<CardsSeen>(`/api/boards/${id}/seen`),
   getBoard: (id: string) => api<BoardState>(`/api/boards/${id}`),
   resourceRawUrl: (id: string, rid: string) => StrataPath(`/api/boards/${id}/resources/${rid}/raw`),
+  primerUrl: (id: string, rid: string, builtAt: number) => StrataPath(`/api/boards/${id}/resources/${rid}/primer?v=${builtAt}`),
   resourceLiveUrl: (id: string, rid: string, gen?: number) => StrataPath(`/api/boards/${id}/resources/${rid}/live${gen ? `?v=${gen}` : ""}`),
   resourcePreview: (id: string, rid: string) => api<{lines:string[]}>(`/api/boards/${id}/resources/${rid}/preview`),
   // empty for prose sources and for rows older than extraction

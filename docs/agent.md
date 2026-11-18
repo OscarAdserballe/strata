@@ -28,7 +28,7 @@ revokes them.
 |---|---|
 | `whoami` | The token's access, and the boards with their handles and ids |
 | `get_outline` | The light view of anything: children, one line each |
-| `get_context` | Everything about one thing: a board, a collection (`<board>/kept`, `/questions`, `/highlights`, `/plan`, `/log`, `/sources`, `/chat`), a source, section, deck, card, question, highlight, group or milestone |
+| `get_context` | Everything about one thing: a board, a collection (`<board>/kept`, `/questions`, `/highlights`, `/plan`, `/log`, `/sources`, `/chat`, `/primers`), a source, section, deck, card, question, highlight, group or milestone |
 | `get_text` | A source's or section's extracted text, by page range; for a PDF with none, whether its text is waiting to be read from its file, being read, or why it could not be |
 | `search` | Batched `{ kind, query }` over cards, kept cards, questions, highlights, sources (newest first, dated), the log, chat |
 | `get_changes` | Reviewed, kept, highlighted, asked, answered, added, finished, logged, since a date |
@@ -87,6 +87,16 @@ instead. Decide and Implementing are reached only this way; Focus leaves Dispatc
 Every thread is work or personal (`area`): the page shows one area at a time, and an item that names
 no area goes where its source suggests. The older `state`, `pinned_at` and `morning_at` columns, the updates,
 sources and pad tables stay in the database; nothing writes them but the mirror of `stage`.
+
+A **primer** is a page an agent writes for one source, shown in the reader's Primer panel beside it to give the
+source's shape before it is read (`server/features/primers`). The reader's Primer button, "Primers for this board" on
+the board menu (ten sources without one per press), or `primer: true` on `request_upload` / `capture` records a
+request in `primers` and wakes the routine the way Send in Dispatch does (an upload's request is recorded, and the
+wake sent, when its source lands). Agents list the requests in `<board>/primers` (and `whoami` counts them) and land
+each page with the `set_primer` op: a complete HTML document of at most 500 KB, served from
+`/api/boards/<b>/resources/<r>/primer` under the live pages' sandbox. Strata calls no model for it. A source revised
+in place marks its primer stale; it is rebuilt only when someone asks again. What the agent is told is
+`get_guide({ topic: "primer" })`, kept short on purpose: the page's form is the agent's call.
 
 `<board>/chat` reads both chat tables, the board's and per-source thread (`messages`) and Ask on a card
 (`card_messages`), newest first, cleared turns included and marked. A question asked at words of a source

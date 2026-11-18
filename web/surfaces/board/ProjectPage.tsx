@@ -5,6 +5,7 @@ import { REGISTER } from "../../data/entities/sources.ts";
 import { plan as planWrites, planGestures, type planCalls } from "../../data/entities/plan.ts";
 import { refreshRegister } from "../../data/entities/register.ts";
 import Verbs from "../../capabilities/sources/SourceVerbs.tsx";
+import BoardPrimers from "../../capabilities/primer/BoardPrimers.tsx";
 import type { BoardActions } from "../../capabilities/sources/useBoardActions.ts";
 import { boardProject, shortDay, STAR_CAP, type ProjectSource, type ProjectUnit } from "../../capabilities/today/projects.ts";
 import { openTab } from "../../shell/screens.ts";
@@ -200,6 +201,7 @@ export default function ProjectPage(p: ProjectPageProps) {
               {!archived ? <label className="pp-mrow">Ends <input type="date" value={plan.endsAt} onChange={(e) => planApi.project({ endsAt: e.target.value })} onKeyDown={(e) => e.stopPropagation()} />
                 {plan.endsAt ? <button className="pp-link" onClick={() => planApi.project({ endsAt: "" })}>no end</button> : null}</label> : null}
               {p.onCram && !archived ? <button onPointerEnter={p.onCramWarm} onPointerDown={p.onCramWarm} onClick={() => { setMenu(false); p.onCram!(); }}>Cram these cards</button> : null}
+              {!archived ? <BoardPrimers board={boardId} /> : null}
               <button onClick={() => { setMenu(false); void planApi.project({ archived: !archived }).finally(() => refreshRegister()); }}>{archived ? "Bring it back" : "Archive"}</button>
               {p.tools ? <span className="pp-mtools">{p.tools}</span> : null}
               <button className={"bad" + (arm === "board" ? " arm" : "")} onClick={() => { if (arm === "board") { setMenu(false); void p.boardActions.remove(boardId); } else setArm("board"); }}>

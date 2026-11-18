@@ -2,10 +2,9 @@
 import { now } from "../../platform/db/sql.ts";
 import type { PrimerMeta } from "../../../shared/types/index.ts";
 import { primersRepo as p, type PrimerRow } from "./repo.ts";
+import { PRIMER_BOARD_BATCH, PRIMER_MAX } from "../../../shared/reading/primer.ts";
 
-export const PRIMER_MAX = 500_000;
-/** How many sources one press of "Primers for this board" asks for. */
-export const BOARD_BATCH = 10;
+export { PRIMER_MAX };
 
 /** Why this is not a page the primer panel can show, or null. */
 export function primerProblem(html: unknown): string | null {
@@ -23,9 +22,9 @@ export const primersOfBoard = (boardId: string): Map<string, PrimerMeta> => new 
 /** Inside a commit. True when this asked for one; a primer already asked for is left as it was. */
 export const requestPrimer = (boardId: string, rid: string): boolean => p.request.run(rid, boardId, now()).changes > 0;
 
-/** Inside a commit: up to BOARD_BATCH of the board's sources that have no primer, oldest first. */
+/** Inside a commit: up to PRIMER_BOARD_BATCH of the board's sources that have no primer, oldest first. */
 export function requestBoard(boardId: string): { asked: number; left: number } {
-  const todo = p.unprimed.all(boardId, BOARD_BATCH);
+  const todo = p.unprimed.all(boardId, PRIMER_BOARD_BATCH);
   for (const r of todo) requestPrimer(boardId, r.id);
   return { asked: todo.length, left: p.unprimedCount.get(boardId)?.n ?? 0 };
 }

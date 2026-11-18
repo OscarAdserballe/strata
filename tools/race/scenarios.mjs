@@ -841,6 +841,46 @@ const captureLostAnswer = {
   },
 };
 
+// the reader asks for a primer and the answer is lost; the agent's page lands before the press is resent
+const primerPress = {
+  name: "primer-press",
+  what: "press Primer on a source while the answer is lost, and let the agent's set_primer land before the press is resent; the source holds one primer, the agent's, and the panel shows it",
+  checks: {
+    one: "the server holds exactly one primer row for the source",
+    kept: "the resent press did not turn the agent's page back into a request",
+    shown: "the panel shows the agent's page",
+  },
+  async run(t) {
+    const b = await board(t, "Race primer");
+    const s = await prose(t, b.id, "primer-race.md", essay("Primer race", `Seed ${t.seed} asks for a primer.`));
+    const { token } = await t.api("/api/agent/tokens", "POST", { name: `race primer ${t.seed}`, write: true });
+    const isPress = (e) => e.method === "POST" && e.path === `/api/boards/${b.id}/resources/${s.rid}/primer`;
+    const page = await t.open({ latency: true, lostAck: { match: isPress, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    await page.goto(readerUrl(t, b.id, s));
+    await page.locator(".rbar-primer").click();
+    const panel = page.locator("aside.primer");
+    await panel.getByRole("button", { name: "Primer", exact: true }).click();
+    const until = performance.now() + GRACE_MS;
+    while (!t.sql("SELECT 1 FROM primers WHERE resource_id = ?", s.rid).length && performance.now() < until) await sleep(50);
+    const marker = `Primer page for seed ${t.seed}`;
+    const html = `<!doctype html><html><body><h1>${marker}</h1><script>document.body.dataset.ready = "1"</script></body></html>`;
+    const r = await fetch(`${t.base}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "apply", arguments: { board: b.id, key: `race-primer-${t.seed}-${Date.now().toString(36)}`, ops: [{ op: "set_primer", source: `src_${s.rid}`, html }] } } }) });
+    const said = await r.json();
+    if (!said.result || said.result.isError) throw new Error(`set_primer: ${JSON.stringify(said).slice(0, 200)}`);
+    await page.evaluate(() => window.__strataSettled?.());
+    await t.net.idle(500);
+    const sent = t.net.entries.filter(isPress);
+    if (!sent.some((e) => e.outcome === "lost-ack")) throw new Error("no press answer was lost: the race this scenario is about did not happen");
+    t.say(`${sent.length} press request(s): ${sent.map((e) => e.outcome).join(", ")}`);
+    const rows = t.sql("SELECT status, html FROM primers WHERE resource_id = ?", s.rid);
+    t.check("one", rows.length === 1, `${rows.length} primer row(s)`);
+    t.check("kept", rows[0]?.status === "ready" && String(rows[0]?.html).includes(marker), `the row is ${rows[0]?.status ?? "missing"}`);
+    const shown = await page.frameLocator("iframe.primer-frame").locator("h1", { hasText: marker }).waitFor({ timeout: 45_000 }).then(() => true, () => false);
+    t.check("shown", shown, shown ? "the panel shows the agent's page" : `the panel says ${JSON.stringify((await panel.innerText().catch(() => "")).slice(0, 120))}`);
+  },
+};
+
 const COUNTER_PAGE =`<!doctype html><html><body><h1>Counter</h1><button id="add">add one</button> <output id="n">…</output>
 <script>
 let n = 0;
@@ -2096,4 +2136,4 @@ const padTwoTabs = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, primerPress, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];

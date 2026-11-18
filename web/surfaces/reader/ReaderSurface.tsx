@@ -31,6 +31,7 @@ import { answered } from "../../capabilities/fold/answered.ts";
 import { barSlot } from "./barSlot.ts";
 import FoldSays from "../../capabilities/fold/FoldSays.tsx";
 import CardFace from "../../capabilities/card/CardFace.tsx";
+import PrimerPanel, { PrimerToggle } from "../../capabilities/primer/PrimerPanel.tsx";
 
 type Ref<T> = MutableRefObject<T>;
 
@@ -142,6 +143,13 @@ export default function ReaderSurface(props: ReaderSurfaceProps) {
   useEffect(() => { if (card && revealed) turned.add(pair.deck, card.id); }, [card && card.id, revealed, pair.deck]);
   useEffect(() => { if (card && !revealed && card.type !== "mcq" && turned.has(pair.deck, card.id)) drill.setRevealed(true); }, [card && card.id]);
   const bar = useSyncExternalStore(barSlot.subscribe, barSlot.get);
+  // a primer's [data-page] link: a PDF turns there, the way a section's first page is landed on
+  const turnToPage = (n: number) => {
+    if (!src || src.kind !== "pdf") return;
+    if (column.treeOpen) column.flipTree(false);
+    column.place.landOnPage.current = n;
+    column.place.landNow();
+  };
   const columnUp = solo || !!composer || (!!card && editing === card.id) || !!deckError || (!src && !onHome) || onHome;
   const bare = !columnUp;
   return (
@@ -167,6 +175,7 @@ export default function ReaderSurface(props: ReaderSurfaceProps) {
             ? <div className="card-empty">Couldn’t load that deck — it may not be in <code>courses/</code>.</div>
             : null}
       </div>
+      {bar && src && activeId && !solo && !onHome ? createPortal(<PrimerToggle src={src} />, bar, "primer") : null}
       {bar && pair.deck && deck.length > 0 && !solo ? createPortal(<KeepDoor keep={cardKeep} done={deck.filter((c) => answered.of(pair.deck, c.id) !== null).length}
         total={deck.length} onBench={onBench} onBenchWarm={onBenchWarm} />, bar) : null}
       {solo ? null : [...slots].map(([id, at]) => {
@@ -202,6 +211,7 @@ export default function ReaderSurface(props: ReaderSurfaceProps) {
           {!onHome && !src ? <div className="page-col prose"><p className="empty">A blank pair — no source. The cards are on the left; drop a PDF or markdown file here, or press <kbd>h</kbd> to capture one from a link.</p></div> : null}
           {marks.selMenu && !solo ? <SelectionMenu at={marks.selMenu} onNote={() => void marks.markSelection(true)} onAsk={marks.askSelection} onCard={marks.cardSelection} /> : null}
         </div>
+        {src && activeId && !solo && !onHome ? <PrimerPanel board={activeId} src={src} onPage={turnToPage} /> : null}
         {onGenerate && bare && !find && !showTree ? <GenerateCards onGenerate={onGenerate} /> : null}
         {/* the cards being made for this source: over the page they will fold into, not in a column of their own */}
         {cardWork && !solo && !onHome && !showTree ? <div className="gen-progress"><CardProgress key={cardWork.r.id} work={cardWork} compact /></div> : null}
