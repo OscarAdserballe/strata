@@ -119,4 +119,6 @@ test("the board's snapshot and the room's hot reads never touch a source's bytes
   });
   assert.ok(sqls.length > 20, "the reads ran");
   assert.deepEqual(sqls.filter((s) => BYTES.test(s) || /\bpage_text\b/.test(s)), [], "a hot read touched resource_blobs");
+  assert.ok(sqls.some((s) => /FROM primers WHERE board_id = \?/.test(s)), "the board's snapshot says each source's primer");
+  assert.deepEqual(sqls.filter((s) => /\bhtml\b[^]*FROM primers/.test(s)), [], "a hot read loaded a primer's page");
 });
