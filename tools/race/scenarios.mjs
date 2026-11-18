@@ -2095,5 +2095,44 @@ const padTwoTabs = {
   },
 };
 
+// the reader asks for a primer while the answer is lost; the routine's page then arrives while the pane waits for it
+const primerAsk = {
+  name: "primer-ask",
+  what: "ask for a source's primer from the reader while the answer to the ask is lost, then let an agent post it; the server asks once, and the pane shows the page when it arrives",
+  checks: {
+    once: "the primer is asked for exactly once on the server",
+    waiting: "the pane says the primer is being written",
+    shown: "once the agent posts it, the pane shows the primer's page",
+  },
+  async run(t) {
+    const b = await board(t, "Race primer");
+    const s = await prose(t, b.id, `race-primer-${t.seed}.md`, essay("A source to prime", "This source gets a page to read before page 1."));
+    const isAsk = (e) => e.method === "POST" && e.path === `/api/boards/${b.id}/resources/${s.rid}/primer`;
+    const page = await t.open({ latency: true, lostAck: { match: isAsk, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    await page.goto(readerUrl(t, b.id, s));
+    await proseShown(page, "This source gets a page to read before page 1.");
+    await page.getByRole("button", { name: "primer", exact: true }).click();
+    await page.getByRole("button", { name: "Make a primer", exact: true }).click();
+    await page.evaluate(() => window.__strataSettled?.());
+    await t.net.idle(500);
+    const sent = t.net.entries.filter(isAsk);
+    if (!sent.some((e) => e.outcome === "lost-ack")) throw new Error("no answer to the ask was lost: the race this scenario is about did not happen");
+    const rows = t.sql("SELECT status FROM primers WHERE resource_id = ?", s.rid);
+    const asks = Number(t.sql("SELECT COUNT(*) n FROM events WHERE event = 'primer_request' AND json_extract(props,'$.resource') = ?", s.rid)[0]?.n ?? 0);
+    t.check("once", rows.length === 1 && rows[0].status === "requested" && asks === 1, `${rows.map((r) => r.status).join(", ") || "no row"}; ${asks} ask(s) after ${sent.length} request(s): ${sent.map((e) => e.outcome).join(", ")}`);
+    const pane = page.getByRole("region", { name: "Primer", exact: true });
+    const waiting = await pane.getByText("Being written…").waitFor({ timeout: 5000 }).then(() => true, () => false);
+    t.check("waiting", waiting, `the pane says ${JSON.stringify(((await pane.textContent().catch(() => "")) ?? "").slice(0, 120))}`);
+    const { token } = await t.api("/api/agent/tokens", "POST", { name: `race primer ${t.seed}`, write: true });
+    const r = await fetch(`${t.base}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "apply", arguments: { board: b.id, key: `race-primer-${t.seed}-${Date.now().toString(36)}`,
+        ops: [{ op: "set_primer", source: `src_${s.rid}`, html: `<!doctype html><html><body><h1>Before you read, seed ${t.seed}</h1></body></html>` }] } } }) });
+    const posted = await r.json();
+    if (!posted.result || posted.result.isError) throw new Error(`set_primer: ${JSON.stringify(posted).slice(0, 200)}`);
+    const shown = await page.frameLocator(".primer .html-frame").getByText(`Before you read, seed ${t.seed}`).waitFor({ timeout: GRACE_MS * 2 }).then(() => true, () => false);
+    t.check("shown", shown, "the pane never showed the posted primer");
+  },
+};
+
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, primerAsk];
