@@ -9,6 +9,7 @@ import { dropDeck, genSlug, installDeck, quoteTextOf, quoteTextOfDeck, writeCard
 import { compileQuote, quoteAnchor } from "../../../shared/reading/compile-quote.ts";
 import { KINDS, flattenTree, normalizeTree, orderByLadder, treeToAscii, type ConceptTree } from "../distil/distil.ts";
 import { agentRepo as a } from "./repo.ts";
+import { pairForResource } from "../sources/ingest.ts";
 import { AgentError, type Board } from "./kinds.ts";
 
 const fail = (msg: string): never => { throw new AgentError(msg); };
@@ -105,14 +106,17 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
     },
   },
   set_project: {
-    fields: { "ends?": orNull("The project's end, YYYY-MM-DD; null or empty clears it."), "archived?": flag("true archives the project, false brings it back.") },
-    does: "Sets or clears the board's end date, or archives it (its kept cards still come back on Review) or brings it back.",
-    check: (o) => { dayOf(o.ends); bool(o.archived, "archived"); },
+    fields: { "ends?": orNull("The project's end, YYYY-MM-DD; null or empty clears it."), "archived?": flag("true archives the project, false brings it back."),
+      "starred?": flag("true stars the project (it sorts first on Today and Projects), false unstars it.") },
+    does: "Sets or clears the board's end date, archives it (its kept cards still come back on Review) or brings it back, or stars or unstars it.",
+    check: (o) => { dayOf(o.ends); bool(o.archived, "archived"); bool(o.starred, "starred"); },
     run(b, o) {
       const cur = q.boardPurpose.get(b.id)!;
       const ends = o.ends === undefined ? cur.ends_at ?? "" : dayOf(o.ends)!;
-      const archived = bool(o.archived, "archived");
+      const archived = bool(o.archived, "archived"), starred = bool(o.starred, "starred");
       q.setBoardProject.run(cur.purpose ?? "", ends, archived === undefined ? cur.archived_at : archived ? (cur.archived_at ?? now()) : null, b.id);
+      if (starred !== undefined) q.setBoardStar.run(starred ? (cur.starred_at ?? now()) : null, b.id);
+      if (starred !== undefined && archived === undefined && o.ends === undefined) return starred ? "starred" : "unstarred";
       return archived === true ? "archived" : archived === false ? "brought back" : ends ? `ends ${ends}` : "no end";
     },
   },
@@ -333,6 +337,8 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
       const other = q.primerFor.get(pid);
       if (other && other.resource_id !== rid) fail(`${String(o.primer)} is already the primer of ${idOf("source", other.resource_id)}.`);
       q.setPrimer.run(rid, b.id, pid, now());
+      // the reader's primer button opens the page through its pair, which a bare upload may not have
+      pairForResource(b.id, (q.resource.get(b.id, pid)?.filename ?? "primer").replace(/\.[^.]+$/, ""), pid);
       return `${idOf("source", pid)} is the primer of ${idOf("source", rid)}`;
     },
   },

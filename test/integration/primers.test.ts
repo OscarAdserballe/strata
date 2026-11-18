@@ -42,6 +42,8 @@ test("the reader asks for a primer, the routine draws it, and each page opens th
 
   assert.deepEqual((await meta(board, rid)).primer, { id: pid, askedAt: null }, "linking clears the ask");
   assert.equal((await meta(board, pid)).primerOf, rid);
+  const pairs = (await server.api(`/api/boards/${board}`)).body.pairs as { resourceId: string | null }[];
+  assert.ok(pairs.some((p) => p.resourceId === pid), "the primer gets a pair, so its button opens it");
   assert.doesNotMatch((await tool(token, "whoami", {})).text, /Primers asked for/);
   const self = await server.api(`/api/boards/${board}/resources/${pid}/primer`, { method: "POST", headers: { "Idempotency-Key": "primer-ask-0002" } });
   assert.equal(self.status, 422, "a primer has no primer of its own");
