@@ -52,7 +52,9 @@ call for the next part. Ids carry a prefix (`src_`, `sec_`, `deck_`, `card_`, `q
 
 Agents add and arrange; they never delete for good (`delete_deck` tombstones a deck the reader can restore, `add_deck` replaces a section's cards), never keep a card and never write a question's answer.
 
-A card is placed by a verbatim quote of the words it asks about and nothing else. `shared/reading/compile-quote.ts` is the one compile step: distil (with the model repairing what fails), `add_deck`, `edit_cards` and the reader all ask it whether a quote occurs exactly once in the card's passage, and an agent's batch with a quote that doesn't compile writes nothing and names why.
+A deck an agent adds is the deck distil would have made: `add_deck` takes the section's concept tree (one synthesis root, claims with questions, a glossary) with the cards, and each card names its tree node, the questions it answers and the term it introduces. The op checks what distil's prompts ask for (`synthesisRootError`, every question answered once, every term defined once), orders definition cards first with `orderByLadder`, and stores the tree as `ready`, so the concept map, drill order and Review's claim are the same for both. A section that already has a tree takes cards without one.
+
+A card, a tree node and a glossary term are each placed by a verbatim quote of the words they are about and nothing else. `shared/reading/compile-quote.ts` is the one compile step: distil (with the model repairing what fails), `add_deck`, `edit_cards` and the reader all ask it whether a quote occurs exactly once in the card's passage, and an agent's batch with a quote that doesn't compile writes nothing and names why.
 Every write tool takes a `key`: the batch commits in one `ctx.commit` together with a receipt under that
 key, so a resent call replays the first answer. `apply`'s operations are in `server/features/agent/ops.ts`;
 a new one is a new entry there, and both apply's schema and the guide list it automatically.

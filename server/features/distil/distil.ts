@@ -39,7 +39,7 @@ export interface ConceptTree {
   nodes: TreeNode[];
 }
 
-const KINDS = ["synthesis", "concept", "mechanism", "move", "distinction", "procedure", "boundary"];
+export const KINDS = ["synthesis", "concept", "mechanism", "move", "distinction", "procedure", "boundary"];
 
 // Retry here, not in the shared client: chat turns have a person waiting, a background distil does not.
 async function withRetry<T>(what: string, fn: () => Promise<T>): Promise<T> {
