@@ -44,4 +44,5 @@ test("the modes are the ADR's: the chat turn streams, read-only POSTs keep nothi
   assert.equal(modeOf("POST", "/api/boards/b-1/resources"), "atomic");
   assert.equal(modeOf("DELETE", "/api/boards/b-1"), "atomic");
   assert.equal(modeOf("POST", "/api/review/grade"), "atomic");
+  assert.equal(modeOf("POST", "/api/boards/b-1/resources/r-1/primer"), "atomic", "asking for a primer wakes the routine once per key");
 });

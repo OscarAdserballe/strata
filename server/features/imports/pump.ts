@@ -172,7 +172,7 @@ export async function pumpImports(): Promise<void> {
           const prepared = JSON.parse(row.prepared!) as Prepared;
           const source = await prepareSource({filename:row.filename,kind:isPdf?'pdf':html?.kind ?? 'text',data:isPdf?bytes.toString('base64'):html?.data,
             mime:isPdf?'application/pdf':html?.mime ?? 'text/plain',text:prepared.text,sections:prepared.sections,pageText:prepared.pageText,
-            importPlan:row.plan ? JSON.parse(row.plan) : undefined,outline:isPdf ? prepared.outline : undefined,tokens:prepared.tokens,createPair:true,importId:row.id,study:row.study!==0});
+            importPlan:row.plan ? JSON.parse(row.plan) : undefined,outline:isPdf ? prepared.outline : undefined,tokens:prepared.tokens,createPair:true,importId:row.id,study:row.study!==0,primer:row.primer===1});
           // Decided at finalize: the first version may still have been uploading when this one was asked for.
           const revises = revisedBy(row.board_id,row.id,row.origin_ref,row.filename);
           const landed = revises ? reviseSource(row.board_id,revises,source) : !!writeSource(row.board_id,source,null);

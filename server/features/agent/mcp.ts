@@ -13,7 +13,8 @@ import { TOOL_BY_NAME, TOOLS, type Env } from "./tools.ts";
 
 const PROTOCOLS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 const INSTRUCTIONS = "Strata is the user's reading room: boards of sources, flashcards and notes. Call whoami first to find the board, then get_context on it. Kept cards (<board>/kept) are what the user chose to hold onto; treat them as the core of what they know. Read get_guide before apply or request_upload.";
-const MAX_MESSAGE = 1024 * 1024;
+// room for a 2 MB primer (set_primer) once JSON has escaped it
+const MAX_MESSAGE = 3 * 1024 * 1024;
 
 type Id = string | number | null;
 const result = (id: Id, value: unknown) => ({ jsonrpc: "2.0", id, result: value });

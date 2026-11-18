@@ -14,6 +14,7 @@ import { deckRoutes } from "./decks/routes.ts";
 import { keepRoutes } from "./keeps/routes.ts";
 import { chatRoutes } from "./ask/routes.ts";
 import { resourceRoutes } from "./sources/routes.ts";
+import { primerRoutes } from "./primers/routes.ts";
 import { markRoutes } from "./marks/routes.ts";
 import { feedbackRoutes } from "./feedback/routes.ts";
 import { reviewRoutes } from "./review/routes.ts";
@@ -41,6 +42,7 @@ export const apiRoutes: Route[] = [
   ...deckRoutes,
   ...chatRoutes,
   ...markRoutes,
+  ...primerRoutes,
   ...resourceRoutes,
   ...feedbackRoutes,
   ...registerRoutes,

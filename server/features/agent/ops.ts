@@ -10,6 +10,7 @@ import { compileQuote, quoteAnchor } from "../../../shared/reading/compile-quote
 import { KINDS, flattenTree, normalizeTree, orderByLadder, treeToAscii, type ConceptTree } from "../distil/distil.ts";
 import { agentRepo as a } from "./repo.ts";
 import { AgentError, type Board } from "./kinds.ts";
+import { PRIMER_MAX_BYTES, writePrimer } from "../primers/primers.ts";
 
 const fail = (msg: string): never => { throw new AgentError(msg); };
 const str = (v: unknown, field: string, max: number, required = true): string | undefined => {
@@ -319,6 +320,23 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
         q.putPlaceMark.run(b.id, rid, ms, o.pinned === undefined ? (cur?.pinned ?? 0) : o.pinned ? 1 : 0);
       }
       return `placed ${idOf("source", rid)}`;
+    },
+  },
+  set_primer: {
+    fields: { source: { type: "string", description: "The source's src_ id." },
+      html: { type: "string", description: "The whole primer: one self-contained HTML page." } },
+    does: "Writes a source's primer, the page the reader opens before page 1, replacing any it had; it is ready at once, asked for or not. get_guide({ topic: \"routine\" }) says what goes in one.",
+    check: (o) => {
+      str(o.source, "source", 200);
+      if (typeof o.html !== "string" || !o.html.trim()) fail("html is the page, as a string.");
+      if (Buffer.byteLength(o.html as string) > PRIMER_MAX_BYTES) fail(`html is at most ${PRIMER_MAX_BYTES / 1024 / 1024} MB.`);
+    },
+    run(b, o) {
+      const ref = parseRef(String(o.source));
+      const rid = ref?.kind === "source" ? ref.id : "";
+      if (!rid || a.resourceBoard.get(rid)?.board_id !== b.id) fail(`${String(o.source)} is not a source on ${b.ref}.`);
+      writePrimer(b.id, rid, o.html as string);
+      return `primer ready for ${idOf("source", rid)}`;
     },
   },
 };
