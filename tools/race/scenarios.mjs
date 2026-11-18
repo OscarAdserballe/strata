@@ -675,6 +675,50 @@ const sourceRename503 = {
   },
 };
 
+// asking for a primer wakes the routine; a refused first try is retried under its key, so the routine is asked once
+const primerAsk503 = {
+  name: "primer-ask-503",
+  what: "ask for a source's primer in the reader while the server answers the first try 503; the primer is asked for exactly once and the panel says it is being written",
+  checks: {
+    once: "the server recorded exactly one ask, in one request that reached it",
+    requested: "the primer is requested on the server",
+    shown: "the panel says it is being written",
+  },
+  async run(t) {
+    const b = await board(t, "Race primer");
+    const src = await prose(t, b.id, `race-primer-${t.seed}.md`, essay("A source to prime", "This source is asked for a primer while the server is busy."));
+    const page = await t.open({ latency: true });
+    const askPath = `/api/boards/${b.id}/resources/${src.rid}/primer`;
+    let refused = 0;
+    await page.route((url) => url.pathname === askPath, async (route, request) => {
+      if (request.method() === "POST" && refused === 0) {
+        refused++;
+        await route.fulfill({ status: 503, contentType: "application/json", body: JSON.stringify({ error: "busy — try again" }) });
+        return;
+      }
+      await route.fallback();
+    });
+    await page.goto(readerUrl(t, b.id, src));
+    await page.locator(".rbar-primer").click();
+    await page.getByRole("button", { name: "Ask for a primer", exact: true }).click();
+    const until = performance.now() + GRACE_MS;
+    let status = null;
+    for (;;) {
+      status = t.sql("SELECT status FROM primers WHERE resource_id = ?", src.rid)[0]?.status ?? null;
+      if (status === "requested" || performance.now() > until) break;
+      await sleep(250);
+    }
+    await t.net.idle(500);
+    if (refused !== 1) throw new Error("the ask was never refused: the 503 this scenario is about did not happen");
+    t.check("requested", status === "requested", `the primer is ${status ?? "absent"} on the server`);
+    const asks = Number(t.sql(`SELECT COUNT(*) n FROM events WHERE event = 'primer_request' AND json_extract(props,'$.resource') = ?`, src.rid)[0]?.n ?? 0);
+    const sent = t.net.entries.filter((e) => e.write && e.path.startsWith(askPath));
+    t.check("once", asks === 1 && sent.length === 1, `${asks} asks on the server; ${sent.length} requests reached it`);
+    const shown = await page.locator(".primer-empty", { hasText: "Being written" }).waitFor({ timeout: 5000 }).then(() => true, () => false);
+    t.check("shown", shown, "the panel does not say the primer is being written");
+  },
+};
+
 // each toggle is one op in the deck's lane; the server must end with the last click's set
 const keepsToggle = {
   name: "keeps-toggle",
@@ -2167,4 +2211,4 @@ const padTwoTabs = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, primerAsk503];
