@@ -10,6 +10,7 @@ import { compileQuote, quoteAnchor } from "../../../shared/reading/compile-quote
 import { KINDS, flattenTree, normalizeTree, orderByLadder, treeToAscii, type ConceptTree } from "../distil/distil.ts";
 import { agentRepo as a } from "./repo.ts";
 import { AgentError, type Board } from "./kinds.ts";
+import { PRIMER_MAX, primerProblem, putPrimer } from "../primers/primers.ts";
 
 const fail = (msg: string): never => { throw new AgentError(msg); };
 const str = (v: unknown, field: string, max: number, required = true): string | undefined => {
@@ -295,6 +296,18 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
       const slug = String(o.id).replace(/^deck_/, "");
       if (!a.decksOf.all(b.id).some((d) => d.deck === slug)) fail(`${String(o.id)} is not a deck on ${b.ref}.`);
       return `set aside ${dropDeck(slug)} cards of ${idOf("deck", slug)}`;
+    },
+  },
+  set_primer: {
+    fields: { source: { type: "string", description: "The source's src_ id." },
+      html: { type: "string", maxLength: PRIMER_MAX, description: "The whole page: one self-contained HTML document, from <!doctype html> to </html>." } },
+    does: "Stores a source's primer, the page the reader opens beside it to see its shape before reading (get_guide({ topic: \"primer\" })). It answers the reader's request for one, or replaces the one it had, stale or not.",
+    check: (o) => { str(o.source, "source", 200); const why = primerProblem(o.html); if (why) fail(why); },
+    run(b, o) {
+      const ref = parseRef(String(o.source));
+      const rid = ref?.kind === "source" && a.resourceBoard.get(ref.id)?.board_id === b.id ? ref.id : fail(`${String(o.source)} is not a source on ${b.ref}.`);
+      putPrimer(b.id, rid, o.html as string);
+      return `primer set for ${idOf("source", rid)} (${Math.max(1, Math.round(Buffer.byteLength(o.html as string, "utf8") / 1024))} KB)`;
     },
   },
   place: {

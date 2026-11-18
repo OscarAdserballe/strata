@@ -11,8 +11,9 @@ export const LIVE_CSP = [
 let bridge: string | null = null;
 const bridgeJs = (): string => (bridge ??= readFileSync(new URL("../../../dist/html-bridge.js", import.meta.url), "utf-8"));
 
-export function withBridge(html: string): string {
-  const tag = `<script>${bridgeJs().replace(/<\/script/gi, "<\\/script")}</script>`;
+export const withBridge = (html: string): string => beforeBodyEnd(html, `<script>${bridgeJs().replace(/<\/script/gi, "<\\/script")}</script>`);
+
+export function beforeBodyEnd(html: string, tag: string): string {
   // the last </body>: an earlier one can sit inside the page's own script, as text it writes
   const at = Math.max(-1, ...[...html.matchAll(/<\/body\s*>/gi)].map((m) => m.index ?? -1));
   return at < 0 ? html + tag : html.slice(0, at) + tag + html.slice(at);

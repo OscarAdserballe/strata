@@ -17,6 +17,7 @@ import type { ServerResponse } from "node:http";
 // Side-effect import: the board-state builder registers itself on load.
 import "../boards/state.ts";
 import { LIVE_CSP, withBridge } from "./live.ts";
+import { primersRepo } from "../primers/repo.ts";
 import { pageStateProblem } from "../../../shared/reading/page-state.ts";
 
 export const resourceRoutes: Route[] = [
@@ -73,7 +74,7 @@ export const resourceRoutes: Route[] = [
       if (url.searchParams.get("pairs") === "1") q.delPairsOfResource.run(boardId, rid);
       q.clearPairResource.run(boardId, rid);
       q.delSectionsOf.run(rid); q.delTreesOfResource.run(rid); q.delSourceTree.run(rid);
-      q.delMarksOfResource.run(rid); q.delRepliesOfResource.run(rid); q.delAsksOfResource.run(rid); q.delPageState.run(rid);
+      q.delMarksOfResource.run(rid); q.delRepliesOfResource.run(rid); q.delAsksOfResource.run(rid); q.delPageState.run(rid); primersRepo.del.run(rid);
       logEvent(db, APP, "resource_remove", { board: boardId, pairs: url.searchParams.get("pairs") === "1" }, ssn);
       return { status: 200, body: { state: stateOf(boardId) } };
     });

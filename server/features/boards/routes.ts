@@ -1,4 +1,5 @@
 import { logEvent } from "../../platform/events/events.ts";
+import { primersRepo } from "../primers/repo.ts";
 import { APP } from "../../platform/config.ts";
 import { db } from "../../platform/db/db.ts";
 import { q } from "../repo.ts";
@@ -77,7 +78,7 @@ export const boardRoutes: Route[] = [
       q.delBoardBlobs.run(id);
       q.delBoardMessages.run(id); q.delBoardResources.run(id); q.delPrefs.run(id); q.delBoardPairs.run(id); q.delNotes.run(id);
       for (const t of q.treesOf.all(id) as { section_id: string }[]) { q.delCourseCards.run(genSlug(t.section_id)); q.delCourse.run(genSlug(t.section_id)); }
-      q.delBoardTrees.run(id); q.delBoardSections.run(id); q.delBoardSourceTrees.run(id); q.delBoardMarks.run(id); q.delBoardReplies.run(id); q.delBoardAsks.run(id); q.delBoardPageStates.run(id);
+      q.delBoardTrees.run(id); q.delBoardSections.run(id); q.delBoardSourceTrees.run(id); q.delBoardMarks.run(id); q.delBoardReplies.run(id); q.delBoardAsks.run(id); q.delBoardPageStates.run(id); primersRepo.delBoard.run(id);
 
       q.delBoardGroups.run(id); q.delBoardMilestones.run(id); q.delBoardPlaces.run(id);
       // A materialized question must take its card with it, or the kept card is left with no owner.

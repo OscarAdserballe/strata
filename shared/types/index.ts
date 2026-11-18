@@ -21,7 +21,12 @@ export interface ResourceMeta {
   doneAt: number | null;
   /** bumped each time the source is revised in place; part of its URLs so no cache serves the old bytes */
   generation?: number;
+  /** its primer, once one was asked for or written */
+  primer?: PrimerMeta;
 }
+
+/** requested: asked for, the agent hasn't written it yet (builtAt set when an older one shows meanwhile); stale: written before the source was revised */
+export interface PrimerMeta { status: "requested" | "ready" | "stale"; requestedAt: number | null; builtAt: number | null }
 
 export interface Budget { usedTokens: number; targetTokens: number; over: boolean }
 

@@ -13,6 +13,7 @@ import { noteOfThread } from "../../../shared/reading/notes.ts";
 import { compileAnchor, quoteOfAnchor, type QuoteText } from "../../../shared/reading/compile-quote.ts";
 import { quoteTextOfDeck } from "../decks/decks.ts";
 import { pageTextStatus } from "../imports/pump.ts";
+import { primersRepo as pr, type PrimerRow } from "../primers/repo.ts";
 
 export class AgentError extends Error {}
 const fail = (msg: string): never => { throw new AgentError(msg); };
@@ -28,6 +29,7 @@ export const KINDS: { kind: string; tables: string[] }[] = [
   { kind: "highlight", tables: ["marks", "mark_replies"] },
   { kind: "question", tables: ["minted"] },
   { kind: "chat", tables: ["messages", "card_messages", "asks"] },
+  { kind: "primer", tables: ["primers"] },
 ];
 export const HIDDEN: Record<string, string> = {};
 
@@ -58,11 +60,13 @@ function sourceStatus(s: SourceRow, kept: number, cards: number): string {
 }
 
 export function boardList(): string {
+  const asked = new Map(pr.requestedByBoard.all().map((r) => [r.board_id, r.n]));
   const lines = a.boardsAll.all().filter((b) => b.type !== "inbox" || a.sourceCounts.get(b.id)!.n > 0).map((b) => {
     const c = a.sourceCounts.get(b.id)!;
     const kept = a.keptCount.get(b.id)?.n ?? 0;
     const name = b.handle ? `${b.handle} (${b.id})` : b.id;
-    return `- ${name} — ${b.title} · ${c.n} sources · ${kept} kept · last touched ${when.day(b.touched_at ?? b.created_at)}`;
+    const primers = asked.get(b.id) ? ` · ${count(asked.get(b.id)!, "primer")} asked for (${b.handle ?? b.id}/primers)` : "";
+    return `- ${name} — ${b.title} · ${c.n} sources · ${kept} kept${primers} · last touched ${when.day(b.touched_at ?? b.created_at)}`;
   });
   return `# Your boards\n\n${lines.join("\n") || "No boards yet."}\n\nPass a board's handle or id as \`board\`.`;
 }
@@ -100,6 +104,7 @@ function boardOutline(b: Board): string {
     `- ${b.ref}/comments — ${commentTally(talksOf(b, sourcesOf(b.id)))}`,
     `- ${b.ref}/sources — ${srcs.length} (${srcs.filter((s) => s.done_at).length} finished)`,
     `- ${b.ref}/chat — ${count(chat.n, "message")} with the board's model${chat.cleared ? ` (${chat.cleared} cleared)` : ""}`,
+    `- ${b.ref}/primers — ${primerTally(pr.primersOf.all(b.id))}`,
     "",
     "## Sources",
     ...(srcs.length ? srcs.map((s) => `- ${idOf("source", s.id)} "${titleOf(s)}" · ${count(sectionsBy.get(s.id) ?? 0, "section")} · ${sourceStatus(s, per(s.id, keptBy), per(s.id, cardsBy))}`) : ["None yet."]),
@@ -253,6 +258,7 @@ function collection(b: Board, name: Collection, f: Filter, cursor: unknown, budg
       return paged(`# Highlights · ${b.title}${f.noted ? " · with notes" : ""}`, items, cursor, budget, again, "No highlights match.");
     }
     case "comments": return commentsCollection(b, f, srcs, cursor, budget, short, again);
+    case "primers": return primersCollection(b, srcs, cursor, budget, again);
     case "chat": {
       const decks = decksOf(b.id);
       let rows = a.chatOf.all(b.id, b.id);
@@ -369,6 +375,30 @@ function commentContext(id: string): string {
   return highlightContext(mid);
 }
 
+// ---------- primers: pages that show a source's shape before it is read ----------
+
+const PRIMER_WORDS: Record<PrimerRow["status"], string> = { requested: "asked for", ready: "ready", stale: "stale (the source was revised since)" };
+function primerTally(rows: PrimerRow[]): string {
+  const n = (s: PrimerRow["status"]) => rows.filter((r) => r.status === s).length;
+  return `${n("requested")} asked for · ${n("ready")} ready · ${n("stale")} stale`;
+}
+const primerLine = (r: PrimerRow, srcs: Map<string, SourceRow>): string =>
+  `- ${idOf("source", r.resource_id)} "${titleOf(srcs.get(r.resource_id))}" · ${PRIMER_WORDS[r.status]}${r.status === "requested" && r.requested_at ? ` ${when.minute(r.requested_at)}` : ""}${r.built_at ? ` · written ${when.day(r.built_at)}, ${Math.max(1, Math.round(r.bytes / 1024))} KB` : ""}`;
+
+function primersCollection(b: Board, srcs: Map<string, SourceRow>, cursor: unknown, budget: number, again: (c: string) => string): string {
+  const rows = pr.primersOf.all(b.id).filter((r) => srcs.has(r.resource_id));
+  const order = { requested: 0, stale: 1, ready: 2 };
+  rows.sort((x, y) => order[x.status] - order[y.status] || (x.requested_at ?? 0) - (y.requested_at ?? 0));
+  const head = [`# Primers · ${b.title} · ${primerTally(rows)}`,
+    `The ones asked for wait on you: read the source and its concept tree (get_context, get_text), then write each with apply: set_primer { source, html }. What a primer is: get_guide({ topic: "primer" }). A stale one is rebuilt only when the reader asks again.`].join("\n");
+  return paged(head, rows.map((r) => primerLine(r, srcs)), cursor, budget, again, "No primers yet: none asked for, none written.");
+}
+
+function waitingPrimers(b: Board): string[] {
+  const n = pr.primersOf.all(b.id).filter((r) => r.status === "requested").length;
+  return n ? ["", "## Primers asked for", `${count(n, "source")} wait on a primer: get_context({ id: "${b.ref}/primers" })`] : [];
+}
+
 // ---------- board overview ----------
 
 function boardContext(b: Board, cursor: unknown, budget: number): string {
@@ -390,6 +420,7 @@ function boardContext(b: Board, cursor: unknown, budget: number): string {
     "## Open questions",
     ...(open.length ? open.map((m) => `- ${oneLine(m.front, 200)} · ${idOf("question", m.id)}`) : ["None."]),
     ...waitingComments(b),
+    ...waitingPrimers(b),
     "",
     "## Log (last lines)",
     tail,
@@ -433,6 +464,8 @@ function sourceContext(rid: string, cursor: unknown, budget: number, short: bool
   if (noted.length) lines.push("", "## Your highlights with notes", ...noted.map((m) => `- > ${oneLine(m.quote, 300)}\n  note: ${m.note}`));
   const talk = talksOf(b, sourcesOf(b.id)).filter((t) => t.m.resource_id === rid);
   if (talk.length) lines.push("", "## Comments", `${commentTally(talk)}: get_context({ id: "${b.ref}/comments", filter: { source: "${idOf("source", rid)}" } })`);
+  const primer = pr.primerOf.get(rid);
+  if (primer) lines.push("", `primer: ${PRIMER_WORDS[primer.status]}${primer.built_at ? ` · written ${when.day(primer.built_at)}` : ""}${primer.status === "requested" ? " · write it with apply: set_primer" : ""}`);
   const kept = a.pageStateOf.get(rid);
   if (kept) lines.push("", `## What the page saved · ${when.day(kept.updated_at)}`, "The reader's own state in this live page (window.strata.save):", "```json", prettyJson(kept.value), "```");
   return pagedText("", lines.join("\n"), cursor, budget, (c) => `get_context({ id: "${idOf("source", rid)}", cursor: "${c}" })`);

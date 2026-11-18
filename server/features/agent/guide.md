@@ -22,7 +22,7 @@ Every id says what it is:
 | id | what |
 |---|---|
 | `thesis` or `b-1a2b3c4d` | a board, by its handle or id |
-| `thesis/log`, `thesis/plan`, `thesis/kept`, `thesis/questions`, `thesis/highlights`, `thesis/comments`, `thesis/sources`, `thesis/chat` | a board's collections |
+| `thesis/log`, `thesis/plan`, `thesis/kept`, `thesis/questions`, `thesis/highlights`, `thesis/comments`, `thesis/sources`, `thesis/chat`, `thesis/primers` | a board's collections |
 | `src_…` | a source |
 | `sec_…` | a section (chapter) of a source |
 | `deck_…` | a deck of cards |
@@ -86,7 +86,7 @@ A board is the reader's project: its groups are its units, read in order, and a 
 To add a local file (PDF, Markdown, text or HTML, up to {{MAX_MB}} MB):
 
 1. Compute its SHA-256 and size, for example `shasum -a 256 file.pdf` and `wc -c < file.pdf`.
-2. Call `request_upload({ board, key, files: [{ name, bytes, sha256 }], origin: { from: "canvas", ref: "<course/file id>" } })`. Add `study: true` to make flashcards as it arrives.
+2. Call `request_upload({ board, key, files: [{ name, bytes, sha256 }], origin: { from: "canvas", ref: "<course/file id>" } })`. Add `study: true` to make flashcards as it arrives, and `primer: true` to ask for its primer (none by default).
    - A file already on that board comes back as `duplicate` with its `src_` id and an `open:` link. Nothing more to do.
    - Otherwise you get an `upload_url`. It works for 15 minutes.
 3. Send the bytes in one request: `curl -sf -X PUT --data-binary @file.pdf "<upload_url>"`.
@@ -116,7 +116,8 @@ You are the reader's routine: a Claude session that Strata wakes (a press in Dis
 
 1. **Dispatch.** `dashboard_board`, then for each thread in `implementing`, `dashboard_open`. The reader has one button, Send, so the notes before it say what they want, and you decide what comes next and where the page lands (`lands` on `dashboard_post`). No page yet: write a proposal. Notes asking for changes: revise the page and answer each note in `replies`. Notes that pick an option, or "go": build it and post the built page to `review`. Send on a built page with no objection: merge, then post a finish page. Reopen (Send on a Finish page): read the notes and pick again.
 2. **The inbox.** On a scheduled run, look through the connectors for new work meant for the reader and add it with `dashboard_add_items`, after `dashboard_read`, so nothing is added twice. Skip anything its **Handled in the last 7 days** section lists: the reader already dealt with it.
-3. Before stopping, call `dashboard_board` once more: a press made while you worked doesn't wake a second run. Never move or edit a thread yourself: a page's `lands` is the only way you move one.
+3. **Primers.** `whoami` names each board with primers asked for; for each, `get_context({ id: "<board>/primers" })` and write every one asked for (`get_guide({ topic: "primer" })`). A wake that says "Primer: …" or "Primers for this board: …" is for these.
+4. Before stopping, call `dashboard_board` once more: a press made while you worked doesn't wake a second run. Never move or edit a thread yourself: a page's `lands` is the only way you move one.
 
 A wake from Strata names its press and thread ("Send: …", "Reopen: …", "Sent to Dispatch: …"; older ones say "Go: …" or "Send back: …"); a run with no such line is the scheduled one. Build in the repository the thread's links or text name; if none of the routine's repositories fits, say so in the page instead of guessing.
 
@@ -137,6 +138,16 @@ A page is one self-contained, light HTML file, short enough to decide from. You 
 **What the reader likes to see.** Before and after, side by side. Pseudocode as the abstraction of a code change, rather than the diff. A mock of the screen when the change is visual, designed in Figma when that helps (link the frame, and draw the gist inline). Beyond that, use your judgment.
 
 Give each option and claim a stable `data-strata-id`, so the reader's notes land on it.
+
+## primer
+
+A primer is a page the reader opens beside a source before reading it, to see its shape: the threads to follow, what to keep track of, the main results. Make it visual and spatial, however suits this material; you know better than any template what helps here. Read the source and its concept tree first (`get_context` on the source, `get_text`).
+
+Land it with `apply` and `set_primer { source, html }`. The constraints are technical only:
+
+- One complete, self-contained HTML document (`<!doctype html>` to `</html>`, under 500 KB), light, with CSS and JS inline. Scripts and fonts only from `https:` CDNs; no `fetch`, XHR or `localStorage`.
+- It shows in a side panel about 420px wide that can be widened, so it should read well narrow and widen nicely.
+- An element with `data-page="n"` turns the reader to page n of the source when clicked (PDFs), so a claim can link to where it is made.
 
 ## proposal
 
