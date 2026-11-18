@@ -173,7 +173,7 @@ function LibraryHome({ covered = false, q, setQ, onOpen, onResume, onWarm, onNew
       {err ? <div className="rg-err" role="alert">{err}</div> : null}
       {unfiled.length ? <Timeline entries={unfiled} boards={threads} onOpen={onOpen} onFile={file}
         onRename={(e, name) => { setErr(""); void sourceActions.rename(e.boardId, e.resourceId, name); }}
-        onDelete={(e) => { setErr(""); void sourceActions.remove(e.boardId, e.resourceId); }}
+        onDelete={(e) => { setErr(""); void sourceActions.remove(e.boardId, e.resourceId, e.filename); }}
         filing={filing} setFiling={setFiling} empty="" /> : null}
     </section>
   </>

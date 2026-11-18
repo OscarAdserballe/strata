@@ -14,7 +14,7 @@ const PORT = await freePort();
 const BASE = `http://127.0.0.1:${PORT}`;
 const DB = join(tmpdir(), `strata-plantest-${process.pid}.db`);
 const OLD = "b-oldboard";
-const EMPTY = { purpose: "", endsAt: "", archivedAt: null, groups: [], milestones: [], places: {} };
+const EMPTY = { purpose: "", endsAt: "", archivedAt: null, starredAt: null, groups: [], milestones: [], places: {} };
 const bare = ({ rev: _rev, ...plan }: { rev?: number; [k: string]: unknown }) => plan;
 let server: ChildProcess;
 
@@ -305,6 +305,28 @@ test("a project's end, its archive and a unit's date: set, cleared, refused when
   assert.equal(r.body.plan.groups[1].byDate, "2026-11-21", "a rename keeps the date");
   r = await send("PATCH", `/api/boards/${id}/plan/groups/${u1}`, { byDate: null });
   assert.equal(r.body.plan.groups[1].byDate, "", "null clears the date");
+});
+
+test("a project's star: set, kept on a second star, cleared, refused when not a boolean, moves plan_rev, and the register carries it", async () => {
+  const id = await newBoard("A starred project");
+  const rev = () => Number(rows("SELECT plan_rev FROM boards WHERE id = ?", id)[0].plan_rev);
+  const r0 = rev();
+  let r = await send("PATCH", `/api/boards/${id}/plan/project`, { starred: true });
+  assert.equal(r.status, 200);
+  const at = r.body.plan.starredAt;
+  assert.ok(typeof at === "number", "starring stamps the project");
+  assert.ok(rev() > r0, "a star moves plan_rev");
+  r = await send("PATCH", `/api/boards/${id}/plan/project`, { starred: true, endsAt: "2026-12-14" });
+  assert.deepEqual([r.body.plan.starredAt, r.body.plan.endsAt], [at, "2026-12-14"], "starring twice keeps the first stamp; the end is set beside it");
+  let p = (await api("/api/register")).body.projects.find((x: { id: string }) => x.id === id);
+  assert.equal(p.starredAt, at, "the register carries the star");
+  r = await send("PATCH", `/api/boards/${id}/plan/project`, { endsAt: "" });
+  assert.equal(r.body.plan.starredAt, at, "a write that names no star leaves it");
+  r = await send("PATCH", `/api/boards/${id}/plan/project`, { starred: false });
+  assert.equal(r.body.plan.starredAt, null);
+  p = (await api("/api/register")).body.projects.find((x: { id: string }) => x.id === id);
+  assert.equal(p.starredAt, null, "the register drops the star");
+  assert.equal((await send("PATCH", `/api/boards/${id}/plan/project`, { starred: "yes" })).status, 400);
 });
 
 test("the register lists each board as a project with its units and places, and the inbox is not one", async () => {

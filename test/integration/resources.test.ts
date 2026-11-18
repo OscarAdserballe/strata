@@ -237,6 +237,46 @@ test("remove a resource", async () => {
   assert.equal((await fetch(`${server.base}/api/boards/${boardId}/resources/${resourceId}/raw`)).status, 404, "and its bytes with it");
 });
 
+test("removing a source takes its notes and its unkept cards; its kept cards stay, with their deck, and keep coming back on Review", async () => {
+  const id = await newBoard(server, { title: "Delete keeps kept cards" });
+  try {
+    const text = "# Saves\n\nThe page draws what it was last told, and nothing fresher.\n";
+    const deckOf = async (filename: string) => {
+      const { body: made } = await api(`/api/boards/${id}/resources`, { method: "POST", body: JSON.stringify({ filename, text, pair: true }) });
+      const { body: built } = await api(`/api/boards/${id}/resources/${made.id}/tree`, { method: "PUT", body: JSON.stringify({
+        tree: { title: "Saves", question: "What does the page draw?", nodes: [{ label: "The page draws what it was told", kind: "concept", anchor: "§1", questions: ["What?"] }] },
+        cards: ["One: what does the page draw?", "Two: how fresh is it?"].map((front) => ({ node: "n1", type: "flashcard", source: 'quote: "The page draws what it was last told"', front, back: "What it was last told." })),
+      }) });
+      const slug = built.state.pairs.find((p: { resourceId: string }) => p.resourceId === made.id).deck as string;
+      return { rid: made.id as string, slug, cards: (await api(`/api/decks/${slug}`)).body.cards.map((c: { id: string }) => c.id) as string[] };
+    };
+    const a = await deckOf("kept.md"), b = await deckOf("unkept.md");
+    assert.equal(a.cards.length, 2);
+    assert.equal((await api(`/api/decks/${a.slug}/keeps`, { method: "POST", body: JSON.stringify({ add: [a.cards[0]] }) })).status, 200);
+    assert.equal((await api(`/api/boards/${id}/marks`, { method: "POST", body: JSON.stringify({ resourceId: a.rid, start: 0, end: 8, quote: "The page", note: "mine" }) })).status, 201);
+    // kept long ago, so it is due now
+    const db = new DatabaseSync(server.db);
+    try { db.prepare("UPDATE card_keeps SET created_at = created_at - 400 * 86400000 WHERE id = ?").run(a.cards[0]); } finally { db.close(); }
+    const due = async () => ((await api("/api/review")).body.cards as { id: string }[]).some((c) => c.id === a.cards[0]);
+    assert.ok(await due(), "due on Review before the delete");
+
+    const gone = await api(`/api/boards/${id}/resources/${a.rid}?pairs=1`, { method: "DELETE" });
+    assert.equal(gone.status, 200);
+    assert.equal(gone.body.state.resources.some((r: { id: string }) => r.id === a.rid), false, "gone from the board");
+    assert.equal(gone.body.state.pairs.some((p: { resourceId: string }) => p.resourceId === a.rid), false, "and its pages");
+    assert.equal(gone.body.state.marks.some((m: { resourceId: string }) => m.resourceId === a.rid), false, "its notes went with it");
+    const left = await api(`/api/decks/${a.slug}`);
+    assert.equal(left.status, 200, "the deck stays while it holds a kept card");
+    assert.deepEqual(left.body.cards.map((c: { id: string }) => c.id), [a.cards[0]], "only the kept card is left");
+    assert.ok(await due(), "and still due on Review after it");
+    const unfiled = (await api("/api/collection")).body.unfiled;
+    assert.ok(unfiled.some((g: { kept: number }) => g.kept === 1), "and still shows among your kept cards");
+
+    assert.equal((await api(`/api/boards/${id}/resources/${b.rid}?pairs=1`, { method: "DELETE" })).status, 200);
+    assert.equal((await api(`/api/decks/${b.slug}`)).status, 404, "a deck with nothing kept goes with its source");
+  } finally { await api(`/api/boards/${id}`, { method: "DELETE" }); }
+});
+
 test("pagetext answers the upload-time extraction, and [] where there is none", async () => {
   const { body: made } = await api("/api/boards", { method: "POST", body: JSON.stringify({ title: "pagetext" }) });
   const id = made.board.id;

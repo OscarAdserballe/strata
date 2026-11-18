@@ -1,0 +1,3 @@
+.pj-star{border:none;background:none;padding:2px 4px;font:400 15px/1 var(--sans);color:var(--ink-faint);cursor:pointer;border-radius:4px;}
+.pj-star:hover{color:var(--accent-deep);background:var(--accent-soft);}
+.pj-star.on{color:var(--accent-deep);}

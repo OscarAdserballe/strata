@@ -66,15 +66,22 @@ export const resourceRoutes: Route[] = [
   route("DELETE", /^\/api\/boards\/([a-zA-Z0-9_-]+)\/resources\/([a-zA-Z0-9_-]+)$/, ({ res, ssn, url, params, commit }) => {
     const [boardId, rid] = params; if (!q.resource.get(boardId, rid)) { sendJson(res, 404, { error: "no such resource" }); return; }
     // Sections go with their source; pairs stay as blank pages unless ?pairs=1 (the shelf's delete).
+    // Kept cards stay, with their deck's name, so Review keeps bringing them back.
     commit(() => {
-      for (const s of q.sectionsOf.all(rid) as SectionRow[]) { q.delCourseCards.run(genSlug(s.id)); q.delCourse.run(genSlug(s.id)); }
+      let kept = 0;
+      for (const s of q.sectionsOf.all(rid) as SectionRow[]) {
+        const slug = genSlug(s.id);
+        q.delUnkeptCourseCards.run(slug);
+        const n = q.courseKeptCount.get(slug)!.n;
+        if (n) kept += n; else q.delCourse.run(slug);
+      }
       q.delResource.run(boardId, rid); q.delBlob.run(rid);
       q.delPlace.run(boardId, rid); q.delPlacesOfResourcePairs.run(boardId, boardId, rid);
       if (url.searchParams.get("pairs") === "1") q.delPairsOfResource.run(boardId, rid);
       q.clearPairResource.run(boardId, rid);
       q.delSectionsOf.run(rid); q.delTreesOfResource.run(rid); q.delSourceTree.run(rid);
       q.delMarksOfResource.run(rid); q.delRepliesOfResource.run(rid); q.delAsksOfResource.run(rid); q.delPageState.run(rid);
-      logEvent(db, APP, "resource_remove", { board: boardId, pairs: url.searchParams.get("pairs") === "1" }, ssn);
+      logEvent(db, APP, "resource_remove", { board: boardId, resource: rid, pairs: url.searchParams.get("pairs") === "1", kept }, ssn);
       return { status: 200, body: { state: stateOf(boardId) } };
     });
     // the cached bytes go once the rows have (a delete that rolled back still has a source)

@@ -79,7 +79,7 @@ Example:
 ] }
 ```
 
-A board is the reader's project: its groups are its units, read in order, and a source in no group is a loose end. `set_project` gives the project an end date or archives it; `set_group` dates a unit. Dates are YYYY-MM-DD.
+A board is the reader's project: its groups are its units, read in order, and a source in no group is a loose end. `set_project` gives the project an end date, archives it, or stars it (a starred project sorts first for the reader); `set_group` dates a unit. Dates are YYYY-MM-DD.
 
 ## uploads
 

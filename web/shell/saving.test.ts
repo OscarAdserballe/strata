@@ -11,6 +11,7 @@ test("the line: quiet, saving, or how many failed", () => {
   assert.equal(saveLine([op("sending")], true), "saving");
   assert.equal(saveLine([op("retrying")], false), "saving", "a retry's gap is slow by definition");
   assert.equal(saveLine([op("failed", "a"), op("failed", "b"), op("queued")], true), "2", "a failure outranks saving");
+  assert.equal(saveLine([op("held")], true), "", "a write waiting out its undo is not saving");
 });
 
 test("the watch: speaks once a write is slow, stops when the registry empties", () => {

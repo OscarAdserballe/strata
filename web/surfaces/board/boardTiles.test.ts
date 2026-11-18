@@ -62,7 +62,7 @@ test("the top level: home, one tile per source with unfinished first, your quest
   assert.equal(t["fold:r2"].enter, "r2");
   assert.equal(t["fold:r2"].sections, 3);
   assert.deepEqual([t["fold:r2"].cards, t["fold:r2"].seen, t["fold:r2"].last], [3, 1, 3]);
-  assert.deepEqual(t["fold:r2"].del, { res: "r2" });
+  assert.deepEqual(t["fold:r2"].del, { res: "r2", notes: 0, kept: 0 });
   assert.equal(t.p3.meta, "23 pages · 5 cards");
   assert.equal(t.p3.pages, 23);
   assert.deepEqual(t.p3.aside, { slugs: ["d3"], live: 5, out: 2 });
@@ -73,6 +73,7 @@ test("the top level: home, one tile per source with unfinished first, your quest
   assert.deepEqual(t.p4.del, { pair: "p4" });
   assert.equal(t.p1.meta, "md · 4 cards");
   assert.deepEqual(t.p1.kp, { kept: 3, total: 4, benched: true });
+  assert.deepEqual(t.p1.del, { res: "r1", notes: 2, kept: 3 }, "deleting it says what goes with it");
   assert.deepEqual([t.p1.addedAt, t.p1.readAt, t.p1.file, t.p1.marksN], [10, 20, "notes.md", 2]);
   assert.equal(t["q:my questions"].meta, "1 open");
   assert.equal(t["q:ignored"].meta, "8 cards set aside");
@@ -114,4 +115,11 @@ test("a question deck or cards-only takes the lit tile off home", () => {
   assert.equal(t.home.cur, false);
   assert.equal(t["q:my questions"].cur, true);
   assert.equal(byKey(boardTiles(base({ solo: true }))).home.cur, false);
+});
+
+test("a source being deleted (gone from resources, its pairs not yet) leaves no tile behind", () => {
+  const b = base().board!;
+  const tiles = boardTiles(base({ board: { ...b, resources: b.resources!.filter((r) => r.id !== "r1") } }));
+  assert.ok(!tiles.some((t) => t.key === "p1" || t.rid === "r1"));
+  assert.ok(tiles.some((t) => t.key === "p4"), "a deck with no source still stands");
 });

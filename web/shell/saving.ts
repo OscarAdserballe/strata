@@ -2,7 +2,9 @@ import type { PendingOp } from "../data/mutate.ts";
 // Publishes a one-word summary that changes rarely, so fast saves never re-render the chip.
 export const SLOW_MS = 1000;
 
-export function saveLine(ops: readonly PendingOp[], slow: boolean): string {
+export function saveLine(all: readonly PendingOp[], slow: boolean): string {
+  // a held op is waiting out its undo, not saving
+  const ops = all.filter((p) => p.state !== "held");
   const failed = ops.filter((p) => p.state === "failed").length;
   if (failed) return String(failed);
   return ops.length && (slow || ops.some((p) => p.state === "retrying")) ? "saving" : "";
@@ -19,7 +21,7 @@ export function saveWatch(m: SaveSource, timers: Timers = browserTimers) {
     let told = read();
     const tell = () => { const now = read(); if (now !== told) { told = now; changed(); } };
     const tick = () => {
-      const busy = m.pending().some((p) => p.state !== "failed");
+      const busy = m.pending().some((p) => p.state !== "failed" && p.state !== "held");
       if (!busy) { if (timer !== null) timers.clear(timer); timer = null; slow = false; }
       else if (!slow && timer === null) timer = timers.set(() => { timer = null; slow = true; tell(); }, SLOW_MS);
       tell();

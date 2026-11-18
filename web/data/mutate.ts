@@ -6,7 +6,8 @@ import { confirmByShape } from "./entities/confirm.ts";
    - Lanes keep order: an op starts when it heads every lane it names; a failed head holds its lanes.
    - One key per op, minted once and reused on every retry and on the pagehide flush.
    - 2xx confirms; a lost answer, deadline, 408/425/429 or 5xx is retried with backoff, paused while offline.
-   - A 409 hands its value to the store and may rebuild the op once; any other 4xx rolls back. */
+   - A 409 hands its value to the store and may rebuild the op once; any other 4xx rolls back.
+   - A held op paints at once and waits holdMs before it may leave, so withdraw(key) can take it back unsent. */
 
 export interface Conflict { rev: number; value: unknown }
 
@@ -36,9 +37,11 @@ export interface Op<Res = unknown> {
   flush?: boolean;
   /** Send with keepalive: a save made as the tab hides, which a phone may kill without a pagehide. */
   keepalive?: boolean;
+  /** Painted at once, sent no sooner than this: until then withdraw(key) takes it back. A pagehide flush sends it early. */
+  holdMs?: number;
 }
 
-export type PendingState = "queued" | "sending" | "retrying" | "failed";
+export type PendingState = "held" | "queued" | "sending" | "retrying" | "failed";
 export interface PendingOp {
   id: string; label: string; lanes: string[]; state: PendingState; attempts: number; error: unknown;
   key: string;
@@ -53,6 +56,8 @@ export interface SaveError extends Error {
   conflict?: Conflict;
   /** A refusal's X-Strata-Epoch, for a caller that orders the conflict itself. */
   epoch?: string;
+  /** taken back with withdraw() inside its hold: nothing was sent */
+  withdrawn?: boolean;
 }
 
 /** Resolves for every HTTP status; rejects only when no answer came back at all. */
@@ -129,6 +134,9 @@ interface Item {
   conflicts: number;
   /** Keepalive requests out now; they outlive the page, so a flush leaves the op be. */
   carrying: number;
+  /** Still inside its hold: painted, not yet allowed on the wire. */
+  holding: boolean;
+  holdTimer: unknown;
 }
 
 export class Mutator {
@@ -178,8 +186,12 @@ export class Mutator {
         const item: Item = {
           id: `op${++this.seq}`, seq: this.seq, op: op as Op<unknown>, key: op.key ?? mintKey(), body: undefined,
           state: "queued", attempts: 0, sent: false, error: null, removers: [], waiters: [waiter],
-          timer: null, due: null, remaining: null, conflicts: 0, carrying: 0,
+          timer: null, due: null, remaining: null, conflicts: 0, carrying: 0, holding: false, holdTimer: null,
         };
+        if (op.holdMs && op.holdMs > 0) {
+          item.holding = true;
+          item.holdTimer = this.d.setTimer(() => { item.holding = false; item.holdTimer = null; this.changed(); this.pump(); }, op.holdMs);
+        }
         item.body = op.body === undefined ? undefined : JSON.stringify(op.body);
         this.paint(item);
         this.items.push(item);
@@ -252,7 +264,7 @@ export class Mutator {
   private pump(): void {
     if (this.d.wire.down()) return;
     for (const item of [...this.items]) {
-      if (item.state !== "queued") continue;
+      if (item.state !== "queued" || item.holding) continue;
       if (!item.op.lanes.every((lane) => this.lanes.get(lane)?.[0] === item)) continue;
       void this.send(item);
     }
@@ -420,6 +432,9 @@ export class Mutator {
   private finish(item: Item): void {
     if (item.timer !== null) this.d.clearTimer(item.timer);
     item.timer = null;
+    if (item.holdTimer !== null) this.d.clearTimer(item.holdTimer);
+    item.holdTimer = null;
+    item.holding = false;
     this.leaveLanes(item);
     this.items = this.items.filter((i) => i !== item);
     this.changed();
@@ -467,6 +482,18 @@ export class Mutator {
     for (const w of item.waiters) w.reject(e);
   }
 
+  /** Takes back a held op that has not left: its layers go and it is never sent. False once it is on its way. */
+  withdraw(key: string): boolean {
+    const item = this.items.find((i) => i.key === key);
+    if (!item || !item.holding || item.sent) return false;
+    this.unpaint(item);
+    this.d.store.settle(item.id, null);
+    this.finish(item);
+    const e = saveError(`${item.op.label} — taken back`, { withdrawn: true });
+    for (const w of item.waiters) w.reject(e);
+    return true;
+  }
+
   /** Drops a lane's failed ops so they no longer wedge every later write behind them. */
   discardFailed(lane: string): void {
     for (const item of [...this.items]) if (item.state === "failed" && item.op.lanes.includes(lane)) this.discard(item.id);
@@ -481,7 +508,7 @@ export class Mutator {
   }
 
   private changed(): void {
-    this.snapshot = this.items.map((i) => ({ id: i.id, label: i.op.label, lanes: i.op.lanes, state: i.state, attempts: i.attempts, error: i.error, key: i.key }));
+    this.snapshot = this.items.map((i) => ({ id: i.id, label: i.op.label, lanes: i.op.lanes, state: i.holding && i.state === "queued" ? "held" : i.state, attempts: i.attempts, error: i.error, key: i.key }));
     for (const cb of [...this.listeners]) cb();
     if (!this.items.length && this.idle.length) {
       const idle = this.idle;
@@ -547,7 +574,8 @@ export class Mutator {
     const guard = (e: Event) => { e.preventDefault(); (e as BeforeUnloadEvent).returnValue = ""; };
     let armed = false;
     this.rearm = () => {
-      const want = this.items.length > 0 || [...this.holders].some((owes) => owes());
+      // a held op goes out with the pagehide flush, so its undo window alone is no reason to ask
+      const want = this.items.some((i) => !i.holding) || [...this.holders].some((owes) => owes());
       if (want === armed) return;
       armed = want;
       if (want) win.addEventListener("beforeunload", guard);
@@ -569,5 +597,6 @@ export const subscribePending = (cb: () => void): (() => void) => mutator.subscr
 export const settled = (): Promise<void> => mutator.settled();
 export const retry = (id: string): void => mutator.retry(id);
 export const discard = (id: string): void => mutator.discard(id);
+export const withdraw = (key: string): boolean => mutator.withdraw(key);
 export const discardFailed = (lane: string): void => mutator.discardFailed(lane);
 export const release = <Res>(op: Op<Res>): Promise<Res> => mutator.release(op);

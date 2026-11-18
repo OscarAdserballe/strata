@@ -1,7 +1,9 @@
-import type { BoardPlan } from "../../../shared/types/index.ts";
+import type { BoardPlan, RegisterResponse } from "../../../shared/types/index.ts";
 import { store as roomStore, type Store } from "../store.ts";
 import { mutate, mutator, type Conflict, type Mutator, type Op } from "../mutate.ts";
 import { planKey, type PlanEntity } from "./boards.ts";
+import { confirmByShape } from "./confirm.ts";
+import { REGISTER } from "./sources.ts";
 
 // One lane per board's plan: moves are relative, so two quick moves must reach the server in order.
 
@@ -59,7 +61,7 @@ type Place = BoardPlan["places"][string];
 const NO_PLACE: Place = { group: null, milestone: null, pinned: false, ord: null };
 type PlacePatch = Partial<Place>;
 type GroupPatch = Partial<Omit<BoardPlan["groups"][number], "id" | "ord">> & { move?: number };
-type ProjectPatch = { endsAt?: string; archived?: boolean };
+type ProjectPatch = { endsAt?: string; archived?: boolean; starred?: boolean };
 type MilestonePatch = Partial<Omit<BoardPlan["milestones"][number], "doneAt">> & { move?: number; done?: boolean };
 
 /** A group's whole order; after a 409: your order first, then what the other device added since. */
@@ -90,7 +92,8 @@ export const planGestures = {
   project: (patch: ProjectPatch): PlanWrite => ({
     method: "PATCH", path: "/project", body: patch,
     guess: (p) => ({ ...p, ...(patch.endsAt !== undefined ? { endsAt: patch.endsAt } : {}),
-      ...(patch.archived !== undefined ? { archivedAt: patch.archived ? p.archivedAt ?? Date.now() : null } : {}) }),
+      ...(patch.archived !== undefined ? { archivedAt: patch.archived ? p.archivedAt ?? Date.now() : null } : {}),
+      ...(patch.starred !== undefined ? { starredAt: patch.starred ? p.starredAt ?? Date.now() : null } : {}) }),
   }),
   addGroup: (name = "New unit", byDate = ""): PlanWrite => ({ method: "POST", path: "/groups", body: { name, ...(byDate ? { byDate } : {}) } }),
   group: (gid: string, patch: GroupPatch = {}): PlanWrite => ({
@@ -130,6 +133,21 @@ export const planGestures = {
     guess: (p) => ({ ...p, places: { ...p.places, [item]: { ...NO_PLACE, ...p.places[item], ...patch } } }),
   }),
 };
+
+const starOnRegister = (board: string, on: boolean) => (reg: RegisterResponse | undefined): RegisterResponse | undefined =>
+  reg ? { ...reg, projects: reg.projects.map((p) => (p.id === board ? { ...p, starredAt: on ? p.starredAt ?? Date.now() : null } : p)) } : reg;
+
+/** A project's star, from a list of projects: painted on the register too, and folded into it on the answer so it never flickers back. */
+export function starOp(board: string, on: boolean, s: Store = roomStore): Op<PlanAnswer> {
+  const op = planOps.write(board, { ...planGestures.project({ starred: on }), label: on ? "star that project" : "unstar that project" }, s);
+  const reg = { key: REGISTER, apply: starOnRegister(board, on) };
+  return {
+    ...op,
+    optimistic: [...(op.optimistic ?? []), reg],
+    confirm: (res, meta) => s.batch(() => { confirmByShape(op, res, meta, s); s.patch(REGISTER, 0, reg.apply); }),
+  };
+}
+export const starProject = (board: string, on: boolean) => mutate(starOp(board, on));
 
 /** The plan rail's calls for one board; the two adds resolve with the new id, or null on failure. */
 export function planCalls(write: (w: PlanWrite) => Promise<PlanAnswer | null>) {
