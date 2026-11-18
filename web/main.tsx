@@ -10,6 +10,7 @@ import "./surfaces/reader/reader.css";
 import "./capabilities/live/live.css";
 import "./capabilities/card/card.css";
 import "./engines/tree/tree.css";
+import "./capabilities/primer/primer.css";
 import "./engines/prose/prose.css";
 import "./surfaces/board/board-home.css";
 import "./capabilities/annotate/annotate.css";

@@ -11,6 +11,8 @@ export interface HtmlHooks {
   onSave(url: string, value: string): Promise<void>;
   /** how tall the page draws itself, in its own pixels */
   onHeight?(h: number): void;
+  /** a link to a page of the source (href="#page=12") was followed */
+  onGoto?(page: number): void;
 }
 
 // Owns one sandboxed iframe and the conversation with the bridge inside it; knows nothing of the room.
@@ -120,6 +122,7 @@ export class HtmlEngine {
       case "revealed": { const done = this.asks.get(m.n); this.asks.delete(m.n); done?.(m.found); break; }
       case "press": this.hooks.onPress(); break;
       case "height": this.hooks.onHeight?.(m.h); break;
+      case "goto": if (Number.isInteger(m.page) && m.page > 0) this.hooks.onGoto?.(m.page); break;
       case "load": this.answer(f, this.hooks.onLoad(this.url).then((value) => ({ t: "state", n: m.n, value }) as ToPage,
         (e: unknown) => ({ t: "state", n: m.n, value: null, why: reason(e) }))); break;
       case "save": this.answer(f, this.hooks.onSave(this.url, m.value).then(() => ({ t: "saved", n: m.n, ok: true }) as ToPage,
