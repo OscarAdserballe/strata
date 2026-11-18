@@ -28,7 +28,7 @@ revokes them.
 |---|---|
 | `whoami` | The token's access, and the boards with their handles and ids |
 | `get_outline` | The light view of anything: children, one line each |
-| `get_context` | Everything about one thing: a board, a collection (`<board>/kept`, `/questions`, `/highlights`, `/plan`, `/log`, `/sources`, `/chat`), a source, section, deck, card, question, highlight, group or milestone |
+| `get_context` | Everything about one thing: a board, a collection (`<board>/kept`, `/questions`, `/highlights`, `/plan`, `/log`, `/sources`, `/chat`, `/primers`), a source, section, deck, card, question, highlight, group or milestone |
 | `get_text` | A source's or section's extracted text, by page range; for a PDF with none, whether its text is waiting to be read from its file, being read, or why it could not be |
 | `search` | Batched `{ kind, query }` over cards, kept cards, questions, highlights, sources (newest first, dated), the log, chat |
 | `get_changes` | Reviewed, kept, highlighted, asked, answered, added, finished, logged, since a date |
@@ -99,6 +99,12 @@ from the app still wait for you. The same bytes on the same board come back as a
 An agent's upload or capture is not studied unless it says `study: true`: its sections get trees marked
 `unstudied`, nothing is carded, and the reader shows "Generate flashcards" instead of the cards column.
 Uploads from the app are studied unless the person turns it off.
+
+A source can have a primer (`server/features/primers`): an overview page the routine writes, read in a panel
+before page 1. The reader's Primer button, the board's "Primers for this board" (ten at a time) and `primer: true`
+on `request_upload` or `capture` queue one in `primers` and wake the routine as Run now does. The routine finds them
+in `whoami` and `<board>/primers` and stores each with the `set_primer` op; a revision in place marks it stale until
+the next press. It is never a `resources` row, and dispatch pages never get one.
 
 A non-PDF file sent again under the same `origin.ref` revises its source in place (`reviseSource` in
 `server/features/sources/ingest.ts`): the pump decides at finalize, the revision asked for last wins

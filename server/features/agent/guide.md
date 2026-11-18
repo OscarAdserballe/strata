@@ -22,7 +22,7 @@ Every id says what it is:
 | id | what |
 |---|---|
 | `thesis` or `b-1a2b3c4d` | a board, by its handle or id |
-| `thesis/log`, `thesis/plan`, `thesis/kept`, `thesis/questions`, `thesis/highlights`, `thesis/comments`, `thesis/sources`, `thesis/chat` | a board's collections |
+| `thesis/log`, `thesis/plan`, `thesis/kept`, `thesis/questions`, `thesis/highlights`, `thesis/comments`, `thesis/sources`, `thesis/chat`, `thesis/primers` | a board's collections |
 | `src_…` | a source |
 | `sec_…` | a section (chapter) of a source |
 | `deck_…` | a deck of cards |
@@ -35,7 +35,7 @@ Every id says what it is:
 
 A link copied from Strata (with `?board=…` or `&resource=…`) works anywhere an id does.
 
-Filters narrow a collection without new ids: `{ group, source, since }` on kept, `{ state: "open" | "answered" }` on questions, `{ noted, source }` on highlights, `{ source, state: "open" | "with_agent" | "your_turn" | "resolved" }` on comments (open by default), `{ source, since }` on chat.
+Filters narrow a collection without new ids: `{ group, source, since }` on kept, `{ state: "open" | "answered" }` on questions, `{ noted, source }` on highlights, `{ source, state: "open" | "with_agent" | "your_turn" | "resolved" }` on comments (open by default), `{ source, since }` on chat, `{ state: "requested" | "ready" | "stale" }` on primers.
 
 ## apply
 
@@ -108,6 +108,8 @@ The reader's notes on your page reach you as they are written: there are no draf
 
 For a web page, arXiv abstract or YouTube video (its transcript), use `capture({ board, key, url })` instead. A video can take a minute or two. It also arrives without flashcards unless you pass `study: true`.
 
+Both take `primer: true` to ask for the source's primer as well (`get_guide({ topic: "primer" })`); leave it out unless the reader wants one. The dispatch board's pages never get one.
+
 Flashcards are the reader's choice. Leave `study` out for your own pages, drafts and explorations; pass `study: true` only when the reader asked for cards from this file. A source without them reads "not studied, no flashcards" in `get_outline` and `get_context`; that is expected, not a failure.
 
 ## routine
@@ -116,9 +118,10 @@ You are the reader's routine: a Claude session that Strata wakes (a press in Dis
 
 1. **Dispatch.** `dashboard_board`, then for each thread in `implementing`, `dashboard_open`. The reader has one button, Send, so the notes before it say what they want, and you decide what comes next and where the page lands (`lands` on `dashboard_post`). No page yet: write a proposal. Notes asking for changes: revise the page and answer each note in `replies`. Notes that pick an option, or "go": build it and post the built page to `review`. Send on a built page with no objection: merge, then post a finish page. Reopen (Send on a Finish page): read the notes and pick again.
 2. **The inbox.** On a scheduled run, look through the connectors for new work meant for the reader and add it with `dashboard_add_items`, after `dashboard_read`, so nothing is added twice. Skip anything its **Handled in the last 7 days** section lists: the reader already dealt with it.
-3. Before stopping, call `dashboard_board` once more: a press made while you worked doesn't wake a second run. Never move or edit a thread yourself: a page's `lands` is the only way you move one.
+3. **Primers.** `whoami` marks each board with primers waiting; for each, `get_context({ id: "<board>/primers", filter: { state: "requested" } })`, then write each one (`get_guide({ topic: "primer" })`).
+4. Before stopping, call `dashboard_board` once more: a press made while you worked doesn't wake a second run. Never move or edit a thread yourself: a page's `lands` is the only way you move one.
 
-A wake from Strata names its press and thread ("Send: …", "Reopen: …", "Sent to Dispatch: …"; older ones say "Go: …" or "Send back: …"); a run with no such line is the scheduled one. Build in the repository the thread's links or text name; if none of the routine's repositories fits, say so in the page instead of guessing.
+A wake from Strata names its press and thread ("Send: …", "Reopen: …", "Sent to Dispatch: …"; older ones say "Go: …" or "Send back: …"), or the primers asked for ("Primer: …"); a run with no such line is the scheduled one. Build in the repository the thread's links or text name; if none of the routine's repositories fits, say so in the page instead of guessing.
 
 Where a page lands is your call, not a fixed order:
 
@@ -145,3 +148,9 @@ A proposal lands in `decide`. It always offers two or three real options and say
 ## built
 
 A built page lands in `review`. It says what works now and how you know (what was red and is green, which checks ran, what you could not run), what you left out, and which PRs Send merges. Show the change the way the task is about it. Everything else follows from the task.
+
+## primer
+
+A primer is a high-level overview the reader opens before page 1 of a source. Read the source (`get_text`) and its concept tree when it has one (`get_context` on the source), then decide how best to show it visually and spatially, so the reader has its strands, what to watch for and its main results before reading. The form is your judgement. Store it with `apply` and `set_primer { source, html }`, which makes a requested primer ready.
+
+It is one self-contained HTML file: CSS and JS inline, scripts and fonts only from https CDNs, no `fetch` and no `localStorage`. Design it for light only. It must read well in a narrow side panel (about 420px) and wider. For a PDF, link a page as `<a href="#page=12">` and the reader turns to it.
