@@ -14,7 +14,7 @@ const PORT = await freePort();
 const BASE = `http://127.0.0.1:${PORT}`;
 const DB = join(tmpdir(), `strata-plantest-${process.pid}.db`);
 const OLD = "b-oldboard";
-const EMPTY = { purpose: "", endsAt: "", archivedAt: null, groups: [], milestones: [], places: {} };
+const EMPTY = { purpose: "", endsAt: "", archivedAt: null, starredAt: null, groups: [], milestones: [], places: {} };
 const bare = ({ rev: _rev, ...plan }: { rev?: number; [k: string]: unknown }) => plan;
 let server: ChildProcess;
 
@@ -291,7 +291,15 @@ test("a project's end, its archive and a unit's date: set, cleared, refused when
   assert.equal(r.body.plan.archivedAt, at, "archiving twice keeps the first date");
   r = await send("PATCH", `/api/boards/${id}/plan/project`, { archived: false, endsAt: "" });
   assert.deepEqual([r.body.plan.archivedAt, r.body.plan.endsAt], [null, ""]);
-  for (const bad of [{ endsAt: "14 Dec" }, { endsAt: 5 }, { archived: "yes" }]) {
+  const r2 = rev();
+  r = await send("PATCH", `/api/boards/${id}/plan/project`, { starred: true });
+  assert.ok(typeof r.body.plan.starredAt === "number", "starring sets a date");
+  assert.ok(rev() > r2, "starring moves plan_rev");
+  const reg = await send("GET", "/api/register");
+  assert.ok(reg.body.projects.find((p: { id: string }) => p.id === id)?.starredAt, "the register carries the star to Today");
+  r = await send("PATCH", `/api/boards/${id}/plan/project`, { starred: false });
+  assert.equal(r.body.plan.starredAt, null);
+  for (const bad of [{ endsAt: "14 Dec" }, { endsAt: 5 }, { archived: "yes" }, { starred: 1 }]) {
     assert.equal((await send("PATCH", `/api/boards/${id}/plan/project`, bad)).status, 400, JSON.stringify(bad));
   }
   assert.equal((await send("PATCH", "/api/boards/b-nope/plan/project", { endsAt: "" })).status, 404);

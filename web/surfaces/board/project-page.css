@@ -87,3 +87,4 @@ input.pp-title{width:100%;border:none;border-bottom:1px solid var(--accent-line)
 }
 .pp-udate span.none{opacity:0;}
 .pp-urow:hover .pp-udate span.none,.pp-udate:focus-within span.none{opacity:1;}
+.pp-pstar{padding:0 6px 0 0;font-size:.6em;vertical-align:.18em;}

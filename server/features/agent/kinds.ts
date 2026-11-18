@@ -283,7 +283,7 @@ function planContext(b: Board, srcs: Map<string, SourceRow>): string {
   };
   const placed = new Set<string>();
   const proj = q.boardPurpose.get(b.id);
-  const lines = [`# Plan · ${b.title}`, `purpose: ${b.purpose || "(none set)"}`, `ends: ${proj?.ends_at || "(no end)"}${proj?.archived_at ? ` · archived ${new Date(proj.archived_at).toISOString().slice(0, 10)}` : ""}`, "", "## Groups"];
+  const lines = [`# Plan · ${b.title}`, `purpose: ${b.purpose || "(none set)"}`, `ends: ${proj?.ends_at || "(no end)"}${proj?.archived_at ? ` · archived ${new Date(proj.archived_at).toISOString().slice(0, 10)}` : ""}${proj?.starred_at ? " · starred" : ""}`, "", "## Groups"];
   for (const g of groups) {
     const items = places.filter((p) => p.group_id === g.id).sort((x, y) => (x.ord ?? 0) - (y.ord ?? 0));
     items.forEach((p) => placed.add(p.item));

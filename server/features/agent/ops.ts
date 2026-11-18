@@ -105,14 +105,17 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
     },
   },
   set_project: {
-    fields: { "ends?": orNull("The project's end, YYYY-MM-DD; null or empty clears it."), "archived?": flag("true archives the project, false brings it back.") },
-    does: "Sets or clears the board's end date, or archives it (its kept cards still come back on Review) or brings it back.",
-    check: (o) => { dayOf(o.ends); bool(o.archived, "archived"); },
+    fields: { "ends?": orNull("The project's end, YYYY-MM-DD; null or empty clears it."), "archived?": flag("true archives the project, false brings it back."), "starred?": flag("true stars the project so it sorts first, false unstars it.") },
+    does: "Sets or clears the board's end date, archives it (its kept cards still come back on Review) or brings it back, or stars it.",
+    check: (o) => { dayOf(o.ends); bool(o.archived, "archived"); bool(o.starred, "starred"); },
     run(b, o) {
       const cur = q.boardPurpose.get(b.id)!;
       const ends = o.ends === undefined ? cur.ends_at ?? "" : dayOf(o.ends)!;
       const archived = bool(o.archived, "archived");
       q.setBoardProject.run(cur.purpose ?? "", ends, archived === undefined ? cur.archived_at : archived ? (cur.archived_at ?? now()) : null, b.id);
+      const starred = bool(o.starred, "starred");
+      if (starred !== undefined) q.setBoardStarred.run(starred ? (cur.starred_at ?? now()) : null, b.id);
+      if (starred !== undefined && archived === undefined && o.ends === undefined) return starred ? "starred" : "unstarred";
       return archived === true ? "archived" : archived === false ? "brought back" : ends ? `ends ${ends}` : "no end";
     },
   },

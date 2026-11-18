@@ -740,6 +740,48 @@ const unitDateTwice = {
   },
 };
 
+// a project's star is a field patch in the plan's lane, guessed on the register Today draws from
+const projectStarFlips = {
+  name: "project-star-flips",
+  what: "star a project on Today, unstar it and star it again, quickly, with the first answer held and the rest out of order; the server holds the star and Today shows it, first",
+  checks: {
+    server: "the server holds the project starred",
+    shown: "Today shows it starred",
+    first: "Today lists it among the starred, before every unstarred project",
+  },
+  async run(t) {
+    const b = await board(t, "Race star");
+    const page = await t.open({ latency: true, reorder: { writes: true } });
+    await page.goto(`${t.base}/`);
+    // the seeded room has already reviewed today, so Today opens on its all-clear
+    const anyway = page.getByRole("button", { name: "Keep reading anyway", exact: true });
+    await page.locator(".today").first().waitFor();
+    if (await anyway.isVisible()) await anyway.click();
+    const cell = page.locator(".td-pcell").filter({ has: page.locator(".td-proj-name", { hasText: b.title }) });
+    const star = cell.locator(".star-project");
+    await star.waitFor();
+    await t.net.idle(400);
+    const isStar = (e) => e.method === "PATCH" && e.path === `/api/boards/${b.id}/plan/project`;
+    const firstAnswer = t.net.hold((e) => isStar(e) && e === t.net.entries.find(isStar));
+    await star.click();
+    await star.click();
+    await star.click();
+    await firstAnswer.arrived(1);
+    firstAnswer.release();
+    await page.evaluate(() => window.__strataSettled?.());
+    await t.net.idle(600);
+    await sleep(600);
+    const at = t.sql("SELECT starred_at FROM boards WHERE id = ?", b.id)[0]?.starred_at ?? null;
+    t.say(`${t.net.entries.filter(isStar).length} star writes`);
+    t.check("server", typeof at === "number", `server starred_at ${at}`);
+    t.check("shown", await star.getAttribute("aria-pressed") === "true", `the star reads ${await star.innerText()}`);
+    // other seeds star their own boards at the same time: it is enough to stand among the starred, before any other
+    const cells = await page.locator(".td-pcell").evaluateAll((els) => els.map((el) => ({ name: el.querySelector(".td-proj-name")?.textContent ?? "", on: el.querySelector(".star-project")?.getAttribute("aria-pressed") === "true" })));
+    const mine = cells.findIndex((c) => c.name.includes(b.title));
+    t.check("first", mine >= 0 && cells.slice(0, mine).every((c) => c.on), `listed at ${mine} of ${cells.length}, after ${cells.slice(0, mine).filter((c) => !c.on).length} unstarred`);
+  },
+};
+
 // a note and removal wait behind the unanswered create, so the server sees create, note, delete in order
 const markNoteDelete = {
   name: "mark-note-delete",
@@ -2096,4 +2138,4 @@ const padTwoTabs = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];
+  planThreeMoves, unitDateTwice, projectStarFlips, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];

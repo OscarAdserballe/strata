@@ -113,15 +113,22 @@ export const starCount = (views: readonly ProjectView[]): number =>
 /** The same view from a board's own state, so the project page agrees with Today without the register. */
 export function boardProject(
   id: string, title: string,
-  plan: { purpose: string; endsAt?: string; archivedAt?: number | null; groups: ProjectEntry["groups"]; places: Record<string, { group: string | null; ord: number | null; pinned: boolean }> },
+  plan: { purpose: string; endsAt?: string; archivedAt?: number | null; starredAt?: number | null; groups: ProjectEntry["groups"]; places: Record<string, { group: string | null; ord: number | null; pinned: boolean }> },
   resources: readonly { id: string; filename: string; kind: string; readPct?: number; lastReadAt?: number | null; doneAt?: number | null; createdAt: number }[],
   now = new Date(),
 ): ProjectView {
-  const p: ProjectEntry = { id, title, purpose: plan.purpose, endsAt: plan.endsAt ?? "", archivedAt: plan.archivedAt ?? null, touchedAt: null,
+  const p: ProjectEntry = { id, title, purpose: plan.purpose, endsAt: plan.endsAt ?? "", archivedAt: plan.archivedAt ?? null, starredAt: plan.starredAt ?? null, touchedAt: null,
     groups: plan.groups.map((g) => ({ ...g, byDate: g.byDate ?? "" })), places: plan.places };
   const entries: RegisterEntry[] = resources.map((r) => ({
     resourceId: r.id, pairId: null, boardId: id, boardTitle: title, unfiled: false, filename: r.filename, kind: r.kind, originUrl: null,
     createdAt: r.createdAt, status: r.doneAt ? "done" : "reading", readPct: Math.round(r.readPct ?? 0), kept: 0, cards: 0, waiting: !r.doneAt, lastAt: r.lastReadAt ?? 0,
   }));
   return projectView(p, entries, now);
+}
+
+/** Active projects: starred first, then by end date, then most recently touched. */
+export function activeProjects(views: readonly ProjectView[]): ProjectView[] {
+  const star = (v: ProjectView) => (v.project.starredAt ? 0 : 1);
+  return views.filter((v) => !v.project.archivedAt)
+    .sort((a, b) => star(a) - star(b) || (a.project.endsAt || "9999").localeCompare(b.project.endsAt || "9999") || (b.project.touchedAt ?? 0) - (a.project.touchedAt ?? 0));
 }

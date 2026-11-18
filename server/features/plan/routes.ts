@@ -41,19 +41,21 @@ export const planRoutes: Route[] = [
     });
   }, { receipt: "atomic" }),
 
-  // A project's end and its archive: each field is set on its own, so this is not a whole-document write.
+  // A project's end, archive and star: each field is set on its own, so this is not a whole-document write.
   route("PATCH", new RegExp(`^${B}\\/project$`), async (ctx) => {
     if (!boardOr404(ctx)) return;
     const { res, ssn, params, body, commit } = ctx; const boardId = params[0];
-    const b = await body<{ endsAt?: string | null; archived?: boolean }>();
+    const b = await body<{ endsAt?: string | null; archived?: boolean; starred?: boolean }>();
     const ends = dayOf(b.endsAt);
     if (ends === null) { sendJson(res, 400, { error: "endsAt is a YYYY-MM-DD day, or empty" }); return; }
     if (b.archived !== undefined && typeof b.archived !== "boolean") { sendJson(res, 400, { error: "archived is true or false" }); return; }
+    if (b.starred !== undefined && typeof b.starred !== "boolean") { sendJson(res, 400, { error: "starred is true or false" }); return; }
     commit(() => {
       const cur = q.boardPurpose.get(boardId)!;
       const archivedAt = b.archived === undefined ? cur.archived_at : b.archived ? (cur.archived_at ?? now()) : null;
       q.setBoardProject.run(cur.purpose ?? "", ends ?? cur.ends_at ?? "", archivedAt, boardId);
-      logEvent(db, APP, "plan_project", { board: boardId, ...(ends !== undefined ? { ends: !!ends } : {}), ...(b.archived !== undefined ? { archived: b.archived } : {}) }, ssn);
+      if (b.starred !== undefined) q.setBoardStarred.run(b.starred ? (cur.starred_at ?? now()) : null, boardId);
+      logEvent(db, APP, "plan_project", { board: boardId, ...(ends !== undefined ? { ends: !!ends } : {}), ...(b.archived !== undefined ? { archived: b.archived } : {}), ...(b.starred !== undefined ? { starred: b.starred } : {}) }, ssn);
       return { status: 200, body: answer(boardId) };
     });
   }, { receipt: "atomic" }),

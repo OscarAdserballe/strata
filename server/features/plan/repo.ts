@@ -3,10 +3,11 @@ import type { PlanGroupRow, PlanMilestoneRow, PlanPlaceRow } from "../../platfor
 
 export const planRepo = {
   // The purpose is read separately rather than widening q.board, which is sent to the client as `board`.
-  boardPurpose: stmt<{ purpose: string | null; ends_at: string | null; archived_at: number | null; plan_rev: number }>(
-    "SELECT purpose,ends_at,archived_at,plan_rev FROM boards WHERE id = ?"),
+  boardPurpose: stmt<{ purpose: string | null; ends_at: string | null; archived_at: number | null; starred_at: number | null; plan_rev: number }>(
+    "SELECT purpose,ends_at,archived_at,starred_at,plan_rev FROM boards WHERE id = ?"),
   setBoardPurpose: stmt("UPDATE boards SET purpose = ? WHERE id = ?"),
   setBoardProject: stmt("UPDATE boards SET purpose = ?, ends_at = ?, archived_at = ? WHERE id = ?"),
+  setBoardStarred: stmt("UPDATE boards SET starred_at = ? WHERE id = ?"),
   groupsOf: stmt<PlanGroupRow>("SELECT id,name,ord,by_date FROM board_groups WHERE board_id = ? ORDER BY ord ASC, created_at ASC"),
   group: stmt<PlanGroupRow>("SELECT id,name,ord,by_date FROM board_groups WHERE board_id = ? AND id = ?"),
   nextGroupOrd: stmt<{ n: number }>("SELECT COALESCE(MAX(ord), -1) + 1 n FROM board_groups WHERE board_id = ?"),

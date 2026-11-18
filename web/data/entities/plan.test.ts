@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import type { BoardPlan } from "../../../shared/types/index.ts";
+import type { BoardPlan, RegisterResponse } from "../../../shared/types/index.ts";
 import { Store } from "../store.ts";
 import { ATTEMPT_DEADLINE_MS, Mutator, RETRY_DELAYS_MS, type SendAnswer, type SendRequest } from "../mutate.ts";
-import { plan as planCalls, planGestures, planOps, planOrder } from "./plan.ts";
+import { plan as planCalls, planGestures, planOps, planOrder, starOp } from "./plan.ts";
 import type { PlanEntity } from "./boards.ts";
 
 const tick = async () => { for (let i = 0; i < 3; i++) await new Promise((resolve) => setImmediate(resolve)); };
@@ -158,4 +158,27 @@ test("the plan rail's gestures: a reorder rebuilt over theirs keeps what the oth
   assert.deepEqual(gone.groups, []);
   assert.deepEqual(gone.places.a, { group: null, milestone: null, pinned: false, ord: null });
   assert.equal(planGestures.purpose("  read it  ").guess!(p).purpose, "read it");
+});
+
+test("a star shows on the plan and the register at once, stays through the answer, and a refusal takes both back", async () => {
+  const { store, sent, m } = room();
+  const reg = { projects: [{ id: "b1", title: "One", starredAt: null }, { id: "b2", title: "Two", starredAt: null }], entries: [] } as unknown as RegisterResponse;
+  store.apply<RegisterResponse>("register", 10, reg, "wire");
+  const starred = () => [store.get<PlanEntity>("plan:b1")?.starredAt ?? null, store.get<RegisterResponse>("register")?.projects.map((p) => p.starredAt ?? null)];
+  const on = m.mutate(starOp("b1", true, store));
+  assert.equal(sent[0].req.method, "PATCH");
+  assert.equal(sent[0].req.path, "/api/boards/b1/plan/project");
+  assert.deepEqual(JSON.parse(sent[0].req.body!), { starred: true });
+  const [p, r] = starred() as [number | null, (number | null)[]];
+  assert.ok(typeof p === "number" && typeof r[0] === "number" && r[1] === null, "both guessed before the answer");
+  sent[0].reply({ status: 200, body: { plan: { ...plan(4), starredAt: 99 }, rev: 11 }, rev: 11, epoch: "" });
+  await on;
+  assert.equal(store.get<PlanEntity>("plan:b1")?.starredAt, 99);
+  assert.ok(store.get<RegisterResponse>("register")?.projects[0].starredAt, "the held register keeps the star until it is read again");
+  const off = m.mutate(starOp("b1", false, store)).catch((e) => e);
+  assert.equal(store.get<RegisterResponse>("register")?.projects[0].starredAt, null);
+  sent[1].reply({ status: 400, body: { error: "starred is true or false" }, rev: 0, epoch: "" });
+  assert.equal((await off).status, 400);
+  assert.equal(store.get<PlanEntity>("plan:b1")?.starredAt, 99, "the refused unstar is taken back on the plan");
+  assert.ok(store.get<RegisterResponse>("register")?.projects[0].starredAt, "and on the register");
 });

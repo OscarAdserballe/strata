@@ -1,7 +1,9 @@
-import type { BoardPlan } from "../../../shared/types/index.ts";
+import type { BoardPlan, RegisterResponse } from "../../../shared/types/index.ts";
 import { store as roomStore, type Store } from "../store.ts";
 import { mutate, mutator, type Conflict, type Mutator, type Op } from "../mutate.ts";
 import { planKey, type PlanEntity } from "./boards.ts";
+import { confirmByShape } from "./confirm.ts";
+import { REGISTER } from "./sources.ts";
 
 // One lane per board's plan: moves are relative, so two quick moves must reach the server in order.
 
@@ -49,8 +51,27 @@ export const planOps = {
   },
 };
 
+/** The register's copy of a project's star, so Today and Projects move with the plan. */
+const starInRegister = (board: string, on: boolean, at: number) => (reg: RegisterResponse | undefined) => (reg
+  ? { ...reg, projects: reg.projects.map((p) => (p.id === board ? { ...p, starredAt: on ? p.starredAt ?? at : null } : p)) }
+  : reg);
+
+/** A project's star: the plan's field, guessed on the plan and the register, and folded into the held register on the answer. */
+export function starOp(board: string, on: boolean, s: Store = roomStore): Op<PlanAnswer> {
+  const base = planOps.write(board, planGestures.project({ starred: on }), s);
+  const reg = starInRegister(board, on, Date.now());
+  return {
+    ...base,
+    label: on ? "star that project" : "unstar that project",
+    optimistic: [...(base.optimistic ?? []), { key: REGISTER, apply: reg }],
+    invalidates: [REGISTER],
+    confirm: (res, meta) => { s.batch(() => { confirmByShape(base, res, meta, s); s.patch(REGISTER, 0, reg); }); },
+  };
+}
+
 export const plan = {
   write: (board: string, w: PlanWrite) => mutate(planOps.write(board, w)),
+  star: (board: string, on: boolean, m: Mutator = mutator) => m.release(starOp(board, on)),
   /** Gives up a failed write so the server's plan shows and the next write is sent. */
   abandon: (board: string, m: Mutator = mutator) => m.discardFailed(planLane(board)),
 };
@@ -59,7 +80,7 @@ type Place = BoardPlan["places"][string];
 const NO_PLACE: Place = { group: null, milestone: null, pinned: false, ord: null };
 type PlacePatch = Partial<Place>;
 type GroupPatch = Partial<Omit<BoardPlan["groups"][number], "id" | "ord">> & { move?: number };
-type ProjectPatch = { endsAt?: string; archived?: boolean };
+type ProjectPatch = { endsAt?: string; archived?: boolean; starred?: boolean };
 type MilestonePatch = Partial<Omit<BoardPlan["milestones"][number], "doneAt">> & { move?: number; done?: boolean };
 
 /** A group's whole order; after a 409: your order first, then what the other device added since. */
@@ -90,7 +111,8 @@ export const planGestures = {
   project: (patch: ProjectPatch): PlanWrite => ({
     method: "PATCH", path: "/project", body: patch,
     guess: (p) => ({ ...p, ...(patch.endsAt !== undefined ? { endsAt: patch.endsAt } : {}),
-      ...(patch.archived !== undefined ? { archivedAt: patch.archived ? p.archivedAt ?? Date.now() : null } : {}) }),
+      ...(patch.archived !== undefined ? { archivedAt: patch.archived ? p.archivedAt ?? Date.now() : null } : {}),
+      ...(patch.starred !== undefined ? { starredAt: patch.starred ? p.starredAt ?? Date.now() : null } : {}) }),
   }),
   addGroup: (name = "New unit", byDate = ""): PlanWrite => ({ method: "POST", path: "/groups", body: { name, ...(byDate ? { byDate } : {}) } }),
   group: (gid: string, patch: GroupPatch = {}): PlanWrite => ({

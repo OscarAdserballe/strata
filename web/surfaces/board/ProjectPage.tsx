@@ -6,6 +6,7 @@ import { plan as planWrites, planGestures, type planCalls } from "../../data/ent
 import { refreshRegister } from "../../data/entities/register.ts";
 import Verbs from "../../capabilities/sources/SourceVerbs.tsx";
 import type { BoardActions } from "../../capabilities/sources/useBoardActions.ts";
+import StarProject from "../../capabilities/today/StarProject.tsx";
 import { boardProject, shortDay, STAR_CAP, type ProjectSource, type ProjectUnit } from "../../capabilities/today/projects.ts";
 import { openTab } from "../../shell/screens.ts";
 import type { Tile } from "./boardTiles.ts";
@@ -186,7 +187,9 @@ export default function ProjectPage(p: ProjectPageProps) {
           <div className="pp-titles">
             {renaming === "title"
               ? <Ghost className="pp-title edit" label="Project name" value={p.head} onCommit={(v) => { setRenaming(null); if (v) void p.boardActions.rename(boardId, v); }} />
-              : <h1 className="pp-title" onDoubleClick={() => setRenaming("title")}>{p.head}</h1>}
+              : <h1 className="pp-title" onDoubleClick={() => setRenaming("title")}>
+                {archived ? null : <StarProject className="pp-pstar" board={boardId} title={p.head} starred={!!plan.starredAt} />}
+                {p.head}</h1>}
             <Ghost className="pp-goal" label="What is it for?" placeholder="What is it for?" value={plan.purpose} onCommit={(v) => planApi.purpose(v)} />
           </div>
           {archived ? null : <div className="pp-total">

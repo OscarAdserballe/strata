@@ -1,0 +1,2 @@
+.star-project{border:none;background:none;padding:2px 4px;font:400 15px/1 var(--sans);color:var(--ink-faint);cursor:pointer;}
+.star-project:hover,.star-project.on{color:var(--accent-deep);}

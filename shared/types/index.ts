@@ -103,8 +103,8 @@ export interface PlanGroup { id: string; name: string; ord: number; byDate: stri
 export interface PlanMilestone { id: string; name: string; due: string; note: string; doneAt: number | null; ord: number }
 /** `ord` is the item's position inside its group; null = never placed (sorts last). */
 export interface PlanPlace { group: string | null; milestone: string | null; pinned: boolean; ord: number | null }
-/** `endsAt` is the reader's YYYY-MM-DD, or "" for no end; `archivedAt` null = active. */
-export interface BoardPlan { purpose: string; endsAt: string; archivedAt: number | null; groups: PlanGroup[]; milestones: PlanMilestone[]; places: Record<string, PlanPlace>; rev?: number }
+/** `endsAt` is the reader's YYYY-MM-DD, or "" for no end; `archivedAt` null = active; `starredAt` set = starred. */
+export interface BoardPlan { purpose: string; endsAt: string; archivedAt: number | null; starredAt?: number | null; groups: PlanGroup[]; milestones: PlanMilestone[]; places: Record<string, PlanPlace>; rev?: number }
 
 /* Revs are stamps from one room counter: of two answers about one scope, the higher rev is newer. */
 export interface NotesSaved { rev: number; notesRev: number }
@@ -400,7 +400,7 @@ export interface RegisterResponse {
 
 /** A board as a project: its plan without milestones, for Today and the projects list. */
 export interface ProjectEntry {
-  id: string; title: string; purpose: string; endsAt: string; archivedAt: number | null;
+  id: string; title: string; purpose: string; endsAt: string; archivedAt: number | null; starredAt?: number | null;
   touchedAt: number | null;
   groups: PlanGroup[];
   places: Record<string, { group: string | null; ord: number | null; pinned: boolean }>;
