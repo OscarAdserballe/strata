@@ -22,7 +22,7 @@ Every id says what it is:
 | id | what |
 |---|---|
 | `thesis` or `b-1a2b3c4d` | a board, by its handle or id |
-| `thesis/log`, `thesis/plan`, `thesis/kept`, `thesis/questions`, `thesis/highlights`, `thesis/comments`, `thesis/sources`, `thesis/chat` | a board's collections |
+| `thesis/log`, `thesis/plan`, `thesis/kept`, `thesis/questions`, `thesis/highlights`, `thesis/comments`, `thesis/sources`, `thesis/chat`, `thesis/primers` | a board's collections |
 | `src_…` | a source |
 | `sec_…` | a section (chapter) of a source |
 | `deck_…` | a deck of cards |
@@ -108,6 +108,8 @@ The reader's notes on your page reach you as they are written: there are no draf
 
 For a web page, arXiv abstract or YouTube video (its transcript), use `capture({ board, key, url })` instead. A video can take a minute or two. It also arrives without flashcards unless you pass `study: true`.
 
+Both take `primer: true` to ask for a primer of the source once it lands (the routine writes it with `set_primer`); leave it out unless the reader wants one.
+
 Flashcards are the reader's choice. Leave `study` out for your own pages, drafts and explorations; pass `study: true` only when the reader asked for cards from this file. A source without them reads "not studied, no flashcards" in `get_outline` and `get_context`; that is expected, not a failure.
 
 ## routine
@@ -115,10 +117,11 @@ Flashcards are the reader's choice. Leave `study` out for your own pages, drafts
 You are the reader's routine: a Claude session that Strata wakes (a press in Dispatch, or Run now) or that runs on its own schedule, with the reader's connectors (Linear, Slack, GitHub, Notion…) beside this server. The wake text says why it ran; the board says what to do. Each run:
 
 1. **Dispatch.** `dashboard_board`, then for each thread in `implementing`, `dashboard_open`. The reader has one button, Send, so the notes before it say what they want, and you decide what comes next and where the page lands (`lands` on `dashboard_post`). No page yet: write a proposal. Notes asking for changes: revise the page and answer each note in `replies`. Notes that pick an option, or "go": build it and post the built page to `review`. Send on a built page with no objection: merge, then post a finish page. Reopen (Send on a Finish page): read the notes and pick again.
-2. **The inbox.** On a scheduled run, look through the connectors for new work meant for the reader and add it with `dashboard_add_items`, after `dashboard_read`, so nothing is added twice. Skip anything its **Handled in the last 7 days** section lists: the reader already dealt with it.
-3. Before stopping, call `dashboard_board` once more: a press made while you worked doesn't wake a second run. Never move or edit a thread yourself: a page's `lands` is the only way you move one.
+2. **Primers.** A primer is a page the reader opens before a source's page 1. On each board, `get_context({ id: "<board>" })` lists the primers asked for (a stale one the reader asked to rebuild is asked for again); `<board>/primers` lists them all. Read the source, and its concept tree if it has one. Decide for yourself how best to show a reader, before they start, what this source is about, the threads to follow through it, and where it lands: use whatever visual, spatial or interactive form suits this particular source. One self-contained light HTML page (inline CSS and JS, scripts and fonts only from https CDNs, no `fetch`, no `localStorage`), readable in a ~420px side panel and wider. Cite pages where it helps. Numbers come from the source. Write it with `apply` and `set_primer { source, html }`.
+3. **The inbox.** On a scheduled run, look through the connectors for new work meant for the reader and add it with `dashboard_add_items`, after `dashboard_read`, so nothing is added twice. Skip anything its **Handled in the last 7 days** section lists: the reader already dealt with it.
+4. Before stopping, call `dashboard_board` once more: a press made while you worked doesn't wake a second run. Never move or edit a thread yourself: a page's `lands` is the only way you move one.
 
-A wake from Strata names its press and thread ("Send: …", "Reopen: …", "Sent to Dispatch: …"; older ones say "Go: …" or "Send back: …"); a run with no such line is the scheduled one. Build in the repository the thread's links or text name; if none of the routine's repositories fits, say so in the page instead of guessing.
+A wake from Strata names its press and thread ("Send: …", "Reopen: …", "Sent to Dispatch: …"; older ones say "Go: …" or "Send back: …"), or the source a primer was asked for ("Primer asked for: …"); a run with no such line is the scheduled one. Build in the repository the thread's links or text name; if none of the routine's repositories fits, say so in the page instead of guessing.
 
 Where a page lands is your call, not a fixed order:
 

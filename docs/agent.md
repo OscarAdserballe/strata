@@ -28,7 +28,7 @@ revokes them.
 |---|---|
 | `whoami` | The token's access, and the boards with their handles and ids |
 | `get_outline` | The light view of anything: children, one line each |
-| `get_context` | Everything about one thing: a board, a collection (`<board>/kept`, `/questions`, `/highlights`, `/plan`, `/log`, `/sources`, `/chat`), a source, section, deck, card, question, highlight, group or milestone |
+| `get_context` | Everything about one thing: a board, a collection (`<board>/kept`, `/questions`, `/highlights`, `/plan`, `/log`, `/sources`, `/chat`, `/primers`), a source, section, deck, card, question, highlight, group or milestone |
 | `get_text` | A source's or section's extracted text, by page range; for a PDF with none, whether its text is waiting to be read from its file, being read, or why it could not be |
 | `search` | Batched `{ kind, query }` over cards, kept cards, questions, highlights, sources (newest first, dated), the log, chat |
 | `get_changes` | Reviewed, kept, highlighted, asked, answered, added, finished, logged, since a date |
@@ -87,6 +87,15 @@ instead. Decide and Implementing are reached only this way; Focus leaves Dispatc
 Every thread is work or personal (`area`): the page shows one area at a time, and an item that names
 no area goes where its source suggests. The older `state`, `pinned_at` and `morning_at` columns, the updates,
 sources and pad tables stay in the database; nothing writes them but the mirror of `stage`.
+
+A source may have a **primer** (`primers`, one row per source, not a `resources` row so it never shows as a
+source): an HTML overview the reader opens before page 1, written by the reader's routine, never by Strata's
+own model. The reader asks for one with Primer in the reader (`POST /api/boards/<b>/resources/<r>/primer`, which
+wakes the routine as a Dispatch send does), or an agent passes `primer: true` on `request_upload` or `capture`. The
+board overview lists the primers asked for and `<board>/primers` lists them all; the routine writes one with the
+`apply` op `set_primer { source, html }` (up to 2 MB, asked for or not). The page is served sandboxed like a live
+source (`…/primer/page`, `LIVE_CSP`). Revising the source in place (`reviseSource`) marks a ready primer `stale`;
+it still shows, with Rebuild, which asks again.
 
 `<board>/chat` reads both chat tables, the board's and per-source thread (`messages`) and Ask on a card
 (`card_messages`), newest first, cleared turns included and marked. A question asked at words of a source
