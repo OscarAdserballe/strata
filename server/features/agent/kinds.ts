@@ -10,6 +10,7 @@ import { parseJson } from "../../platform/db/sql.ts";
 import { agentRepo as a, type ChatRow, type KeptRow, type SourceRow } from "./repo.ts";
 import { count, facesOfCard, indent, oneLine, paged, pagedText, tokensOf, when } from "./render.ts";
 import { noteOfThread } from "../../../shared/reading/notes.ts";
+import type { PrimerPlan } from "../../../shared/types/index.ts";
 import { compileAnchor, quoteOfAnchor, type QuoteText } from "../../../shared/reading/compile-quote.ts";
 import { quoteTextOfDeck } from "../decks/decks.ts";
 import { pageTextStatus } from "../imports/pump.ts";
@@ -21,7 +22,7 @@ const fail = (msg: string): never => { throw new AgentError(msg); };
 export const KINDS: { kind: string; tables: string[] }[] = [
   { kind: "board", tables: ["boards", "board_notes", "board_prefs"] },
   { kind: "plan", tables: ["board_groups", "board_milestones", "board_places"] },
-  { kind: "source", tables: ["resources", "resource_blobs", "pairs", "imports", "page_states"] },
+  { kind: "source", tables: ["resources", "resource_blobs", "pairs", "imports", "page_states", "primers"] },
   { kind: "section", tables: ["sections", "trees", "source_trees"] },
   { kind: "card", tables: ["cards", "card_edits", "card_drops", "courses", "review_receipts"] },
   { kind: "kept", tables: ["card_keeps"] },
@@ -64,7 +65,9 @@ export function boardList(): string {
     const name = b.handle ? `${b.handle} (${b.id})` : b.id;
     return `- ${name} — ${b.title} · ${c.n} sources · ${kept} kept · last touched ${when.day(b.touched_at ?? b.created_at)}`;
   });
-  return `# Your boards\n\n${lines.join("\n") || "No boards yet."}\n\nPass a board's handle or id as \`board\`.`;
+  const asked = a.primersAsked.all().map((p) => `- ${idOf("source", p.resource_id)} "${titleOf(p)}" on ${a.boardMeta.get(p.board_id)?.handle ?? p.board_id} · asked ${when.day(p.asked_at)}${p.redraw ? " · redraw" : ""}`);
+  const primers = asked.length ? `\n\n## Primers asked for\nDraw each: get_guide({ topic: "primer" }).\n${asked.join("\n")}` : "";
+  return `# Your boards\n\n${lines.join("\n") || "No boards yet."}${primers}\n\nPass a board's handle or id as \`board\`.`;
 }
 
 // ---------- outline ----------
@@ -369,6 +372,26 @@ function commentContext(id: string): string {
   return highlightContext(mid);
 }
 
+// ---------- primers: the page a reader opens before a source's page 1 ----------
+
+function waitingPrimers(b: Board): string[] {
+  const asked = q.primersOf.all(b.id).filter((p) => p.asked_at);
+  if (!asked.length) return [];
+  const srcs = sourcesOf(b.id);
+  return ["", "## Primers asked for", `Draw each: get_guide({ topic: "primer" }).`,
+    ...asked.map((p) => `- ${idOf("source", p.resource_id)} "${titleOf(srcs.get(p.resource_id))}"${p.primer_id ? ` · redraw ${idOf("source", p.primer_id)}` : ""}`)];
+}
+
+function primerLine(rid: string): string[] {
+  const of = q.primerFor.get(rid);
+  if (of) return [`primer of ${idOf("source", of.resource_id)}`];
+  const p = q.primerOf.get(rid);
+  if (!p) return [];
+  const plan = p.plan ? JSON.parse(p.plan) as PrimerPlan : null;
+  return [`primer: ${p.primer_id ? idOf("source", p.primer_id) : "none yet"}${p.asked_at ? ` · asked for ${when.day(p.asked_at)}, waiting to be drawn` : ""}`,
+    ...(plan ? [`primer plan: ${plan.question} · threads: ${plan.threads.map((t) => t.name).join("; ")}`] : [])];
+}
+
 // ---------- board overview ----------
 
 function boardContext(b: Board, cursor: unknown, budget: number): string {
@@ -390,6 +413,7 @@ function boardContext(b: Board, cursor: unknown, budget: number): string {
     "## Open questions",
     ...(open.length ? open.map((m) => `- ${oneLine(m.front, 200)} · ${idOf("question", m.id)}`) : ["None."]),
     ...waitingComments(b),
+    ...waitingPrimers(b),
     "",
     "## Log (last lines)",
     tail,
@@ -416,6 +440,7 @@ function sourceContext(rid: string, cursor: unknown, budget: number, short: bool
     ...(site ? [`open: ${openLink(site, b.id, rid)}`] : []),
     ...(s.origin_url ? [`from ${s.origin_url}`] : []),
     ...(origin?.origin ? [`pushed from ${origin.origin}${origin.origin_ref ? ` (${origin.origin_ref})` : ""}`] : []),
+    ...primerLine(rid),
     `text: get_text({ id: "${idOf("source", rid)}" })${size(s.tokens || sections.reduce((n, x) => n + (x.tokens ?? 0), 0))}`,
     "",
     "## Sections",

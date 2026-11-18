@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { ImportsStatus } from "../../capabilities/sources/ImportsPanel.tsx";
 import { loadCapture } from "../../capabilities/sources/AddSource.tsx";
 import Suggest from "../../capabilities/feedback/Suggest.tsx";
@@ -10,6 +10,8 @@ export interface ReaderBarProps {
   board: string;
   file: string;
   kind: string;
+  /** the source's primer door, beside its name */
+  primer?: ReactNode;
   onBoards(): void;
   onHome(): void;
   onAdd(kind: "file" | "link", study?: boolean): void;
@@ -51,6 +53,7 @@ export default function ReaderBar(p: ReaderBarProps) {
       <span className="rbar-slash">/</span>
       <span className="rbar-file" title={p.file}>{p.file}</span>
       <span className="rbar-kind">{KIND[p.kind] || "text"}</span>
+      {p.primer}
       <span className="rbar-grow" />
       {p.imports ? <ImportsStatus onOpen={p.onImport} className="rbar-imports" /> : null}
       <span className="rbar-slot" ref={barSlot.set} />

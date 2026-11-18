@@ -11,6 +11,8 @@ import { signOut as leaveRoom } from "./signOut.ts";
 import TopNav from "./TopNav.tsx";
 import { ImportsStatus } from "../capabilities/sources/ImportsPanel.tsx";
 import ReaderBar from "../surfaces/reader/ReaderBar.tsx";
+import PrimerButton from "../capabilities/primer/PrimerButton.tsx";
+import { togglePlan } from "../capabilities/primer/planOpen.ts";
 import Layers from "./Layers.tsx";
 import { toast } from "./layers.ts";
 import { BoardPickerHost, addSourceFrom, pickerNow, setPicker } from "../capabilities/sources/BoardPicker.tsx";
@@ -182,7 +184,7 @@ export default function BoardRoute() {
       panelOpen, hideShelf: hideBoardPage, showShelf: showBoardPage, toggleCardsOnly, stepUi,
       mintCapture: captureReply, mintOpenCard, move: drill.move, answer: drill.answer, gradeCard: drill.gradeCard, goToCardSource: drill.goToCardSource,
       setEditing: drill.setEditing, setBenchEdit: setKeepsEditing, toggleBench: toggleKeeps, closeBench: closeKeeps, closeTopLayer,
-      logCard: drill.logCard, openCram, log: StrataAPI.log, warmKeyed,
+      logCard: drill.logCard, openCram, log: StrataAPI.log, warmKeyed, togglePrimerPlan: togglePlan,
     }) as unknown as RoomKeyActions,
   }, () => stateRef.current);
 
@@ -235,6 +237,7 @@ export default function BoardRoute() {
     <div className="app" style={{ zoom: String(ui * ROOM), "--room": String(ROOM) } as React.CSSProperties}>
       {reading && src
         ? <ReaderBar board={boardTitle} file={src.filename} kind={src.kind} onHome={() => openPair(0)}
+        primer={activeId ? <PrimerButton board={activeId} src={src} of={src.primerOf ? (board?.resources || []).find((r: ResourceMeta) => r.id === src.primerOf) : null} onOpen={(rid) => openBoard(activeId, rid)} /> : null}
         onBoards={openLibrary}
         onAdd={pickAddSource}
         imports={!keepsUp && !cramming && !launcher} onImport={(b, r) => openBoard(b, r)}

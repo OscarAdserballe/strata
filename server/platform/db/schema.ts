@@ -356,6 +356,16 @@ CREATE TABLE IF NOT EXISTS board_places (
   ord INTEGER,                            -- position inside its group; null = never placed
   PRIMARY KEY (board_id, item)
 );
+-- A source's primer: an HTML page, itself a source on the board, that the reader opens before page 1.
+-- The reader asks for one, the routine draws it and links it with set_primer; asked_at is cleared then.
+CREATE TABLE IF NOT EXISTS primers (
+  resource_id TEXT PRIMARY KEY, board_id TEXT NOT NULL,
+  primer_id TEXT,                         -- the HTML source that is the primer; null until one is drawn
+  asked_at INTEGER, built_at INTEGER,
+  plan TEXT                               -- JSON PrimerPlan the routine drew the page from
+);
+CREATE INDEX IF NOT EXISTS idx_primers_board ON primers(board_id);
+CREATE INDEX IF NOT EXISTS idx_primers_primer ON primers(primer_id);
 -- THE DASHBOARD (features/dashboard): a separate app the room only hosts, so nothing here has a
 -- board_id. A task is like a Linear issue: a body, dated updates appended to it, one level of
 -- subtasks. Agents never touch tasks directly; they add inbox items, and you keep or drop each.

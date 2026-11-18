@@ -34,7 +34,7 @@ export type RoomKeyActions = Record<
   | "setRevealed" | "setOpenMark" | "setEditing" | "setBenchEdit" | "setLauncher" | "panelOpen" | "hideShelf" | "showShelf"
   | "toggleCardsOnly" | "toggleBench" | "closeBench" | "closeTopLayer" | "openFind" | "closeFind" | "stepUi" | "stepHistory"
   | "mintCapture" | "mintOpenCard" | "move" | "answer" | "gradeCard" | "jumpToCard" | "goToCardSource" | "adoptDrift"
-  | "logCard" | "openCram" | "log" | "warmKeyed",
+  | "logCard" | "openCram" | "log" | "warmKeyed" | "togglePrimerPlan",
   Act>;
 
 export interface RoomKeysCtx {
@@ -101,6 +101,7 @@ export function makeKeyHandler(ctx: RoomKeysCtx): (e: KeyboardEvent) => void {
     if (k === "f" && b.src && !b.onHome && !r.cardsOnly && !r.treeOpen) { e.preventDefault(); a.openFind(); return; }
     if (k === "o") { e.preventDefault(); a.toggleCardsOnly(); return; }
     if (k === "x") { e.preventDefault(); a.openCram(); return; }
+    if (k === "i" && b.src && !e.metaKey && !e.ctrlKey) { e.preventDefault(); a.togglePrimerPlan(); return; }
     if (e.key === "-" || e.key === "_") { e.preventDefault(); a.stepUi(-1); return; }
     if (e.key === "=" || e.key === "+") { e.preventDefault(); a.stepUi(1); return; }
     if (k === "t" && !b.onHome && b.src && !r.cardsOnly) { e.preventDefault(); a.panelOpen("tree", !r.treeOpen); a.setTreeOpen((v: boolean) => !v); return; }

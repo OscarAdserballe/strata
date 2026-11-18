@@ -10,6 +10,7 @@ import { compileQuote, quoteAnchor } from "../../../shared/reading/compile-quote
 import { KINDS, flattenTree, normalizeTree, orderByLadder, treeToAscii, type ConceptTree } from "../distil/distil.ts";
 import { agentRepo as a } from "./repo.ts";
 import { AgentError, type Board } from "./kinds.ts";
+import type { PrimerPlan } from "../../../shared/types/index.ts";
 
 const fail = (msg: string): never => { throw new AgentError(msg); };
 const str = (v: unknown, field: string, max: number, required = true): string | undefined => {
@@ -27,7 +28,7 @@ const dayOf = (v: unknown): string => v === null || v === undefined || v === "" 
 const text = (max: number, about: string) => ({ type: "string", maxLength: max, description: about });
 const flag = (about: string) => ({ type: "boolean", description: about });
 const orNull = (about: string) => ({ type: ["string", "null"], description: about });
-const CARDS_MAX = 200, FACE_MAX = 4000;
+const CARDS_MAX = 200, FACE_MAX = 4000, PLAN_MAX = 12;
 const AT = text(600, "Where the card sits: 4 to 40 consecutive words of the source, copied verbatim, that occur once in its passage (on one page, for a PDF): the words the card asks about.");
 const BUSY = ["queued", "preparing", "running", "carding"];
 const list = (about: string) => ({ type: "array", items: { type: "string" }, description: about });
@@ -48,6 +49,19 @@ const TREE = { type: "object", required: ["question", "nodes"],
       items: { type: "object", required: ["term", "kernel"], properties: { term: text(120, "The term."), kernel: text(600, "Its definition, kept short."), at: AT } } },
     nodes: { type: "array", minItems: 1, maxItems: 1, items: NODE,
       description: "Exactly one root, of kind synthesis: its label answers the question, and the claims that carry it sit beneath as children." },
+  } };
+
+const WHERE = text(120, "Where in the source, e.g. \"p. 14\", \"§3.2\" or \"12:40\".");
+const PLAN = { type: "object", required: ["question", "threads", "results"],
+  description: "The primer's plan, written before the page and drawn from: what the source answers, the threads to follow through it, what it finds, and what to keep track of. The reader can open it beside the page.",
+  properties: {
+    question: text(300, "The one question the whole source answers."),
+    threads: { type: "array", minItems: 1, maxItems: PLAN_MAX, description: "The strands a reader follows through the source, in reading order.",
+      items: { type: "object", additionalProperties: false, required: ["name", "gist"], properties: {
+        name: text(120, "The thread, in a few words."), gist: text(600, "What it carries and why it matters."), where: WHERE } } },
+    results: { type: "array", minItems: 1, maxItems: PLAN_MAX, description: "The main findings, each a claim that reads cold.",
+      items: { type: "object", additionalProperties: false, required: ["claim"], properties: { claim: text(600, "The finding."), where: WHERE } } },
+    watch: list("Terms, notation or assumptions to keep track of while reading."),
   } };
 
 /** fields are JSON Schema properties; a name ending in "?" is optional. */
@@ -321,7 +335,50 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
       return `placed ${idOf("source", rid)}`;
     },
   },
+  set_primer: {
+    fields: { source: { type: "string", description: "The src_ id of the source the primer is for." },
+      primer: { type: "string", description: "The src_ id of the HTML page you uploaded as its primer." },
+      plan: PLAN },
+    does: "Makes an HTML source the primer of another: the page the reader opens before page 1, with the plan you drew it from. Write the plan first, then the page from it; upload the page with origin.ref primer/<src_ id> so a redraw replaces it in place. See get_guide({ topic: \"primer\" }).",
+    check: (o) => { str(o.source, "source", 200); str(o.primer, "primer", 200); checkPlan(o.plan); },
+    run(b, o) {
+      const rid = String(o.source).replace(/^src_/, ""), pid = String(o.primer).replace(/^src_/, "");
+      if (a.resourceBoard.get(rid)?.board_id !== b.id) fail(`${String(o.source)} is not a source on ${b.ref}.`);
+      if (a.resourceBoard.get(pid)?.board_id !== b.id) fail(`${String(o.primer)} is not a source on ${b.ref}.`);
+      if (rid === pid) fail("A source can't be its own primer.");
+      if (a.sourceOne.get(pid)?.kind !== "html") fail(`${String(o.primer)} is not an HTML page; a primer is one.`);
+      if (q.primerFor.get(rid)) fail(`${String(o.source)} is itself a primer.`);
+      const other = q.primerFor.get(pid);
+      if (other && other.resource_id !== rid) fail(`${String(o.primer)} is already the primer of ${idOf("source", other.resource_id)}.`);
+      q.setPrimer.run(rid, b.id, pid, now(), JSON.stringify(planOf(o.plan)));
+      return `${idOf("source", pid)} is the primer of ${idOf("source", rid)}`;
+    },
+  },
 };
+
+function checkPlan(raw: unknown): void {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) fail("plan is required: { question, threads, results, watch? }.");
+  const p = raw as Record<string, unknown>;
+  str(p.question, "plan.question", 300);
+  for (const [k, need] of [["threads", "name"], ["results", "claim"]] as const) {
+    const xs = p[k];
+    if (!Array.isArray(xs) || !xs.length || xs.length > PLAN_MAX) fail(`plan.${k} is a list of 1 to ${PLAN_MAX}.`);
+    (xs as Record<string, unknown>[]).forEach((x, i) => { str(x?.[need], `plan.${k}[${i}].${need}`, 600); str(x.where, `plan.${k}[${i}].where`, 120, false); });
+    if (k === "threads") (xs as Record<string, unknown>[]).forEach((x, i) => str(x.gist, `plan.threads[${i}].gist`, 600));
+  }
+  if (strs(p.watch, "plan.watch").length > PLAN_MAX * 2) fail(`plan.watch holds at most ${PLAN_MAX * 2} items.`);
+}
+
+function planOf(raw: unknown): PrimerPlan {
+  const p = raw as Record<string, unknown>, s = (v: unknown, max: number) => String(v ?? "").trim().slice(0, max);
+  const where = (v: unknown) => (v === undefined || v === null || !String(v).trim() ? {} : { where: s(v, 120) });
+  return {
+    question: s(p.question, 300),
+    threads: (p.threads as Record<string, unknown>[]).map((t) => ({ name: s(t.name, 120), gist: s(t.gist, 600), ...where(t.where) })),
+    results: (p.results as Record<string, unknown>[]).map((r) => ({ claim: s(r.claim, 600), ...where(r.where) })),
+    watch: strs(p.watch, "plan.watch").map((w) => s(w, 200)).filter(Boolean),
+  };
+}
 
 const strs = (v: unknown, field: string): string[] => {
   if (v === undefined || v === null) return [];

@@ -75,6 +75,9 @@ export const agentRepo = {
     "SELECT id,pair_id,state,front,back,source,created_at,updated_at FROM minted WHERE board_id = ? AND id = ?"),
   mintedBoard: stmt<{ board_id: string }>("SELECT board_id FROM minted WHERE id = ?"),
   resourceBoard: stmt<{ board_id: string }>("SELECT board_id FROM resources WHERE id = ?"),
+  primersAsked: stmt<{ resource_id: string; board_id: string; filename: string | null; asked_at: number; redraw: number }>(
+    `SELECT p.resource_id, p.board_id, r.filename, p.asked_at, p.primer_id IS NOT NULL AS redraw FROM primers p
+     JOIN resources r ON r.board_id = p.board_id AND r.id = p.resource_id WHERE p.asked_at IS NOT NULL ORDER BY p.asked_at`),
   pageStateOf: stmt<{ value: string; updated_at: number }>("SELECT value,updated_at FROM page_states WHERE resource_id = ?"),
   markBoard: stmt<{ board_id: string }>("SELECT board_id FROM marks WHERE id = ?"),
   // drafts are the reader's until Send back, so an agent reads only what was sent
