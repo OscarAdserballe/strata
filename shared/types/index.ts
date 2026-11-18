@@ -21,6 +21,10 @@ export interface ResourceMeta {
   doneAt: number | null;
   /** bumped each time the source is revised in place; part of its URLs so no cache serves the old bytes */
   generation?: number;
+  /** this source's primer: the HTML source drawn for it, or when one was asked for and not yet drawn */
+  primer?: { id: string | null; askedAt: number | null };
+  /** set on a primer: the source it is the primer of */
+  primerOf?: string;
 }
 
 export interface Budget { usedTokens: number; targetTokens: number; over: boolean }

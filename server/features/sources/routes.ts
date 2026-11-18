@@ -73,7 +73,7 @@ export const resourceRoutes: Route[] = [
       if (url.searchParams.get("pairs") === "1") q.delPairsOfResource.run(boardId, rid);
       q.clearPairResource.run(boardId, rid);
       q.delSectionsOf.run(rid); q.delTreesOfResource.run(rid); q.delSourceTree.run(rid);
-      q.delMarksOfResource.run(rid); q.delRepliesOfResource.run(rid); q.delAsksOfResource.run(rid); q.delPageState.run(rid);
+      q.delMarksOfResource.run(rid); q.delRepliesOfResource.run(rid); q.delAsksOfResource.run(rid); q.delPageState.run(rid); q.delPrimersOfResource.run(rid);
       logEvent(db, APP, "resource_remove", { board: boardId, pairs: url.searchParams.get("pairs") === "1" }, ssn);
       return { status: 200, body: { state: stateOf(boardId) } };
     });

@@ -318,6 +318,24 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
       return `placed ${idOf("source", rid)}`;
     },
   },
+  set_primer: {
+    fields: { source: { type: "string", description: "The src_ id of the source the primer is for." },
+      primer: { type: "string", description: "The src_ id of the HTML page you uploaded as its primer." } },
+    does: "Makes an HTML source the primer of another: the page the reader opens before page 1. Upload the page first, with origin.ref primer/<src_ id> so a redraw replaces it in place. See get_guide({ topic: \"primer\" }).",
+    check: (o) => { str(o.source, "source", 200); str(o.primer, "primer", 200); },
+    run(b, o) {
+      const rid = String(o.source).replace(/^src_/, ""), pid = String(o.primer).replace(/^src_/, "");
+      if (a.resourceBoard.get(rid)?.board_id !== b.id) fail(`${String(o.source)} is not a source on ${b.ref}.`);
+      if (a.resourceBoard.get(pid)?.board_id !== b.id) fail(`${String(o.primer)} is not a source on ${b.ref}.`);
+      if (rid === pid) fail("A source can't be its own primer.");
+      if (a.sourceOne.get(pid)?.kind !== "html") fail(`${String(o.primer)} is not an HTML page; a primer is one.`);
+      if (q.primerFor.get(rid)) fail(`${String(o.source)} is itself a primer.`);
+      const other = q.primerFor.get(pid);
+      if (other && other.resource_id !== rid) fail(`${String(o.primer)} is already the primer of ${idOf("source", other.resource_id)}.`);
+      q.setPrimer.run(rid, b.id, pid, now());
+      return `${idOf("source", pid)} is the primer of ${idOf("source", rid)}`;
+    },
+  },
 };
 
 const strs = (v: unknown, field: string): string[] => {

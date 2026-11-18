@@ -118,6 +118,13 @@ export const sourceOps = {
       path: `/api/boards/${board}/resources/${rid}/distil`,
     };
   },
+  /** Asks for the source's primer, which the routine draws; asking again redraws it. */
+  primer(board: string, rid: string): Op<WithState & { woke: boolean }> {
+    return {
+      label: "ask for that primer", lanes: [sourceLane(rid)], method: "POST",
+      path: `/api/boards/${board}/resources/${rid}/primer`,
+    };
+  },
   /** A new split replaces the whole one it was chosen over; a 409 fails it rather than overwrite another's. */
   resplit(board: string, rid: string, plan: SplitPlan, base: number): Op<Resplit> {
     return {
@@ -188,6 +195,7 @@ export function run<Res>(op: Op<Res>, m: Mutator = mutator): Promise<Res> {
 export const sources = {
   rename: (board: string, rid: string, name: string) => run(sourceOps.rename(board, rid, name)),
   done: (board: string, rid: string, done: boolean) => run(sourceOps.done(board, rid, done)),
+  primer: (board: string, rid: string) => run(sourceOps.primer(board, rid)),
   remove: (board: string, rid: string) => run(sourceOps.remove(board, rid)),
   removePair: (board: string, pid: string) => run(sourceOps.removePair(board, pid)),
   file: (from: string, pid: string, rid: string, to: string, toTitle: string) => run(sourceOps.file(from, pid, rid, to, toTitle)),

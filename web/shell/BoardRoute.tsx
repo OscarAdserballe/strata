@@ -9,6 +9,7 @@ import { signOut as leaveRoom } from "./signOut.ts";
 import TopNav from "./TopNav.tsx";
 import { ImportsStatus } from "../capabilities/sources/ImportsPanel.tsx";
 import ReaderBar from "../surfaces/reader/ReaderBar.tsx";
+import PrimerButton from "../capabilities/primer/PrimerButton.tsx";
 import Layers from "./Layers.tsx";
 import { toast } from "./layers.ts";
 import { BoardPickerHost, addSourceFrom, pickerNow, setPicker } from "../capabilities/sources/BoardPicker.tsx";
@@ -228,6 +229,7 @@ export default function BoardRoute() {
     <div className="app" style={{ zoom: String(ui * ROOM), "--room": String(ROOM) } as React.CSSProperties}>
       {reading && src
         ? <ReaderBar board={boardTitle} file={src.filename} kind={src.kind} onHome={() => openPair(0)}
+        primer={activeId ? <PrimerButton board={activeId} src={src} onOpen={(rid) => openBoard(activeId, rid)} /> : null}
         onBoards={openLibrary}
         onAdd={pickAddSource}
         imports={!keepsUp && !cramming && !launcher} onImport={(b, r) => openBoard(b, r)}

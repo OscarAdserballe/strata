@@ -19,6 +19,7 @@ export const REVISIONED: readonly Revisioned[] = [
   { table: "sections", key: "board_id", scope: "board", row: true },
   { table: "board_notes", key: "board_id", scope: "board", row: true },
   { table: "page_states", key: "board_id", scope: "board", row: true },
+  { table: "primers", key: "board_id", scope: "board" },
   { table: "resources", key: "board_id", scope: "board" },
   { table: "trees", key: "board_id", scope: "board", row: true },
   { table: "source_trees", key: "board_id", scope: "board" },
