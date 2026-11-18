@@ -8,6 +8,7 @@ import "./capabilities/offline/offline.css";
 import "./shell/status.css";
 import "./surfaces/reader/reader.css";
 import "./capabilities/live/live.css";
+import "./capabilities/primer/primer.css";
 import "./capabilities/card/card.css";
 import "./engines/tree/tree.css";
 import "./engines/prose/prose.css";

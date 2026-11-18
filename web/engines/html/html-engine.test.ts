@@ -61,3 +61,15 @@ test("the page's height reaches the host only from the frame that is open", () =
   hear({ source: f.contentWindow, data: { [STRATA]: { t: "height", h: 512 } } });
   assert.deepEqual(heights, [512]);
 });
+
+test("a page link in a primer reaches the reader as a page number, and nothing else does", () => {
+  const pages: number[] = [];
+  const engine = new HtmlEngine({ ...hooks, onPage: (n: number) => pages.push(n) } as never);
+  engine.open(host, "/primer/one");
+  const f = frames[frames.length - 1];
+  ready(f);
+  for (const n of [12, 0, 2.5, -1]) hear({ source: f.contentWindow, data: { [STRATA]: { t: "page", n } } });
+  hear({ source: {}, data: { [STRATA]: { t: "page", n: 3 } } });
+  assert.deepEqual(pages, [12], "only a whole page from the open frame");
+  engine.dispose();
+});

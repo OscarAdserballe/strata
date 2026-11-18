@@ -25,6 +25,8 @@ export type FromPage =
   | { t: "press" }
   | { t: "load"; n: number }
   | { t: "save"; n: number; value: string }
-  | { t: "height"; h: number };
+  | { t: "height"; h: number }
+  /** a link to a page of the source the page is about: <a href="#page=12"> */
+  | { t: "page"; n: number };
 
 export const STRATA = "strata-live";

@@ -411,6 +411,7 @@ export const StrataAPI = {
   getBoard: (id: string) => api<BoardState>(`/api/boards/${id}`),
   resourceRawUrl: (id: string, rid: string) => StrataPath(`/api/boards/${id}/resources/${rid}/raw`),
   resourceLiveUrl: (id: string, rid: string, gen?: number) => StrataPath(`/api/boards/${id}/resources/${rid}/live${gen ? `?v=${gen}` : ""}`),
+  primerLiveUrl: (id: string, rid: string, built?: number | null) => StrataPath(`/api/boards/${id}/resources/${rid}/primer/live${built ? `?v=${built}` : ""}`),
   resourcePreview: (id: string, rid: string) => api<{lines:string[]}>(`/api/boards/${id}/resources/${rid}/preview`),
   // empty for prose sources and for rows older than extraction
   pageText: (id: string, rid: string) => api<{ pages: string[] }>(`/api/boards/${id}/resources/${rid}/pagetext`).then((j) => j.pages || []),

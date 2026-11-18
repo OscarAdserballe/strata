@@ -426,6 +426,8 @@ document.addEventListener("selectionchange", () => { clearTimeout(selT); selT = 
 addEventListener("click", (e) => {
   const a = e.target instanceof Element ? e.target.closest<HTMLAnchorElement>("a[href]") : null;
   if (!a || e.defaultPrevented || a.closest(OURS) || a.hasAttribute("download")) return;
+  const page = /^#page=(\d{1,5})$/.exec(a.getAttribute("href") ?? "");
+  if (page) { e.preventDefault(); send({ t: "page", n: Number(page[1]) }); return; }
   const to = new URL(a.href, location.href);
   if (to.origin === location.origin && to.pathname === location.pathname && to.search === location.search) return;
   if (!/^https?:$/.test(to.protocol)) return;

@@ -1,0 +1,14 @@
+/* A source's primer, laid over its pages. */
+.primer-plane{position:absolute;inset:0;z-index:26;display:flex;flex-direction:column;background:var(--paper);}
+.primer-plane .htmlsrc{flex:1;min-height:0;}
+.primer-say{margin:auto;max-width:380px;padding:24px;font:400 13.5px/1.5 var(--sans);color:var(--ink-soft);text-align:center;}
+.primer-say p{margin:0 0 14px;}
+.primer-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:0;padding:8px 16px;border-bottom:1px solid var(--line);
+            background:var(--paper-2);font:400 12.5px/1.4 var(--sans);color:var(--ink-soft);}
+.primer-ask{border:1px solid var(--line);border-radius:7px;background:var(--card-bg);padding:5px 11px;font:500 11.5px/1.2 var(--sans);color:var(--ink);cursor:pointer;}
+.primer-ask:hover:not(:disabled){color:var(--accent-deep);background:var(--accent-soft);}
+.primer-ask:disabled{cursor:default;color:var(--ink-faint);}
+.rbar-primer{margin-right:8px;}
+.rbar-primer.ready i{background:var(--accent) !important;box-shadow:none !important;}
+.rbar-primer.requested i{background:var(--ink-faint) !important;box-shadow:none !important;}
+.rbar-primer.stale i{background:var(--warn) !important;box-shadow:none !important;}
