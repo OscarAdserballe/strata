@@ -65,3 +65,26 @@
 .rbar-keep{border:1px solid var(--line) !important;border-radius:7px;padding:2px 7px !important;background:none !important;color:var(--ink-soft) !important;font:500 10px var(--mono) !important;cursor:pointer;margin-right:4px;}
 .rbar-keep.next{background:var(--accent) !important;border-color:var(--accent) !important;color:var(--card-bg) !important;}
 .rbar-keep.full{color:var(--accent) !important;}
+
+/* the primer: Claude's page about the source, in the side column */
+.rbar-chip.primer-chip i{background:var(--accent-deep);} .rbar-chip.primer-chip b{color:var(--accent-deep);}
+.rbar-chip.primer-chip.off:not(.has){color:var(--ink-faint) !important;}
+.deck.primer-on{padding:0;}
+.deck.primer-on::before,.deck.primer-on::after{display:none;}
+.primer{flex:1;min-height:0;display:flex;flex-direction:column;}
+.primer-head{display:flex;align-items:center;gap:8px;flex:0 0 auto;height:30px;padding:0 10px 0 14px;border-bottom:1px solid var(--line-soft);font:500 8.5px/1 var(--mono);color:var(--ink-faint);white-space:nowrap;}
+.primer-title{color:var(--ink-soft);text-transform:uppercase;letter-spacing:.06em;}
+.primer-note.stale{color:var(--warn);}
+.primer-grow{flex:1;}
+.primer-head button{font:inherit;color:var(--accent-deep);background:none;border:0;padding:0;cursor:pointer;}
+.primer-head button:hover{text-decoration:underline;}
+.primer-head .primer-close{color:var(--ink-faint);font-size:10px;}
+.primer-body{flex:1;min-height:0;display:flex;}
+.primer-host{flex:1;min-width:0;min-height:0;position:relative;}
+.primer-frame{position:absolute;inset:0;width:100%;height:100%;border:0;background:#fff;}
+.primer-empty{margin:28px 22px;font:400 11px/1.55 var(--sans);color:var(--ink-soft);}
+.primer-empty p{margin:0 0 14px;}
+.primer-ask{border:1px solid var(--accent-line);border-radius:7px;background:var(--accent-soft);color:var(--accent-deep);padding:6px 12px;font:500 11px/1.2 var(--sans);cursor:pointer;}
+.primer-ask:hover{background:var(--accent);color:var(--card-bg);}
+.primer-error{color:var(--warn);font:400 10px/1.4 var(--sans);margin:8px 0 0;}
+.primer-head .primer-ask:hover{background:none;color:var(--accent-deep);}

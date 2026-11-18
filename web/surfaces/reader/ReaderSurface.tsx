@@ -31,6 +31,7 @@ import { answered } from "../../capabilities/fold/answered.ts";
 import { barSlot } from "./barSlot.ts";
 import FoldSays from "../../capabilities/fold/FoldSays.tsx";
 import CardFace from "../../capabilities/card/CardFace.tsx";
+import { PrimerChip, PrimerPanel } from "./Primer.tsx";
 
 type Ref<T> = MutableRefObject<T>;
 
@@ -142,12 +143,14 @@ export default function ReaderSurface(props: ReaderSurfaceProps) {
   useEffect(() => { if (card && revealed) turned.add(pair.deck, card.id); }, [card && card.id, revealed, pair.deck]);
   useEffect(() => { if (card && !revealed && card.type !== "mcq" && turned.has(pair.deck, card.id)) drill.setRevealed(true); }, [card && card.id]);
   const bar = useSyncExternalStore(barSlot.subscribe, barSlot.get);
-  const columnUp = solo || !!composer || (!!card && editing === card.id) || !!deckError || (!src && !onHome) || onHome;
+  const [primerFor, setPrimerFor] = useState<string | null>(null);
+  const primerOn = !!src && !!activeId && !solo && !onHome && primerFor === src.id;
+  const columnUp = primerOn || solo || !!composer || (!!card && editing === card.id) || !!deckError || (!src && !onHome) || onHome;
   const bare = !columnUp;
   return (
     <>
       {/* minWidth comes along so the stylesheet's 380px floor yields exactly when the clamp does */}
-      <div className={"deck" + (solo ? " solo" : "")} style={solo ? undefined : bare ? { display: "none" } : { width: splitW, minWidth: Math.min(380, splitW) }}
+      <div className={"deck" + (solo ? " solo" : "") + (primerOn && !composer && !(card && editing === card.id) && !deckError ? " primer-on" : "")} style={solo ? undefined : bare ? { display: "none" } : { width: splitW, minWidth: Math.min(380, splitW) }}
         ref={deckRef} onTouchStart={deckTouchStart} onTouchEnd={deckTouchEnd}>
         {composer
           ? composer
@@ -165,8 +168,12 @@ export default function ReaderSurface(props: ReaderSurfaceProps) {
             ? <div className="card-empty">{mixing ? "shuffling the board…" : "Nothing to drill — no page on this board has a deck yet."}</div>
           : deckError
             ? <div className="card-empty">Couldn’t load that deck — it may not be in <code>courses/</code>.</div>
+          : primerOn
+            ? <PrimerPanel board={activeId!} rid={src!.id} scale={props.ui * ROOM} onClose={() => setPrimerFor(null)} />
             : null}
       </div>
+      {bar && src && activeId && !solo && !onHome ? createPortal(<PrimerChip key={src.id} board={activeId} rid={src.id} on={primerOn}
+        onFlip={() => setPrimerFor(primerOn ? null : src.id)} />, bar) : null}
       {bar && pair.deck && deck.length > 0 && !solo ? createPortal(<KeepDoor keep={cardKeep} done={deck.filter((c) => answered.of(pair.deck, c.id) !== null).length}
         total={deck.length} onBench={onBench} onBenchWarm={onBenchWarm} />, bar) : null}
       {solo ? null : [...slots].map(([id, at]) => {

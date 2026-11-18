@@ -1858,6 +1858,50 @@ const dispatchPress = {
   },
 };
 
+const primerAsk = {
+  name: "primer-ask",
+  what: "you ask for a source's primer while reads answer late and out of order and the ask's answer is lost; the ask is held once, the panel keeps saying Claude is writing it, and the page Claude then writes shows without a reload",
+  checks: {
+    once: "the primer is asked for exactly once, on the server",
+    waiting: "after the ask settles, the panel still says Claude is writing it",
+    shown: "the primer Claude writes shows in the panel without a reload",
+  },
+  async run(t) {
+    const tag = `${t.seed}-${Date.now().toString(36)}`;
+    const b = await board(t, "Race primer");
+    const s = await prose(t, b.id, "primer-essay.md", essay("Primer essay", `Primer ${tag}.`));
+    const { token } = await t.api("/api/agent/tokens", "POST", { name: `race primer ${t.seed}`, write: true });
+    const isAsk = (e) => e.method === "POST" && e.path === `/api/boards/${b.id}/resources/${s.rid}/primer`;
+    const page = await t.open({ latency: true, reorder: { writes: true }, lostAck: { match: isAsk, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    await page.goto(readerUrl(t, b.id, s));
+    await proseShown(page, `Primer ${tag}.`);
+    await page.locator(".rbar-chip.primer-chip").click();
+    await page.getByRole("button", { name: "Make a primer", exact: true }).click();
+    const until = performance.now() + GRACE_MS;
+    let rows = [];
+    for (;;) {
+      rows = t.sql("SELECT status, asked_at FROM primers WHERE board_id = ? AND resource_id = ?", b.id, s.rid);
+      if (rows.length || performance.now() > until) break;
+      await sleep(250);
+    }
+    await page.evaluate(() => window.__strataSettled?.());
+    await t.net.idle(500);
+    const asks = t.net.entries.filter(isAsk);
+    if (!asks.some((e) => e.outcome === "lost-ack")) throw new Error("no ask's answer was lost: the race this scenario is about did not happen");
+    t.check("once", rows.length === 1 && rows[0].status === "asked", `${rows.length} row(s) ${rows.map((r) => r.status).join(",")} after ${asks.length} send(s)`);
+    const said = (await page.locator(".primer").textContent()) ?? "";
+    t.check("waiting", said.includes("Claude is writing it"), JSON.stringify(said.slice(0, 120)));
+    const r = await fetch(`${t.base}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "apply", arguments: { board: b.id, key: `race-primer-${tag}`.replace(/[^A-Za-z0-9-]/g, ""),
+        ops: [{ op: "set_primer", source: `src_${s.rid}`, html: `<!doctype html><html><body><h1>Primer for ${tag}</h1></body></html>` }] } } }) });
+    const body = await r.json();
+    if (!body.result || body.result.isError) throw new Error(`set_primer: ${JSON.stringify(body).slice(0, 200)}`);
+    const heading = page.frameLocator("iframe.primer-frame").locator("h1");
+    const shown = await heading.waitFor({ timeout: GRACE_MS * 3 }).then(() => heading.textContent(), () => null);
+    t.check("shown", shown === `Primer for ${tag}`, `the panel shows ${JSON.stringify(shown)}`);
+  },
+};
+
 const dispatchNewThread = {
   name: "dispatch-new-thread",
   what: "from Decide's sidebar you write a thread and Send it to Dispatch, then write another and Keep it, on a lossy wire with the first create's answer lost; each thread is on the server once with its context, the sent one with Claude after one send, the kept one in to-do",
@@ -2096,4 +2140,4 @@ const padTwoTabs = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, primerAsk];

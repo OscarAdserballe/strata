@@ -1,6 +1,9 @@
 import { STRATA, type Box, type FromPage, type LiveMark, type ToPage } from "./protocol.ts";
 import type { LayerIntents, LayerItem } from "../fold/layers.ts";
 
+// no allow-same-origin: with it, the page could lift its own sandbox
+export const LIVE_SANDBOX = "allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals allow-forms";
+
 export interface HtmlHooks {
   /** a selection of words, or a labelled box picked whole (`box` names it) */
   onSelect(sel: { start: number; end: number; quote: string; box?: string | null; own?: string | null } | null, at: Box | null): void;
@@ -40,8 +43,7 @@ export class HtmlEngine {
     this.close();
     this.queued = [...asked, ...drawn];
     const f = document.createElement("iframe");
-    // no allow-same-origin: with it, the page could lift its own sandbox
-    f.setAttribute("sandbox", "allow-scripts allow-popups allow-popups-to-escape-sandbox allow-modals allow-forms");
+    f.setAttribute("sandbox", LIVE_SANDBOX);
     f.setAttribute("allow", "fullscreen");
     f.setAttribute("title", "live page");
     f.className = "html-frame";
