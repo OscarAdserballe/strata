@@ -65,9 +65,9 @@ export const resourceRoutes: Route[] = [
 
   route("DELETE", /^\/api\/boards\/([a-zA-Z0-9_-]+)\/resources\/([a-zA-Z0-9_-]+)$/, ({ res, ssn, url, params, commit }) => {
     const [boardId, rid] = params; if (!q.resource.get(boardId, rid)) { sendJson(res, 404, { error: "no such resource" }); return; }
-    // Sections go with their source; pairs stay as blank pages unless ?pairs=1 (the shelf's delete).
+    // Sections go with their source, kept cards stay for Review; pairs stay as blank pages unless ?pairs=1.
     commit(() => {
-      for (const s of q.sectionsOf.all(rid) as SectionRow[]) { q.delCourseCards.run(genSlug(s.id)); q.delCourse.run(genSlug(s.id)); }
+      for (const s of q.sectionsOf.all(rid) as SectionRow[]) { q.delUnkeptCards.run(genSlug(s.id)); q.delCourseIfEmpty.run(genSlug(s.id)); }
       q.delResource.run(boardId, rid); q.delBlob.run(rid);
       q.delPlace.run(boardId, rid); q.delPlacesOfResourcePairs.run(boardId, boardId, rid);
       if (url.searchParams.get("pairs") === "1") q.delPairsOfResource.run(boardId, rid);

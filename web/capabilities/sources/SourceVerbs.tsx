@@ -15,9 +15,11 @@ export interface SourceVerbsProps<T extends VerbTarget> {
   onKeepWarm?: (() => void) | null;
   onRename?: ((t: T) => void) | null;
   onDone?: ((t: T, done: boolean) => void) | null;
+  /** onDel asks for itself, so the menu doesn't ask first */
+  delAsks?: boolean;
 }
 
-export default function SourceVerbs<T extends VerbTarget>({ t, onDel, onAside, onDistil, onDistilWarm, onKeep, onKeepWarm, onRename, onDone }: SourceVerbsProps<T>) {
+export default function SourceVerbs<T extends VerbTarget>({ t, onDel, onAside, onDistil, onDistilWarm, onKeep, onKeepWarm, onRename, onDone, delAsks }: SourceVerbsProps<T>) {
   const [menu, setMenu] = useState(false);
   const [arm, setArm] = useState<string | null>(null);
   useEffect(() => {
@@ -64,8 +66,8 @@ export default function SourceVerbs<T extends VerbTarget>({ t, onDel, onAside, o
             : row("aside", "set the deck aside", "ignore " + aside.live + (aside.live === 1 ? " card?" : " cards?"), () => onAside(t, false))
           : null}
         {t.del && onDel
-          ? row("del", "delete this " + (t.del.res ? "source" : "pair"),
-              (t.del.res ? "the source, its pages and its cards" : "the pair and its cards") + " — all of it?",
+          ? row("del", "delete this " + (t.del.res ? "source" : "pair") + (delAsks ? "…" : ""),
+              delAsks ? null : (t.del.res ? "the source and its notes? kept cards stay" : "the pair and its cards — all of it?"),
               () => onDel(t), "bad")
           : null}
       </span> : null}

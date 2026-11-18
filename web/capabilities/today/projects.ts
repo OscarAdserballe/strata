@@ -132,36 +132,3 @@ export function activeProjects(views: readonly ProjectView[]): ProjectView[] {
   return views.filter((v) => !v.project.archivedAt)
     .sort((a, b) => star(a) - star(b) || (a.project.endsAt || "9999").localeCompare(b.project.endsAt || "9999") || (b.project.touchedAt ?? 0) - (a.project.touchedAt ?? 0));
 }
-
-export interface DupSource { id: string; filename: string; originUrl?: string | null; readPct?: number; doneAt?: number | null; createdAt: number }
-
-const sameName = (n: string): string => n.toLowerCase()
-  .replace(/\.(pdf|md|markdown|txt|html?)$/, "")
-  .replace(/\s*(\(\d+\)|-\s*copy(\s*\d+)?|copy(\s*\d+)?)$/, "")
-  .replace(/[\s_\-]+/g, " ").trim();
-
-/** Sources that repeat another in the same project (same link, or the same name give or take " (1)"), mapped to the one to keep: finished, then furthest read, then oldest. */
-export function duplicates(sources: readonly DupSource[]): Map<string, string> {
-  const rank = (s: DupSource) => [s.doneAt ? 0 : 1, -(s.readPct ?? 0), s.createdAt];
-  const better = (a: DupSource, b: DupSource) => { const x = rank(a), y = rank(b); for (let i = 0; i < x.length; i++) if (x[i] !== y[i]) return x[i] < y[i]; return a.id < b.id; };
-  const parent = new Map<string, string>();
-  const find = (id: string): string => { const p = parent.get(id) ?? id; return p === id ? id : find(p); };
-  const byKey = new Map<string, string>();
-  for (const s of sources) {
-    parent.set(s.id, s.id);
-    for (const k of [s.originUrl ? "u:" + s.originUrl.replace(/[#?].*$/, "").replace(/\/$/, "") : "", "n:" + sameName(s.filename)]) {
-      if (!k || k === "n:") continue;
-      const other = byKey.get(k);
-      if (other) parent.set(find(s.id), find(other)); else byKey.set(k, s.id);
-    }
-  }
-  const groups = new Map<string, DupSource[]>();
-  for (const s of sources) { const r = find(s.id); groups.set(r, [...(groups.get(r) ?? []), s]); }
-  const out = new Map<string, string>();
-  for (const g of groups.values()) {
-    if (g.length < 2) continue;
-    const keep = g.reduce((a, b) => (better(a, b) ? a : b));
-    for (const s of g) if (s.id !== keep.id) out.set(s.id, keep.id);
-  }
-  return out;
-}

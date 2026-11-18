@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { ProjectEntry, RegisterEntry } from "../../../shared/types/index.ts";
-import { activeProjects, duplicates, projectView, readingList, starCount } from "./projects.ts";
+import { activeProjects, projectView, readingList, starCount } from "./projects.ts";
 
 const NOW = new Date(2026, 10, 14, 9);   // Saturday 14 Nov
 const DAY = 864e5;
@@ -40,16 +40,6 @@ test("reading is your stars plus what you opened this fortnight and haven't fini
   assert.equal(readingList([v], (id) => (id === "s" ? recent : 0), NOW.getTime()).find((r) => r.source.id === "s")!.stale, false, "keeping a star freshens it");
   assert.equal(starCount([v]), 2);
   assert.equal(readingList([{ ...v, project: { ...v.project, archivedAt: 1 } }], () => 0, NOW.getTime()).length, 0, "an archived project reads nothing onto Today");
-});
-
-test("a duplicate is the same link or the same name give or take a copy suffix; the copy read furthest stays", () => {
-  const src = (id: string, filename: string, over: Partial<Parameters<typeof duplicates>[0][number]> = {}) => ({ id, filename, originUrl: null, readPct: 0, doneAt: null, createdAt: 1, ...over });
-  const d = duplicates([
-    src("a", "Panel Data II.pdf"), src("b", "Panel Data II (1).pdf", { readPct: 40 }), src("c", "panel_data_ii copy.pdf"),
-    src("d", "Lecture 2"), src("e", "Lecture 3"),
-    src("f", "Some article", { originUrl: "https://x.org/p?utm=1" }), src("g", "Some article, again", { originUrl: "https://x.org/p", doneAt: 5 }),
-  ]);
-  assert.deepEqual([...d].sort(), [["a", "b"], ["c", "b"], ["f", "g"]]);
 });
 
 test("starred projects come first, then by end", () => {

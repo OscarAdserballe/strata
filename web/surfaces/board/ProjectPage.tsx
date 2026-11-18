@@ -6,7 +6,7 @@ import { plan as planWrites, planGestures, type planCalls } from "../../data/ent
 import { refreshRegister } from "../../data/entities/register.ts";
 import Verbs from "../../capabilities/sources/SourceVerbs.tsx";
 import type { BoardActions } from "../../capabilities/sources/useBoardActions.ts";
-import { boardProject, duplicates, shortDay, STAR_CAP, type ProjectSource, type ProjectUnit } from "../../capabilities/today/projects.ts";
+import { boardProject, shortDay, STAR_CAP, type ProjectSource, type ProjectUnit } from "../../capabilities/today/projects.ts";
 import { openTab } from "../../shell/screens.ts";
 import type { Tile } from "./boardTiles.ts";
 import "./project-page.css";
@@ -45,6 +45,19 @@ function UnitDot({ u }: { u: ProjectUnit }) {
   return <i className={"pp-dot" + (all ? " done" : u.done || u.sources.some((s) => s.pct > 0) ? " half" : "")} />;
 }
 
+const count = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+
+/** Says what goes with a source and what stays before it is deleted. */
+function DeleteAsk({ name, notes, kept, onDelete, onCancel }: { name: string; notes: number; kept: number; onDelete(): void; onCancel(): void }) {
+  return <div className="pp-delask" role="alertdialog" aria-label={"Delete " + name}
+    onKeyDown={(e) => { if (e.key === "Escape") { e.stopPropagation(); onCancel(); } }}>
+    <span><b>Delete “{name}”?</b> {notes ? `Its ${count(notes, "note")} ${notes === 1 ? "goes" : "go"} with it. ` : ""}
+      {kept ? `Its ${count(kept, "kept card")} ${kept === 1 ? "stays" : "stay"} in Review.` : notes ? "" : "No notes or kept cards on it."}</span>
+    <button className="pp-delgo" onClick={onDelete}>Delete</button>
+    <button className="pp-link" autoFocus onClick={onCancel}>Cancel</button>
+  </div>;
+}
+
 /** A field that saves on blur or Enter and puts itself back on Escape. */
 function Ghost({ value, onCommit, className, label, placeholder }: { value: string; onCommit(v: string): void; className: string; label: string; placeholder?: string }) {
   const [v, setV] = useState(value);
@@ -74,8 +87,9 @@ export default function ProjectPage(p: ProjectPageProps) {
   const [arm, setArm] = useState<string | null>(null);
   const [over, setOver] = useState<string | null>(null);
   const [choosing, setChoosing] = useState<string | null>(null);
+  const [deleting, setDeleting] = useState<string | null>(null);
   const drag = useRef<string | null>(null);
-  useEffect(() => { setOpen(null); setMenu(false); setRenaming(null); setArm(null); setChoosing(null); }, [boardId]);
+  useEffect(() => { setOpen(null); setMenu(false); setRenaming(null); setArm(null); setChoosing(null); setDeleting(null); }, [boardId]);
   useEffect(() => {
     if (!menu) return;
     const shut = () => { setMenu(false); setArm(null); };
@@ -117,10 +131,7 @@ export default function ProjectPage(p: ProjectPageProps) {
 
   const archived = !!plan.archivedAt;
   const starred = !!plan.starredAt;
-  const dups = useMemo(() => duplicates(p.resources), [p.resources]);
-  const nameOf = (rid: string) => view.sources.find((s) => s.id === rid)?.name ?? "the other copy";
-  const delDups = () => { setArm(null); for (const rid of dups.keys()) { const t = tileOf.get(rid); if (t && p.onDel) p.onDel(t); } };
-  const verbs = { onDel: p.onDel, onAside: p.onAside, onDistil: p.onDistil, onDistilWarm: p.onDistilWarm, onKeep: p.onKeep, onKeepWarm: p.onKeepWarm, onDone: p.onDone };
+  const verbs = { onDel: p.onDel ? (t: Tile) => setDeleting(t.rid ?? null) : undefined, delAsks: true, onAside: p.onAside, onDistil: p.onDistil, onDistilWarm: p.onDistilWarm, onKeep: p.onKeep, onKeepWarm: p.onKeepWarm, onDone: p.onDone };
 
   const sourceRow = (s: ProjectSource) => {
     const t = tileOf.get(s.id);
@@ -135,15 +146,16 @@ export default function ProjectPage(p: ProjectPageProps) {
             onClick={() => t && p.onOpen(t)}>{s.name}</button>}
       {t?.busy ? <span className="dk-spin" title="the model is reading this in" /> : null}
       {issue ? <span className="pp-issue">{issue.error} {issue.verb}</span> : null}
-      {dups.has(s.id) && t && p.onDel ? <span className="pp-dup">duplicate of {nameOf(dups.get(s.id)!)}
-        <button className={"pp-dupdel" + (arm === "dup:" + s.id ? " arm" : "")} onBlur={() => setArm((a) => (a === "dup:" + s.id ? null : a))}
-          onClick={() => { if (arm === "dup:" + s.id) { setArm(null); p.onDel!(t); } else setArm("dup:" + s.id); }}>{arm === "dup:" + s.id ? "Delete this copy?" : "Delete"}</button></span> : null}
       <span className="pp-sright">
         <button className={"pp-star" + (s.pinned ? " on" : "")} aria-pressed={s.pinned} title={s.pinned ? "On Today — click to unstar" : "Star: keep it on Today"}
           aria-label={(s.pinned ? "Unstar " : "Star ") + s.name} onClick={() => star(s)}>{s.pinned ? "★" : "☆"}</button>
         {t ? <Verbs t={t} {...verbs} onRename={p.onRenamed ? () => setRenaming("src:" + s.id) : undefined} /> : null}
+        {t?.del && p.onDel ? <button className="pp-del" aria-label={"Delete " + s.name} aria-expanded={deleting === s.id}
+          onClick={() => setDeleting(deleting === s.id ? null : s.id)}>Delete</button> : null}
         <span className="pp-state">{s.finished ? "done" : s.pct ? `${s.pct}%` : ""}</span>
       </span>
+      {deleting === s.id && t && p.onDel ? <DeleteAsk name={s.name} notes={t.marksN ?? 0} kept={t.kp?.kept ?? 0}
+        onDelete={() => { setDeleting(null); p.onDel!(t); }} onCancel={() => setDeleting(null)} /> : null}
       {choosing === s.id ? <div className="pp-choose" role="dialog" aria-label="Five stars already">
         <span>Five stars already. Which one goes?</span>
         {[...ownStars, ...otherStars].map((x) => <button key={x.board + x.rid} className="pp-chip" onClick={() => dropStar(x, s.id)}>{x.name}</button>)}
@@ -221,11 +233,6 @@ export default function ProjectPage(p: ProjectPageProps) {
         {p.work}
 
         {archived ? <p className="pp-archived">Archived {dayLong(plan.archivedAt!)} · {view.sources.filter((s) => s.finished).length} sources read{kept ? ` · ${kept} cards kept` : ""}</p> : null}
-        {dups.size && p.onDel && !archived ? <div className="pp-dups" role="status">
-          <span>{dups.size === 1 ? "1 source is a duplicate" : `${dups.size} sources are duplicates`} of another here. The copy you've read furthest stays.</span>
-          <button className={"pp-dupdel" + (arm === "dups" ? " arm" : "")} onBlur={() => setArm((a) => (a === "dups" ? null : a))}
-            onClick={() => { if (arm === "dups") delDups(); else setArm("dups"); }}>{arm === "dups" ? `Delete ${dups.size} and their cards?` : `Delete ${dups.size === 1 ? "it" : `all ${dups.size}`}`}</button>
-        </div> : null}
         {view.units.length ? <div className="pp-colhead">sources read</div> : null}
         {view.units.map(unitRow)}
         {!archived ? <button className="pp-add" onClick={() => void planApi.addGroup("New unit").then((id) => { if (id) { setOpen(id); setRenaming(id); } })}>+ unit</button> : null}

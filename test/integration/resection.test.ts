@@ -154,3 +154,19 @@ test("a split that leaves no text to study, or a source with one section, is ref
   assert.equal((await split(board, md.body.id)).status, 409);
   await api(`/api/boards/${board}`, { method: "DELETE" });
 });
+
+test("deleting a source takes its unkept cards and keeps the kept ones in Review", async () => {
+  const { board, rid, decks } = await book("delete keeps kept");
+  const [kept, unkept] = await cardsOf(decks[0]);
+  assert.equal((await api(`/api/decks/${decks[0]}/keeps`, json("POST", { add: [kept.id] }))).status, 200);
+  const gone = await api(`/api/boards/${board}/resources/${rid}?pairs=1`, { method: "DELETE" });
+  assert.equal(gone.status, 200, JSON.stringify(gone.body));
+  assert.ok(!gone.body.state.resources.some((r: { id: string }) => r.id === rid));
+  assert.deepEqual((await cardsOf(decks[0])).map((c) => c.id), [kept.id], "the kept card stays, the unkept one goes");
+  assert.ok(!(await cardsOf(decks[0])).some((c) => c.id === unkept.id));
+  assert.equal((await api(`/api/decks/${decks[1]}`)).status, 404, "a section with nothing kept loses its deck");
+  const history = await api(`/api/review/history?course=${decks[0]}&card=${encodeURIComponent(kept.id)}`);
+  assert.equal(history.status, 200, "Review still finds the kept card");
+  assert.equal(typeof history.body.keptAt, "number");
+  await api(`/api/boards/${board}`, { method: "DELETE" });
+});
