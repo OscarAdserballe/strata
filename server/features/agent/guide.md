@@ -22,7 +22,7 @@ Every id says what it is:
 | id | what |
 |---|---|
 | `thesis` or `b-1a2b3c4d` | a board, by its handle or id |
-| `thesis/log`, `thesis/plan`, `thesis/kept`, `thesis/questions`, `thesis/highlights`, `thesis/comments`, `thesis/sources`, `thesis/chat` | a board's collections |
+| `thesis/log`, `thesis/plan`, `thesis/kept`, `thesis/questions`, `thesis/highlights`, `thesis/comments`, `thesis/sources`, `thesis/primers`, `thesis/chat` | a board's collections |
 | `src_…` | a source |
 | `sec_…` | a section (chapter) of a source |
 | `deck_…` | a deck of cards |
@@ -116,9 +116,10 @@ You are the reader's routine: a Claude session that Strata wakes (a press in Dis
 
 1. **Dispatch.** `dashboard_board`, then for each thread in `implementing`, `dashboard_open`. The reader has one button, Send, so the notes before it say what they want, and you decide what comes next and where the page lands (`lands` on `dashboard_post`). No page yet: write a proposal. Notes asking for changes: revise the page and answer each note in `replies`. Notes that pick an option, or "go": build it and post the built page to `review`. Send on a built page with no objection: merge, then post a finish page. Reopen (Send on a Finish page): read the notes and pick again.
 2. **The inbox.** On a scheduled run, look through the connectors for new work meant for the reader and add it with `dashboard_add_items`, after `dashboard_read`, so nothing is added twice. Skip anything its **Handled in the last 7 days** section lists: the reader already dealt with it.
-3. Before stopping, call `dashboard_board` once more: a press made while you worked doesn't wake a second run. Never move or edit a thread yourself: a page's `lands` is the only way you move one.
+3. **Primers.** A wake that says "Primer: <title> (src_… on board …)" is the reader asking for a primer on that source; on a scheduled run, look in `<board>/primers` on each board `whoami` lists for asked ones. Read the source (`get_text`, and its concept tree from `get_context` if it has one), then write the primer and `apply` `set_primer { source, html }`. Make one self-contained light HTML page that gives a reader a visual, spatial overview of this source before they read it: the threads to follow, what matters, the main results. Use your judgement about how to visualise it; interactive figures and KaTeX are welcome. It fits a ~420px side panel and widens. Inline CSS and JS, scripts and fonts only from https CDNs, no `fetch`, no `localStorage`.
+4. Before stopping, call `dashboard_board` once more: a press made while you worked doesn't wake a second run. Never move or edit a thread yourself: a page's `lands` is the only way you move one.
 
-A wake from Strata names its press and thread ("Send: …", "Reopen: …", "Sent to Dispatch: …"; older ones say "Go: …" or "Send back: …"); a run with no such line is the scheduled one. Build in the repository the thread's links or text name; if none of the routine's repositories fits, say so in the page instead of guessing.
+A wake from Strata names its press and thread ("Send: …", "Reopen: …", "Sent to Dispatch: …"; older ones say "Go: …" or "Send back: …"), or the source a primer is for ("Primer: …"); a run with no such line is the scheduled one. Build in the repository the thread's links or text name; if none of the routine's repositories fits, say so in the page instead of guessing.
 
 Where a page lands is your call, not a fixed order:
 

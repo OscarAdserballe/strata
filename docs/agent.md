@@ -28,7 +28,7 @@ revokes them.
 |---|---|
 | `whoami` | The token's access, and the boards with their handles and ids |
 | `get_outline` | The light view of anything: children, one line each |
-| `get_context` | Everything about one thing: a board, a collection (`<board>/kept`, `/questions`, `/highlights`, `/plan`, `/log`, `/sources`, `/chat`), a source, section, deck, card, question, highlight, group or milestone |
+| `get_context` | Everything about one thing: a board, a collection (`<board>/kept`, `/questions`, `/highlights`, `/plan`, `/log`, `/sources`, `/primers`, `/chat`), a source, section, deck, card, question, highlight, group or milestone |
 | `get_text` | A source's or section's extracted text, by page range; for a PDF with none, whether its text is waiting to be read from its file, being read, or why it could not be |
 | `search` | Batched `{ kind, query }` over cards, kept cards, questions, highlights, sources (newest first, dated), the log, chat |
 | `get_changes` | Reviewed, kept, highlighted, asked, answered, added, finished, logged, since a date |
@@ -87,6 +87,12 @@ instead. Decide and Implementing are reached only this way; Focus leaves Dispatc
 Every thread is work or personal (`area`): the page shows one area at a time, and an item that names
 no area goes where its source suggests. The older `state`, `pinned_at` and `morning_at` columns, the updates,
 sources and pad tables stay in the database; nothing writes them but the mirror of `stage`.
+
+A primer is one self-contained page about a source that the reader opens beside it before page 1
+(`primers`, never a `resources` row). The reader asks for one from the source's page, which records it
+as `asked` and wakes the routine with `Primer: <title> (src_… on board …)`; the routine writes it with
+the `set_primer` op, and `<board>/primers` lists them, asked first. Replacing a text source in place
+marks its primer `stale`. The page is served under the live pages' CSP, without the bridge.
 
 `<board>/chat` reads both chat tables, the board's and per-source thread (`messages`) and Ask on a card
 (`card_messages`), newest first, cleared turns included and marked. A question asked at words of a source

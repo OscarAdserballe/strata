@@ -109,3 +109,10 @@ test("asking about a source that isn't there is a 404, and deleting a source tak
   assert.equal((await server.api(`/api/boards/${board}/resources/${gone}`, { method: "DELETE" })).status, 200);
   assert.doesNotMatch(await ok("get_context", { id: "primed/primers" }), new RegExp(`src_${gone}`));
 });
+
+test("the routine's guide says how to answer a primer wake, and the op list carries set_primer", async () => {
+  const routine = await ok("get_guide", { topic: "routine" });
+  for (const said of ["Primer: <title>", "<board>/primers", "set_primer", "visual, spatial overview", "~420px side panel"]) assert.ok(routine.includes(said), `the routine guide says ${said}`);
+  assert.match(await ok("get_guide", { topic: "apply" }), /- `set_primer` \(source, html\)/);
+  assert.match(await ok("get_guide", { topic: "ids" }), /thesis\/primers/);
+});
