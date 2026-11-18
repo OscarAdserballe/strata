@@ -64,8 +64,6 @@ export default function Today({ reg, review, onReview, onOpen, onResume, onWarm,
       <p className="td-sum">{todayCards} card{todayCards === 1 ? "" : "s"}{read ? `, ${read} minute${read === 1 ? "" : "s"} of reading` : ""} today.<br />
         {tomorrow ? `Tomorrow: ${tomorrow} card${tomorrow === 1 ? "" : "s"} (about ${minutesFor(tomorrow)} minute${minutesFor(tomorrow) === 1 ? "" : "s"}).` : "Nothing due tomorrow."}</p>
       <div className="td-clear-row">
-        <div className="td-big"><b>{days.total}</b><span>days with Strata</span></div>
-        <div className="td-big streak"><b>{days.streak}</b><span>in a row</span></div>
         <div><DayGrid days={days} big /><span className="td-cap">26 weeks · ink = minutes read and reviewed</span></div>
       </div>
       <div className="td-clear-go">
@@ -116,10 +114,6 @@ export default function Today({ reg, review, onReview, onOpen, onResume, onWarm,
       </main>
 
       <aside className="td-side">
-        {days ? <div className="td-counter">
-          <div className="td-day"><b>Day {days.total}</b><span>{days.streak} in a row</span></div>
-          <DayGrid days={days} />
-        </div> : null}
         <div className="td-head small"><span>Projects</span><span>{active.length} active</span></div>
         {active.map((v) => <button key={v.project.id} className="td-proj" {...warm(v.project.id)} onClick={() => onOpen(v.project.id)}>
           <span className="td-proj-top"><span className="td-proj-name">{v.project.title}</span><span className="td-end">{endLabel(v.project)}</span></span>

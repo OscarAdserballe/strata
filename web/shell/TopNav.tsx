@@ -1,5 +1,5 @@
 // The room's one bar: Today, Projects and Review, the day counter, Jump to and + Add. Every screen but the reader wears it.
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import type { RegisterResponse } from "../../shared/types/index.ts";
 import { useEntity } from "../data/store.ts";
 import { REGISTER } from "../data/entities/sources.ts";
@@ -8,7 +8,6 @@ import { loadCapture } from "../capabilities/sources/AddSource.tsx";
 import { setPicker, type PickerItem } from "../capabilities/sources/BoardPicker.tsx";
 import Suggest from "../capabilities/feedback/Suggest.tsx";
 import { openKeysSheet } from "../capabilities/keys/registry.ts";
-import { foldDays } from "../capabilities/today/days.ts";
 import { begin as journey } from "../platform/rum.ts";
 import { openTab, setReviewing } from "./screens.ts";
 import { room } from "./room.ts";
@@ -53,7 +52,6 @@ export default function TopNav(p: TopNavProps) {
   const reg = useEntity<RegisterResponse>(REGISTER);
   held = reg;
   const review = useReviewStrip();
-  const days = useMemo(() => (reg && reg.hours ? foldDays(reg.hours, reg.daysBefore ?? 0) : null), [reg && reg.hours]);
   const [menu, setMenu] = useState<"add" | "more" | null>(null);
   const [study, setStudy] = useState(true);
   const deploy = useDeploy();
@@ -81,8 +79,6 @@ export default function TopNav(p: TopNavProps) {
       </div>
       <span className="tn-grow" />
       {p.tools}
-      {days && days.total ? <span className="tn-days" title="days you reviewed or read for five minutes">
-        <b>Day {days.total}</b>{days.streak > 1 ? <> · {days.streak} in a row</> : null}</span> : null}
       {p.quiet ? null : <>
         <button className="tn-jump" onClick={() => jumpTo(reg)} title="a project or a source, by name">Jump to… <kbd>⌘K</kbd></button>
         <span className="tn-pop">

@@ -29,9 +29,6 @@
 .td-acts{display:flex;align-items:center;gap:20px;}
 .td-foot{font:400 13px/1.4 var(--sans);color:var(--ink-faint);margin-top:18px;}
 
-.td-counter{display:flex;align-items:center;gap:18px;}
-.td-day b{display:block;font:600 34px/1 var(--serif);}
-.td-day span{display:block;font:500 9.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-top:8px;}
 
 .td-proj{display:block;width:100%;text-align:left;border:none;border-bottom:1px solid var(--line-soft);background:none;padding:14px 0;cursor:pointer;color:var(--ink);}
 .td-proj:hover .td-proj-name{color:var(--accent-deep);}
@@ -50,9 +47,7 @@
 .today.clear h1{font-size:50px;margin:16px 0 18px;}
 .td-sum{font:400 18px/1.6 var(--serif);color:var(--ink-soft);}
 .td-clear-row{display:flex;justify-content:center;align-items:flex-end;gap:46px;margin:40px 0;text-align:left;}
-.td-big b{display:block;font:600 64px/1 var(--serif);}
-.td-big.streak b{color:var(--accent-deep);}
-.td-big span,.td-cap{display:block;font:500 9.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-top:14px;}
+.td-cap{display:block;font:500 9.5px/1 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--ink-faint);margin-top:14px;}
 .td-clear-go{display:flex;justify-content:center;gap:10px;}
 
 @media (max-width: 1100px){
