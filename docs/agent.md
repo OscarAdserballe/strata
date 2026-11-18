@@ -62,7 +62,7 @@ a new one is a new entry there, and both apply's schema and the guide list it au
 A source's **primer** (`server/features/primers`) is its first layer: one HTML page, itself a source on the
 board, that the reader opens before page 1. The reader asks for one with the Primer button in the reader's bar,
 which records the ask in `primers` and wakes the routine; `whoami` lists every ask under **Primers asked for**,
-and the routine uploads the page it draws (`get_guide({ topic: "primer" })`) and links it with the `set_primer` op,
+and the routine uploads the page it draws (`get_guide({ topic: "primer" })`) and links it with the `set_primer` op, together with the plan it was drawn from (the reader opens it with `i`),
 which clears the ask. How the page looks is left to the model, source by source.
 
 The dashboard (`server/features/dashboard`, page at `<room>/dashboard`) is a separate app the room only

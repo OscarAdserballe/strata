@@ -21,6 +21,7 @@ export const ROOM: readonly KeyGroup[] = [
     ["f", "find in the source (↵ next · ⇧↵ back · esc leaves)"],
     ["o", "only the cards — the whole board, shuffled"],
     ["x", "cram — the sources you choose, drilled in rounds, off the review schedule"],
+    ["i", "the primer's plan — what the routine drew it from (on a source with a primer, or the primer)"],
   ]],
   ["marking", [
     ["select", "drag over a passage — highlight / note comes up over it"],

@@ -22,9 +22,17 @@ export interface ResourceMeta {
   /** bumped each time the source is revised in place; part of its URLs so no cache serves the old bytes */
   generation?: number;
   /** this source's primer: the HTML source drawn for it, or when one was asked for and not yet drawn */
-  primer?: { id: string | null; askedAt: number | null };
+  primer?: { id: string | null; askedAt: number | null; plan?: PrimerPlan };
   /** set on a primer: the source it is the primer of */
   primerOf?: string;
+}
+
+/** what a primer was drawn from: the routine writes it first, then the page */
+export interface PrimerPlan {
+  question: string;
+  threads: { name: string; gist: string; where?: string }[];
+  results: { claim: string; where?: string }[];
+  watch: string[];
 }
 
 export interface Budget { usedTokens: number; targetTokens: number; over: boolean }

@@ -10,6 +10,7 @@ import { parseJson } from "../../platform/db/sql.ts";
 import { agentRepo as a, type ChatRow, type KeptRow, type SourceRow } from "./repo.ts";
 import { count, facesOfCard, indent, oneLine, paged, pagedText, tokensOf, when } from "./render.ts";
 import { noteOfThread } from "../../../shared/reading/notes.ts";
+import type { PrimerPlan } from "../../../shared/types/index.ts";
 import { compileAnchor, quoteOfAnchor, type QuoteText } from "../../../shared/reading/compile-quote.ts";
 import { quoteTextOfDeck } from "../decks/decks.ts";
 import { pageTextStatus } from "../imports/pump.ts";
@@ -386,7 +387,9 @@ function primerLine(rid: string): string[] {
   if (of) return [`primer of ${idOf("source", of.resource_id)}`];
   const p = q.primerOf.get(rid);
   if (!p) return [];
-  return [`primer: ${p.primer_id ? idOf("source", p.primer_id) : "none yet"}${p.asked_at ? ` · asked for ${when.day(p.asked_at)}, waiting to be drawn` : ""}`];
+  const plan = p.plan ? JSON.parse(p.plan) as PrimerPlan : null;
+  return [`primer: ${p.primer_id ? idOf("source", p.primer_id) : "none yet"}${p.asked_at ? ` · asked for ${when.day(p.asked_at)}, waiting to be drawn` : ""}`,
+    ...(plan ? [`primer plan: ${plan.question} · threads: ${plan.threads.map((t) => t.name).join("; ")}`] : [])];
 }
 
 // ---------- board overview ----------

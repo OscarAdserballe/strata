@@ -361,7 +361,8 @@ CREATE TABLE IF NOT EXISTS board_places (
 CREATE TABLE IF NOT EXISTS primers (
   resource_id TEXT PRIMARY KEY, board_id TEXT NOT NULL,
   primer_id TEXT,                         -- the HTML source that is the primer; null until one is drawn
-  asked_at INTEGER, built_at INTEGER
+  asked_at INTEGER, built_at INTEGER,
+  plan TEXT                               -- JSON PrimerPlan the routine drew the page from
 );
 CREATE INDEX IF NOT EXISTS idx_primers_board ON primers(board_id);
 CREATE INDEX IF NOT EXISTS idx_primers_primer ON primers(primer_id);

@@ -1,4 +1,4 @@
-import type { ResourceMeta } from "../../../shared/types/index.ts";
+import type { PrimerPlan, ResourceMeta } from "../../../shared/types/index.ts";
 import { q } from "../repo.ts";
 import { estTokens, isPdf, kindOf } from "./blobs.ts";
 
@@ -20,7 +20,7 @@ export function resourceMeta(boardId: string): ResourceMeta[] {
       kind: kindOf(r), tokens: estTokens(r), included: r.included !== 0, originUrl: r.origin_url ?? null,
       read, readPct: p ? Math.min(100, Math.round(p.deepest)) : 0, readMs: p ? p.ms : 0,
       createdAt: r.created_at, lastReadAt, doneAt: r.done_at ?? null, ...(r.generation ? { generation: r.generation } : {}),
-      ...(pr && (pr.primer_id || pr.asked_at) ? { primer: { id: pr.primer_id, askedAt: pr.asked_at } } : {}),
+      ...(pr && (pr.primer_id || pr.asked_at) ? { primer: { id: pr.primer_id, askedAt: pr.asked_at, ...(pr.plan ? { plan: JSON.parse(pr.plan) as PrimerPlan } : {}) } } : {}),
       ...(of ? { primerOf: of } : {}),
     };
   });

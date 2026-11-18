@@ -14,8 +14,11 @@ async function tool(token: string, name: string, args: Record<string, unknown>):
   const body = await r.json();
   return { text: body.result.content[0].text as string, isError: !!body.result.isError };
 }
+const PLAN = { question: "How does a bank hedge a bond book against rate moves?",
+  threads: [{ name: "Duration", gist: "How far a price moves when rates do.", where: "§1" }, { name: "The hedge", gist: "Shorting futures of matched duration." }],
+  results: [{ claim: "A duration-matched short leaves only convexity exposed.", where: "§3" }], watch: ["DV01", "convexity"] };
 const meta = async (board: string, rid: string) =>
-  ((await server.api(`/api/boards/${board}`)).body.resources as { id: string; primer?: { id: string | null; askedAt: number | null }; primerOf?: string }[]).find((r) => r.id === rid)!;
+  ((await server.api(`/api/boards/${board}`)).body.resources as { id: string; primer?: { id: string | null; askedAt: number | null; plan?: unknown }; primerOf?: string }[]).find((r) => r.id === rid)!;
 
 test("the reader asks for a primer, the routine draws it, and each page opens the other", async () => {
   const token = ((await server.api("/api/agent/tokens", { method: "POST", body: JSON.stringify({ name: "routine", write: true }) })).body as { token: string }).token;
@@ -35,12 +38,15 @@ test("the reader asks for a primer, the routine draws it, and each page opens th
   assert.doesNotMatch((await tool(token, "get_guide", { topic: "primer" })).text, /<!doctype html>/i, "a brief, not a template");
 
   const pid = await addMarkdown(server, board, "Primer · hedging.html", PAGE);
-  const wrong = await tool(token, "apply", { board, key: "primer-link-bad1", ops: [{ op: "set_primer", source: `src_${pid}`, primer: `src_${rid}` }] });
+  const wrong = await tool(token, "apply", { board, key: "primer-link-bad1", ops: [{ op: "set_primer", source: `src_${pid}`, primer: `src_${rid}`, plan: PLAN }] });
   assert.ok(wrong.isError && /not an HTML page/.test(wrong.text), wrong.text);
-  const linked = await tool(token, "apply", { board, key: "primer-link-0001", ops: [{ op: "set_primer", source: `src_${rid}`, primer: `src_${pid}` }] });
+  const planless = await tool(token, "apply", { board, key: "primer-link-nopl", ops: [{ op: "set_primer", source: `src_${rid}`, primer: `src_${pid}` }] });
+  assert.ok(planless.isError && /plan is required/.test(planless.text), "the page comes with the plan it was drawn from");
+  const linked = await tool(token, "apply", { board, key: "primer-link-0001", ops: [{ op: "set_primer", source: `src_${rid}`, primer: `src_${pid}`, plan: PLAN }] });
   assert.equal(linked.isError, false, linked.text);
 
-  assert.deepEqual((await meta(board, rid)).primer, { id: pid, askedAt: null }, "linking clears the ask");
+  assert.deepEqual((await meta(board, rid)).primer, { id: pid, askedAt: null, plan: PLAN }, "linking clears the ask and keeps the plan");
+  assert.match((await tool(token, "get_context", { id: `src_${rid}` })).text, /primer plan: How does a bank hedge .* threads: Duration; The hedge/);
   assert.equal((await meta(board, pid)).primerOf, rid);
   assert.doesNotMatch((await tool(token, "whoami", {})).text, /Primers asked for/);
   const self = await server.api(`/api/boards/${board}/resources/${pid}/primer`, { method: "POST", headers: { "Idempotency-Key": "primer-ask-0002" } });

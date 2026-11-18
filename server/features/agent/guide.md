@@ -143,13 +143,15 @@ Give each option and claim a stable `data-strata-id`, so the reader's notes land
 
 A primer is the first layer of a source: one page the reader opens before page 1, to know what they are about to read. What are the threads to follow, what matters, what does it find? It is not a text summary. Use what a page can do that prose can't: space, colour, pictures, a slider where moving one helps. How it looks is your call, source by source. A paper, a textbook chapter and a podcast each want a different page. Read the whole source first (`get_context` on it, then `get_text`), along with its concept tree and the reader's highlights if it has them.
 
+Draw it in two stages, as a deck is drawn from its concept tree. First the **plan**: the one question the source answers, the threads a reader follows through it (in reading order, each with a gist and where it is), the main results as claims that read cold, and what to keep track of (terms, notation, assumptions). Then the page, drawn from the plan. The plan goes with the page to `set_primer`, and the reader can open it beside the page (`i`), so it should agree with what the page shows.
+
 The few things that hold every time:
 
 - One self-contained HTML file: inline CSS and JS, scripts and fonts only from https CDNs, no `fetch`, no `localStorage`. Light only. It is read beside the source, so it should work in a narrow column (about 420px) as well as wide.
 - Every number and claim comes from the source. Say where it is (a page, a timestamp) so the reader can go there.
 - Give each part a stable `data-strata-id`, so the reader's notes land on it.
 
-To deliver it: `request_upload` the page to the source's board, named `Primer · <source title>.html`, with `origin: { from: "primer", ref: "primer/<src_ id>" }` (the same ref replaces the page in place on a redraw). When `get_import` says it is done, `apply` `set_primer { source, primer }`. That links the two, so the source shows a Primer button and the request is cleared. A redraw (the source already has a primer) is answered the same way. Read the reader's notes on the old page (`<board>/comments`) first, and answer them with `reply_note`.
+To deliver it: `request_upload` the page to the source's board, named `Primer · <source title>.html`, with `origin: { from: "primer", ref: "primer/<src_ id>" }` (the same ref replaces the page in place on a redraw). When `get_import` says it is done, `apply` `set_primer { source, primer, plan }`. That links the two, so the source shows a Primer button and the request is cleared. A redraw (the source already has a primer) is answered the same way. Read the reader's notes on the old page (`<board>/comments`) first, and answer them with `reply_note`.
 
 An agent that uploads a source may draw its primer too, the same way, without being asked.
 
