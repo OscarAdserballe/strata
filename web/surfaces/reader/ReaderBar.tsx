@@ -5,6 +5,9 @@ import Suggest from "../../capabilities/feedback/Suggest.tsx";
 import { openKeysSheet } from "../../capabilities/keys/registry.ts";
 import { type Layer, switches } from "../../capabilities/fold/switches.ts";
 import { barSlot } from "./barSlot.ts";
+import { useEntity } from "../../data/store.ts";
+import { REGISTER } from "../../data/entities/sources.ts";
+import { primeRegister } from "../../data/entities/register.ts";
 
 export interface ReaderBarProps {
   board: string;
@@ -20,6 +23,9 @@ export interface ReaderBarProps {
   onNewCard(): void;
   adminPath: string | null;
   onSignOut(): void;
+  /** the confirm's words, asked when Delete is first pressed */
+  deleteAsk?: () => string;
+  onDelete?: () => void;
 }
 
 const KIND: Record<string, string> = { pdf: "PDF", html: "HTML", transcript: "transcript" };
@@ -30,8 +36,13 @@ export default function ReaderBar(p: ReaderBarProps) {
   const sw = useSyncExternalStore(switches.subscribe, switches.getSnapshot);
   const [menu, setMenu] = useState(false);
   const [study, setStudy] = useState(true);
+  const [armed, setArmed] = useState(false);
+  // the confirm counts kept cards from the register, so it is read while the menu is open
+  useEntity(REGISTER);
+  const ask = armed ? (p.deleteAsk?.() ?? "Delete this source?") : null;
   useEffect(() => {
-    if (!menu) return;
+    if (!menu) { setArmed(false); return; }
+    if (p.onDelete) void primeRegister().catch(() => {});
     const shut = () => setMenu(false);
     document.addEventListener("click", shut);
     document.addEventListener("keydown", shut, true);
@@ -67,6 +78,9 @@ export default function ReaderBar(p: ReaderBarProps) {
           <button onClick={() => { setMenu(false); p.onNewCard(); }}><b>New card</b>c</button>
           {p.follow !== null ? <button aria-pressed={p.follow} onClick={p.onFollow}><b>Follow chapters</b>{p.follow ? "on" : "off"}</button> : null}
           <button onClick={() => { setMenu(false); openKeysSheet(); }}><b>Shortcuts</b>?</button>
+          {p.onDelete ? <button className={"rbar-del" + (ask ? " arm" : "")}
+            onClick={() => { if (!armed) { setArmed(true); return; } setMenu(false); p.onDelete!(); }}>
+            <b>{ask ?? "Delete this source"}</b></button> : null}
           <Suggest />
           {p.adminPath ? <button onClick={() => location.assign(p.adminPath!)}><b>Admin</b></button> : null}
           <button onClick={p.onSignOut}><b>Log out</b></button>

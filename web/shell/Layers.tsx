@@ -1,5 +1,5 @@
 import { Fragment, type ReactNode, useEffect, useRef, useSyncExternalStore } from "react";
-import { LAYERS, type LayerName, subscribeToast, toastNow } from "./layers.ts";
+import { LAYERS, type LayerName, hideToast, subscribeToast, toastSaid } from "./layers.ts";
 import KeysSheet from "../capabilities/keys/KeysSheet.tsx";
 import SaveChip from "./SaveChip.tsx";
 import Pad from "../capabilities/pad/Pad.tsx";
@@ -19,6 +19,8 @@ export default function Layers({ slots, esc }: { slots: LayerSlots; esc?: LayerC
 
 // Its own subscription, so showing a toast re-renders only this.
 function Toast() {
-  const said = useSyncExternalStore(subscribeToast, toastNow, () => "");
-  return said ? <div className="toast">{said}</div> : null;
+  const said = useSyncExternalStore(subscribeToast, toastSaid, toastSaid);
+  const act = said.act;
+  return said.text ? <div className="toast" role="status">{said.text}
+    {act ? <button className="toast-act" onClick={() => { hideToast(); act.run(); }}>{act.label}</button> : null}</div> : null;
 }

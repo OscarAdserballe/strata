@@ -9,6 +9,7 @@ import DistilProgress from "../../capabilities/progress/DistilProgress.tsx";
 import type { DistilWork } from "../../capabilities/progress/distil.ts";
 import type { BoardActions } from "../../capabilities/sources/useBoardActions.ts";
 import ResplitDialog, { warmResplit } from "../../capabilities/sources/Resplit.tsx";
+import { deleting, useDeleting } from "../../capabilities/sources/deleting.ts";
 import type { useSourceActions } from "../../capabilities/sources/useSourceActions.ts";
 import ProjectPage from "./ProjectPage.tsx";
 import BookRoom from "./BookRoom.tsx";
@@ -79,16 +80,18 @@ export default function BoardSurface(p: BoardSurfaceProps) {
   const [resplit, setResplit] = useState<Tile | null>(null);
   useEffect(() => { setResplit(null); }, [boardId]);
   const livePlan = useEntity<BoardPlan>(planKey(boardId || ""));
+  const gone = useDeleting();
   if (!up || !board || !boardId) return null;
   const activeId = boardId;
 
   const tiles = boardTiles({ board: { ...board, ...roomStore.get<Board>(boardKey(boardId)), marks: roomStore.get<Board["marks"]>(marksKey(boardId)) }, touchLive, decks: p.decks, pairs: p.pairs, pairIdx, bookView, qDeck: p.qDeck, solo: p.solo, activeId, driftSection: p.driftSection, notes, qGroups: p.qGroups,
-    pageCount });
+    pageCount }).filter((t) => !(t.del?.res && gone.has(t.del.res)));
   const { toast, toastWhy, sourceActions } = p;
 
   async function deleteTile(t: Tile) {
     if (!t.del) return;
-    if (t.del.res) await sourceActions.remove(activeId, t.del.res);
+    const rid = t.del.res;
+    if (rid) deleting.soon(rid, t.file || t.label || "that source", () => void sourceActions.remove(activeId, rid));
     else await sourceActions.removePair(activeId, t.del.pair!);
   }
   async function redistilTile(t: Tile) {
@@ -178,7 +181,7 @@ export default function BoardSurface(p: BoardSurfaceProps) {
   if (!tiles.some((t) => t.gap)) return (
     <div className="desk-at">
       <ProjectPage boardId={activeId} tiles={tiles} plan={livePlan ?? board.plan ?? null} planApi={planApi}
-        resources={roomStore.get<Board>(boardKey(activeId))?.resources ?? board.resources ?? []}
+        resources={(roomStore.get<Board>(boardKey(activeId))?.resources ?? board.resources ?? []).filter((r: ResourceMeta) => !gone.has(r.id))}
         head={p.title} over={over} onBack={p.onBack} onWarm={p.onWarm}
         {...verbs} onDistilWarm={(t: Tile) => { if (t.rid) warmResplit(activeId, t.rid); }}
         issues={issues} onCram={p.onCram} onCramWarm={p.onCramWarm}

@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type React from "react";
 import { StrataAPI, StrataAnswer, StrataWhy, whenQuiet, wireQuiet } from "../data/api.ts";
 import { store as roomStore } from "../data/store.ts";
-import { applyBoardState, boardKey, useBoardView } from "../data/entities/boards.ts";
+import { applyBoardState, boardKey, marksKey, useBoardView } from "../data/entities/boards.ts";
+import { REGISTER } from "../data/entities/sources.ts";
+import { deleteAsk, deleting } from "../capabilities/sources/deleting.ts";
 import { AddSourceHost, ImportReceipt, captureOpen, closeCapture } from "../capabilities/sources/AddSource.tsx";
 import { DropZone, filesDrop } from "../capabilities/sources/drop.tsx";
 import { signOut as leaveRoom } from "./signOut.ts";
@@ -39,7 +41,7 @@ import { boardNow, holdBoardHand, type BoardHand } from "../surfaces/board/handl
 import ReaderSurface from "../surfaces/reader/ReaderSurface.tsx";
 import { readAt, type HeldPlace, type useSourceColumn } from "../surfaces/reader/useSourceColumn.ts";
 import type { HeldPair } from "../surfaces/reader/useDrill.ts";
-import type { ResourceMeta, Section } from "../../shared/types/index.ts";
+import type { Mark, RegisterResponse, ResourceMeta, Section } from "../../shared/types/index.ts";
 import { useRoomKeys, type RoomKeyActions } from "../capabilities/keys/room-keys.ts";
 import { distilWorkOf, generateCards, isUnstudied, kickDistil, retryDistil, useDistilPoll } from "../capabilities/progress/distil.ts";
 import { sourceAnswers } from "../capabilities/sources/answers.ts";
@@ -155,6 +157,16 @@ export default function BoardRoute() {
   function toastWhy(e: unknown, said: string) { console.warn("[strata]", said, e); toast(StrataWhy(e, said), 4200); }
 
   const signOut = () => leaveRoom((e) => toastWhy(e, "couldn't sign out"));
+  const askDelete = (bid: string, rid: string) => {
+    const slugs = new Set(((stateRef.current.board?.pairs ?? []) as HeldPair[]).filter((x) => x.resourceId === rid).map((x) => x.deck));
+    const decks = (drillNow()?.decks ?? []).filter((d) => slugs.has(d.slug));
+    const kept = Math.max(decks.reduce((n, d) => n + (d.kept || 0), 0), roomStore.get<RegisterResponse>(REGISTER)?.entries.find((e) => e.resourceId === rid)?.kept ?? 0);
+    return deleteAsk((roomStore.get<Mark[]>(marksKey(bid)) ?? []).filter((m) => m.resourceId === rid).length, kept);
+  };
+  function deleteOpen(bid: string, r: ResourceMeta) {
+    openPair(0);
+    deleting.soon(r.id, r.filename, () => void sourceActions.remove(bid, r.id));
+  }
   const keepBoardOffline = () => downloadBoard(current(), stateRef.current.board, { toast, toastWhy });
   const benchRestoreCard = (c: Wire) => drill.undeleteCard(c, null);
   const deskHome = (emptyColumn: boolean) => onHome && emptyColumn && !composer;
@@ -233,7 +245,8 @@ export default function BoardRoute() {
         imports={!keepsUp && !cramming && !launcher} onImport={(b, r) => openBoard(b, r)}
         follow={!onHome && openSection ? followChapters : null}
         onFollow={() => setFollowChapters(on=>{localStorage.setItem("strata.followChapters",on?"0":"1");return !on;})}
-        onNewCard={() => openComposer("", "")} adminPath={adminPath} onSignOut={signOut} />
+        onNewCard={() => openComposer("", "")} adminPath={adminPath} onSignOut={signOut}
+        deleteAsk={() => askDelete(activeId!, src.id)} onDelete={() => deleteOpen(activeId!, src)} />
         : launcher || reviewing ? null : <TopNav here={onHome && !solo ? "projects" : null} onAdd={pickAddSource} adminPath={adminPath} onSignOut={signOut}
         tools={<>
           {soloLine ? <span className="tn-solo">{soloLine}</span> : null}

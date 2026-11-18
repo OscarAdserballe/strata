@@ -15,6 +15,8 @@ export const decksRepo = {
   card: stmt<CardRow & { course: string }>("SELECT id,course,deck,type,payload,ord,rev FROM cards WHERE course = ? AND id = ?"),
   upsertCourse: stmt("INSERT INTO courses (slug,title,meta,updated_at) VALUES (?,?,?,?) ON CONFLICT(slug) DO UPDATE SET title=excluded.title, meta=excluded.meta, updated_at=excluded.updated_at"),
   delCourseCards: stmt("DELETE FROM cards WHERE course = ?"),
+  delUnkeptCards: stmt("DELETE FROM cards WHERE course = ? AND id NOT IN (SELECT id FROM card_keeps)"),
+  cardCountOf: stmt<{ n: number }>("SELECT COUNT(*) n FROM cards WHERE course = ?"),
   // A card's id names the deck that made it; its course is where it is filed now.
   delMadeCards: stmt("DELETE FROM cards WHERE course = ?1 AND substr(id, 1, length(?1) + 1) = ?1 || '/'"),
   insCard: stmt("INSERT INTO cards (id,course,deck,type,payload,ord) VALUES (?,?,?,?,?,?)"),

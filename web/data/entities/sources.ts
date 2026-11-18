@@ -92,7 +92,7 @@ export const sourceOps = {
     return listOp({
       label: "delete that", lanes: [sourceLane(rid)], method: "DELETE",
       path: `/api/boards/${board}/resources/${rid}?pairs=1`,
-      invalidates: [REGISTER, BOARDS, ...DECK_TAGS],
+      invalidates: [REGISTER, BOARDS, ...DECK_TAGS], flush: true,
     }, [{ key: REGISTER, apply: lists.dropSource(rid) }], s);
   },
   /** A page with no source; its deck too if this was its last door. */

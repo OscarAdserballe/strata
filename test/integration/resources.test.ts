@@ -12,6 +12,11 @@ const server = useServer({ seed: async (s) => {
   resourceId = await addMarkdown(s, boardId, "tuckman-ch4.md", MD);
 } });
 const api = (path: string, init?: RequestInit) => server.api(path, init);
+const slugOf = (rid: string): string => {
+  const db = new DatabaseSync(server.db, { readOnly: true });
+  try { return "src-" + String((db.prepare("SELECT id FROM sections WHERE resource_id = ?").get(rid) as { id: string }).id).replace(/[^a-z0-9]/gi, "").toLowerCase(); }
+  finally { db.close(); }
+};
 const mine = (state: { resources: { id: string }[] }) => state.resources.find((x) => x.id === resourceId) as Record<string, any>;
 
 test("prose covers use bounded previews without counting as reads or truncating the source", async () => {
@@ -235,6 +240,40 @@ test("remove a resource", async () => {
   assert.equal(status, 200);
   assert.equal(mine(body.state), undefined, "gone from the shelf");
   assert.equal((await fetch(`${server.base}/api/boards/${boardId}/resources/${resourceId}/raw`)).status, 404, "and its bytes with it");
+});
+
+test("deleting a source keeps its kept cards in Review and takes the rest: cards, deck, notes", async () => {
+  const id = await newBoard(server, { title: "a source deleted, its keeps kept" });
+  const rid = await addMarkdown(server, id, "hedging.md", MD);
+  const tree = { title: "Hedging", question: "?", nodes: [{ label: "convexity", kind: "concept", anchor: "#duration-hedging" }] };
+  const card = (front: string) => ({ node: "n1", type: "flashcard", source: "#duration-hedging", front, back: "a." });
+  const put = await api(`/api/boards/${id}/resources/${rid}/tree`, { method: "PUT", body: JSON.stringify({ tree, cards: [card("kept?"), card("dropped?")] }) });
+  assert.equal(put.status, 200, JSON.stringify(put.body));
+  const slug = slugOf(rid);
+  const cards = (await api(`/api/decks/${slug}`)).body.cards as { id: string; front: string }[];
+  const keep = cards.find((c) => c.front === "kept?")!.id, other = cards.find((c) => c.front === "dropped?")!.id;
+  assert.equal((await api(`/api/decks/${slug}/keeps`, { method: "POST", body: JSON.stringify({ add: [keep] }) })).status, 200);
+  assert.equal((await api(`/api/boards/${id}/marks`, { method: "POST", body: JSON.stringify({ resourceId: rid, start: 2, end: 10, quote: MD.slice(2, 10) }) })).status, 201);
+  const gone = await api(`/api/boards/${id}/resources/${rid}?pairs=1`, { method: "DELETE" });
+  assert.equal(gone.status, 200);
+  assert.equal(gone.body.state.resources.find((r: { id: string }) => r.id === rid), undefined, "off the board");
+  const db = new DatabaseSync(server.db, { readOnly: true });
+  try {
+    const ids = (db.prepare("SELECT id FROM cards WHERE course = ?").all(slug) as { id: string }[]).map((r) => r.id);
+    assert.deepEqual(ids, [keep], "the kept card stays, the other goes");
+    assert.ok(db.prepare("SELECT 1 FROM courses WHERE slug = ?").get(slug), "its deck stays to hold it");
+    assert.ok(db.prepare("SELECT 1 FROM card_keeps WHERE id = ?").get(keep), "and it is still kept");
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM marks WHERE resource_id = ?").get(rid)!.n, 0, "its notes go");
+    assert.equal(db.prepare("SELECT COUNT(*) n FROM cards WHERE id = ?").get(other)!.n, 0);
+  } finally { db.close(); }
+
+  const bare = await addMarkdown(server, id, "unkept.md", MD);
+  const put2 = await api(`/api/boards/${id}/resources/${bare}/tree`, { method: "PUT", body: JSON.stringify({ tree, cards: [card("nobody keeps this?")] }) });
+  assert.equal(put2.status, 200);
+  const slug2 = slugOf(bare);
+  await api(`/api/boards/${id}/resources/${bare}?pairs=1`, { method: "DELETE" });
+  assert.equal((await api(`/api/decks/${slug2}`)).status, 404, "a deck with nothing kept goes whole");
+  await api(`/api/boards/${id}`, { method: "DELETE" });
 });
 
 test("pagetext answers the upload-time extraction, and [] where there is none", async () => {
