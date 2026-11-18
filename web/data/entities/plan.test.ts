@@ -159,3 +159,26 @@ test("the plan rail's gestures: a reorder rebuilt over theirs keeps what the oth
   assert.deepEqual(gone.places.a, { group: null, milestone: null, pinned: false, ord: null });
   assert.equal(planGestures.purpose("  read it  ").guess!(p).purpose, "read it");
 });
+
+test("a star shows at once on the project's plan and in the register, and stays through the answer", async () => {
+  const { store, sent, m } = room();
+  const reg = { projects: [{ id: "b1", starredAt: null }, { id: "b2", starredAt: null }], entries: [] };
+  store.apply("register", 10, reg, "wire");
+  const starring = m.mutate(planOps.star("b1", true, store));
+  const starredIn = () => (store.get<typeof reg>("register")?.projects ?? []).filter((p) => p.starredAt).map((p) => p.id);
+  assert.deepEqual(starredIn(), ["b1"], "the register guesses it before any answer");
+  assert.equal(typeof store.get<PlanEntity>("plan:b1")?.starredAt, "number", "and the plan");
+  assert.equal(sent[0].req.path, "/api/boards/b1/plan/project");
+  assert.equal(sent[0].req.method, "PATCH");
+  assert.deepEqual(JSON.parse(String(sent[0].req.body)), { starred: true });
+  sent[0].reply({ status: 200, body: { plan: { ...plan(4), starredAt: 123 }, rev: 11 }, rev: 11, epoch: "" });
+  await starring;
+  assert.equal(store.get<PlanEntity>("plan:b1")?.starredAt, 123, "the server's plan");
+  assert.deepEqual(starredIn(), ["b1"], "no flicker before the register is read again");
+
+  const unstarring = m.mutate(planOps.star("b1", false, store)).catch((e) => e);
+  assert.deepEqual(starredIn(), []);
+  sent[1].reply({ status: 400, body: { error: "no" }, rev: 0, epoch: "" });
+  await unstarring;
+  assert.deepEqual(starredIn(), ["b1"], "a refused unstar rolls back");
+});

@@ -1,7 +1,9 @@
-import type { BoardPlan } from "../../../shared/types/index.ts";
+import type { BoardPlan, RegisterResponse } from "../../../shared/types/index.ts";
 import { store as roomStore, type Store } from "../store.ts";
 import { mutate, mutator, type Conflict, type Mutator, type Op } from "../mutate.ts";
 import { planKey, type PlanEntity } from "./boards.ts";
+import { REGISTER } from "./sources.ts";
+import { confirmByShape } from "./confirm.ts";
 
 // One lane per board's plan: moves are relative, so two quick moves must reach the server in order.
 
@@ -22,7 +24,7 @@ export interface PlanWrite {
   rebuild?: (theirs: BoardPlan) => PlanWrite | null;
 }
 
-const EMPTY: BoardPlan = { purpose: "", endsAt: "", archivedAt: null, groups: [], milestones: [], places: {} };
+const EMPTY: BoardPlan = { purpose: "", endsAt: "", archivedAt: null, starredAt: null, groups: [], milestones: [], places: {} };
 
 export const planOps = {
   write(board: string, w: PlanWrite, s: Store = roomStore): Op<PlanAnswer> {
@@ -47,10 +49,28 @@ export const planOps = {
       flush: true,
     };
   },
+  /** Today and Projects read the register, the project page its plan: both are guessed, so every list moves at once. */
+  star(board: string, on: boolean, s: Store = roomStore): Op<PlanAnswer> {
+    const op = planOps.write(board, { label: on ? "star that" : "unstar that", ...planGestures.project({ starred: on }) }, s);
+    const at = on ? Date.now() : null;
+    const listed = (reg: RegisterResponse | undefined) =>
+      (reg ? { ...reg, projects: reg.projects.map((p) => (p.id === board ? { ...p, starredAt: on ? p.starredAt ?? at : null } : p)) } : reg);
+    return {
+      ...op,
+      optimistic: [
+        { key: planKey(board), apply: (held: PlanEntity | undefined) => (held ? { ...held, starredAt: on ? held.starredAt ?? at : null } : held) },
+        { key: REGISTER, apply: listed },
+      ],
+      // folded into the held register too, so the star doesn't flicker off before the reread lands
+      confirm: (res, meta) => s.batch(() => { confirmByShape(op, res, meta, s); s.patch(REGISTER, 0, listed); }),
+      invalidates: [REGISTER],
+    };
+  },
 };
 
 export const plan = {
   write: (board: string, w: PlanWrite) => mutate(planOps.write(board, w)),
+  star: (board: string, on: boolean) => mutate(planOps.star(board, on)),
   /** Gives up a failed write so the server's plan shows and the next write is sent. */
   abandon: (board: string, m: Mutator = mutator) => m.discardFailed(planLane(board)),
 };

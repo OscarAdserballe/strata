@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { RegisterResponse } from "../../../shared/types/index.ts";
-import { plan, planGestures } from "../../data/entities/plan.ts";
-import { refreshRegister } from "../../data/entities/register.ts";
+import { plan } from "../../data/entities/plan.ts";
 import { activeProjects, daysUntil, projectView, shortDay, type ProjectView } from "../../capabilities/today/projects.ts";
 import "./projects.css";
 
@@ -27,15 +26,10 @@ const Segments = ({ v }: { v: ProjectView }) => v.units.length ? <div className=
 export default function ProjectsIndex({ reg, onOpen, onWarm, onNew }: ProjectsIndexProps) {
   const [shelf, setShelf] = useState<"active" | "archived">("active");
   const views = useMemo<ProjectView[]>(() => (reg ? reg.projects.map((p) => projectView(p, reg.entries)) : []), [reg]);
-  const [starOver, setStarOver] = useState<Record<string, boolean>>({});
-  useEffect(() => { setStarOver({}); }, [reg]);
-  const starredViews = views.map((v) => (v.project.id in starOver ? { ...v, project: { ...v.project, starredAt: starOver[v.project.id] ? v.project.starredAt ?? Date.now() : null } } : v));
-  const active = activeProjects(starredViews);
+  const active = activeProjects(views);
   const anyStar = active.some((v) => v.project.starredAt);
-  function star(id: string, on: boolean) {
-    setStarOver((o) => ({ ...o, [id]: on }));
-    plan.write(id, planGestures.project({ starred: on })).then(() => refreshRegister(), () => setStarOver((o) => { const n = { ...o }; delete n[id]; return n; }));
-  }
+  // a failed star shows on the save chip
+  const star = (id: string, on: boolean) => { plan.star(id, on).catch(() => {}); };
   const archived = views.filter((v) => v.project.archivedAt).sort((a, b) => (b.project.archivedAt ?? 0) - (a.project.archivedAt ?? 0));
   const shown = shelf === "active" ? active : archived;
   return (

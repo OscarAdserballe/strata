@@ -48,6 +48,9 @@ export default function Today({ reg, review, onReview, onOpen, onResume, onWarm,
       .catch((e: unknown) => { setUnstarred((x) => x.filter((id) => id !== r.source.id)); setWhy(StrataWhy(e, "couldn't unstar that")); })
       .finally(() => refreshRegister());
   }
+  function starProject(id: string, on: boolean) {
+    plan.star(id, on).catch((e: unknown) => setWhy(StrataWhy(e, on ? "couldn't star that" : "couldn't unstar that")));
+  }
   function keep(r: ReadingRow) { try { localStorage.setItem(keptKey(r.source.id), String(Date.now())); } catch { /* private window */ } setKept((n) => n + 1); }
 
   const due = review ? review.total : 0;
@@ -117,12 +120,16 @@ export default function Today({ reg, review, onReview, onOpen, onResume, onWarm,
 
       <aside className="td-side">
         <div className="td-head small"><span>Projects</span><span>{active.length} active</span></div>
-        {active.map((v) => <button key={v.project.id} className={"td-proj" + (v.project.starredAt ? " starred" : anyStar ? " quiet" : "")} {...warm(v.project.id)} onClick={() => onOpen(v.project.id)}>
-          <span className="td-proj-top"><span className="td-proj-name">{v.project.starredAt ? <i className="td-pstar" aria-label="starred">★ </i> : null}{v.project.title}</span><span className="td-end">{endLabel(v.project)}</span></span>
+        {active.map((v) => <div key={v.project.id} className={"td-pcell" + (v.project.starredAt ? " starred" : anyStar ? " quiet" : "")}>
+          <button className={"td-pstar" + (v.project.starredAt ? " on" : "")} aria-pressed={!!v.project.starredAt}
+            aria-label={(v.project.starredAt ? "Unstar " : "Star ") + v.project.title} title={v.project.starredAt ? "Starred: sorts first. Click to unstar" : "Star: sort it first"}
+            onClick={() => starProject(v.project.id, !v.project.starredAt)}>{v.project.starredAt ? "★" : "☆"}</button>
+          <button className="td-proj" {...warm(v.project.id)} onClick={() => onOpen(v.project.id)}>
+          <span className="td-proj-top"><span className="td-proj-name">{v.project.title}</span><span className="td-end">{endLabel(v.project)}</span></span>
           {v.next || v.due || v.fresh ? <span className="td-next">{v.next ? <>Next: {v.next}</> : null}
             {v.due ? <i className="td-mark due">due {v.due}</i> : null}{v.fresh ? <i className="td-mark new">{v.fresh} new</i> : null}</span> : null}
           <span className="td-prog"><span className="td-bar"><b style={{ width: `${v.total ? (100 * v.done) / v.total : 0}%` }} /></span><span>{v.done}/{v.total}</span></span>
-        </button>)}
+        </button></div>)}
         {reg && !active.length ? <p className="td-quiet">No projects yet. <button className="td-link" onClick={onProjects}>Start one</button></p> : null}
       </aside>
     </div>

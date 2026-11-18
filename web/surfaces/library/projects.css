@@ -29,7 +29,7 @@
 .pj-cell>.pj-card{flex:1;}
 .pj-cell.quiet{opacity:.62;}
 .pj-cell.quiet:hover{opacity:1;}
-.pj-card.starred{border-color:var(--accent-line);}
+.pj-card.starred{border-color:var(--warn);background:var(--warn-soft);}
 .pj-star{position:absolute;top:14px;right:14px;border:none;background:none;padding:2px 4px;font:400 16px/1 var(--sans);color:var(--ink-faint);cursor:pointer;z-index:1;}
-.pj-star.on{color:var(--accent-deep);}
-.pj-star:hover{color:var(--accent-deep);}
+.pj-star:hover{color:var(--ink-soft);}
+.pj-star.on{color:var(--warn);}
