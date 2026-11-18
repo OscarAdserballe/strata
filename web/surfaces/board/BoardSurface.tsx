@@ -88,7 +88,7 @@ export default function BoardSurface(p: BoardSurfaceProps) {
 
   async function deleteTile(t: Tile) {
     if (!t.del) return;
-    if (t.del.res) await sourceActions.remove(activeId, t.del.res);
+    if (t.del.res) await sourceActions.remove(activeId, t.del.res, t.label);
     else await sourceActions.removePair(activeId, t.del.pair!);
   }
   async function redistilTile(t: Tile) {

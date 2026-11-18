@@ -1,2 +1,4 @@
 /* Toasts carry failure reasons, so they wrap to a few lines. */
 .toast{position:fixed;left:50%;bottom:74px;transform:translateX(-50%);z-index:var(--layer-toast);font:500 10.5px/1.5 var(--mono);letter-spacing:.05em;color:var(--paper);background:oklch(0.30 0.012 60);padding:8px 14px;border-radius:14px;opacity:.94;pointer-events:none;max-width:min(46rem,90vw);text-align:center;text-wrap:pretty;}
+.toast.acts{pointer-events:auto;display:flex;align-items:center;gap:12px;}
+.toast-act{border:none;background:none;padding:0;font:inherit;font-weight:600;color:var(--paper);text-decoration:underline;text-underline-offset:3px;cursor:pointer;}

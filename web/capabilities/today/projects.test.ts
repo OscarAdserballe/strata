@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import type { ProjectEntry, RegisterEntry } from "../../../shared/types/index.ts";
-import { projectView, readingList, starCount } from "./projects.ts";
+import { activeProjects, projectView, readingList, starCount } from "./projects.ts";
 
 const NOW = new Date(2026, 10, 14, 9);   // Saturday 14 Nov
 const DAY = 864e5;
@@ -40,4 +40,17 @@ test("reading is your stars plus what you opened this fortnight and haven't fini
   assert.equal(readingList([v], (id) => (id === "s" ? recent : 0), NOW.getTime()).find((r) => r.source.id === "s")!.stale, false, "keeping a star freshens it");
   assert.equal(starCount([v]), 2);
   assert.equal(readingList([{ ...v, project: { ...v.project, archivedAt: 1 } }], () => 0, NOW.getTime()).length, 0, "an archived project reads nothing onto Today");
+});
+
+test("active projects: starred first, then the soonest end, then the latest touched; archived ones are left out", () => {
+  const views = [
+    project({ id: "late", endsAt: "2026-12-20" }),
+    project({ id: "soon", endsAt: "2026-11-20" }),
+    project({ id: "star-open", starredAt: 1 }),
+    project({ id: "star-soon", starredAt: 2, endsAt: "2026-12-01" }),
+    project({ id: "gone", starredAt: 3, archivedAt: 4 }),
+    project({ id: "open-touched", touchedAt: 9 }),
+    project({ id: "open" }),
+  ].map((p) => projectView(p, [], NOW));
+  assert.deepEqual(activeProjects(views).map((v) => v.project.id), ["star-soon", "star-open", "soon", "late", "open-touched", "open"]);
 });

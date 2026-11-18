@@ -33,7 +33,6 @@ export function toast(text: string, ms?: number, act?: Said["act"]): void {
   timer = setTimeout(() => { said = { text: "" }; tell(); }, ms || 1300);
   tell();
 }
-export const toastNow = (): string => said.text;
 export const toastSaid = (): Said => said;
 export const hideToast = (): void => { clearTimeout(timer); said = { text: "" }; tell(); };
 export const subscribeToast = (cb: () => void): (() => void) => { heard.add(cb); return () => { heard.delete(cb); }; };

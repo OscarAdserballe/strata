@@ -2,7 +2,7 @@ import type { Board, BoardListEntry, BoardState, RegisterEntry, RegisterResponse
 import type { Heading } from "../../../shared/imports/import-plan.ts";
 import { fetched } from "../api.ts";
 import { store as roomStore, type Fetcher, type Store } from "../store.ts";
-import { call, mutator, type Mutator, type Op, type SaveError } from "../mutate.ts";
+import { call, mintKey, mutator, type Mutator, type Op, type SaveError } from "../mutate.ts";
 import { boardKey, type BoardEntity } from "./boards.ts";
 import { confirmByShape, type ConfirmMeta } from "./confirm.ts";
 
@@ -40,6 +40,9 @@ export const lists = {
     };
   })),
   dropSource: (rid: string) => onEntries((es) => es.filter((e) => e.resourceId !== rid)),
+  dropListedSource: (rid: string) => onBoards((bs) => bs.map((b) => (b.resources?.some((r) => r.id === rid) ? { ...b, resources: b.resources.filter((r) => r.id !== rid) } : b))),
+  /** the board's own snapshot without the source; its pairs stay until the answer, so the open page's place holds */
+  dropBoardSource: (rid: string): Change<BoardEntity | undefined> => (bd) => (bd ? { ...bd, resources: bd.resources.filter((r) => r.id !== rid) } : bd),
   fileSource: (rid: string, to: string, title: string) =>
     onEntries((es) => es.map((e) => (e.resourceId === rid ? { ...e, boardId: to, boardTitle: title, unfiled: false } : e))),
   renameBoardEntries: (id: string, title: string) => onEntries((es) => es.map((e) => (e.boardId === id ? { ...e, boardTitle: title } : e))),
@@ -87,13 +90,18 @@ export const sourceOps = {
       invalidates: [REGISTER],
     };
   },
-  /** The whole source: its pages, its sections' decks, its marks. */
-  remove(board: string, rid: string, s: Store = roomStore): Op<WithState> {
+  /** The whole source: pages, unkept cards, marks (kept cards stay); held, it leaves after `ms` unless withdrawn. */
+  remove(board: string, rid: string, s: Store = roomStore, hold?: { key: string; ms: number }): Op<WithState> {
     return listOp({
       label: "delete that", lanes: [sourceLane(rid)], method: "DELETE",
       path: `/api/boards/${board}/resources/${rid}?pairs=1`,
       invalidates: [REGISTER, BOARDS, ...DECK_TAGS],
-    }, [{ key: REGISTER, apply: lists.dropSource(rid) }], s);
+      ...(hold ? { key: hold.key, holdMs: hold.ms, flush: true } : {}),
+    }, [
+      { key: REGISTER, apply: lists.dropSource(rid) },
+      { key: BOARDS, apply: lists.dropListedSource(rid) },
+      { key: boardKey(board), apply: lists.dropBoardSource(rid) },
+    ], s);
   },
   /** A page with no source; its deck too if this was its last door. */
   removePair(board: string, pid: string): Op<WithState> {
@@ -197,6 +205,11 @@ export const sources = {
   done: (board: string, rid: string, done: boolean) => run(sourceOps.done(board, rid, done)),
   primer: (board: string, rid: string) => run(sourceOps.primer(board, rid)),
   remove: (board: string, rid: string) => run(sourceOps.remove(board, rid)),
+  /** Gone from the page now, deleted on the server after `ms` unless undo() is called first (false once it has left). */
+  removeLater(board: string, rid: string, ms: number, m: Mutator = mutator): { done: Promise<WithState>; undo: () => boolean } {
+    const key = mintKey();
+    return { done: run(sourceOps.remove(board, rid, roomStore, { key, ms }), m), undo: () => m.withdraw(key) };
+  },
   removePair: (board: string, pid: string) => run(sourceOps.removePair(board, pid)),
   file: (from: string, pid: string, rid: string, to: string, toTitle: string) => run(sourceOps.file(from, pid, rid, to, toTitle)),
   distil: (board: string, rid: string) => run(sourceOps.distil(board, rid)),

@@ -2,7 +2,9 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type React from "react";
 import { StrataAPI, StrataAnswer, StrataWhy, whenQuiet, wireQuiet } from "../data/api.ts";
 import { store as roomStore } from "../data/store.ts";
-import { applyBoardState, boardKey, useBoardView } from "../data/entities/boards.ts";
+import { applyBoardState, boardKey, marksKey, useBoardView } from "../data/entities/boards.ts";
+import { REGISTER } from "../data/entities/sources.ts";
+import { deleteAsk } from "../capabilities/sources/deleteAsk.ts";
 import { AddSourceHost, ImportReceipt, captureOpen, closeCapture } from "../capabilities/sources/AddSource.tsx";
 import { DropZone, filesDrop } from "../capabilities/sources/drop.tsx";
 import { signOut as leaveRoom } from "./signOut.ts";
@@ -40,7 +42,7 @@ import { boardNow, holdBoardHand, type BoardHand } from "../surfaces/board/handl
 import ReaderSurface from "../surfaces/reader/ReaderSurface.tsx";
 import { readAt, type HeldPlace, type useSourceColumn } from "../surfaces/reader/useSourceColumn.ts";
 import type { HeldPair } from "../surfaces/reader/useDrill.ts";
-import type { ResourceMeta, Section } from "../../shared/types/index.ts";
+import type { Mark, RegisterResponse, ResourceMeta, Section } from "../../shared/types/index.ts";
 import { useRoomKeys, type RoomKeyActions } from "../capabilities/keys/room-keys.ts";
 import { distilWorkOf, generateCards, isUnstudied, kickDistil, retryDistil, useDistilPoll } from "../capabilities/progress/distil.ts";
 import { sourceAnswers } from "../capabilities/sources/answers.ts";
@@ -160,12 +162,12 @@ export default function BoardRoute() {
   const benchRestoreCard = (c: Wire) => drill.undeleteCard(c, null);
   const deskHome = (emptyColumn: boolean) => onHome && emptyColumn && !composer;
 
-  const { syncSourceMutation, landCapture, benchDeckChanged, boardState: benchBoardState, asideDone, keepTile, openTile } = sourceAnswers({
+  const { syncSourceMutation, leaveSource, landCapture, benchDeckChanged, boardState: benchBoardState, asideDone, keepTile, openTile } = sourceAnswers({
     now: () => stateRef.current, drill, deckCache: () => drillNow()?.deckCacheRef.current ?? null,
     setBoard, setPairIdx: choosePair, pairId: pairIdNow, hideShelf: hideBoardPage, setBench: setKeeps, jumpToAnchor,
     libraryUp: () => screensNow().library,
   });
-  const sourceActions = useSourceActions({ onState: syncSourceMutation, onError: toastWhy });
+  const sourceActions = useSourceActions({ onState: syncSourceMutation, onError: toastWhy, onLeaving: leaveSource });
   const boardActions = useBoardActions({
     onState: (id, st) => { if (id === current()) setBoard(st); },
     onError: toastWhy,
@@ -217,6 +219,11 @@ export default function BoardRoute() {
   const reading = !onHome && !solo && !launcher && !reviewing && !cramming && !keepsUp;
   const deskTools = <DownloadButton boardId={activeId} onDownload={keepBoardOffline} />;
   const cardWork = src && distilWork.busy.find((w) => w.r.id === src.id);
+  // read when the reader arms its delete, not on every render of the room
+  const askDelete = (rid: string) => () => deleteAsk({
+    notes: (roomStore.get<Mark[]>(marksKey(current())) ?? []).filter((m) => m.resourceId === rid).length,
+    kept: roomStore.get<RegisterResponse>(REGISTER)?.entries.find((e) => e.resourceId === rid)?.kept ?? 0,
+  });
   const onGenerate = src && !cardWork && isUnstudied(board, src.id) ? () => generateCards(current(), src, sourceActions.redistil) : null;
 
   const roomComposer = composer && !composer.fold && !reviewing && !cramming && !keepsUp
@@ -235,7 +242,8 @@ export default function BoardRoute() {
         imports={!keepsUp && !cramming && !launcher} onImport={(b, r) => openBoard(b, r)}
         follow={!onHome && openSection ? followChapters : null}
         onFollow={() => setFollowChapters(on=>{localStorage.setItem("strata.followChapters",on?"0":"1");return !on;})}
-        onNewCard={() => openComposer("", "")} adminPath={adminPath} onSignOut={signOut} />
+        onNewCard={() => openComposer("", "")} adminPath={adminPath} onSignOut={signOut}
+        onDelete={() => void sourceActions.remove(current(), src.id, src.filename)} deleteAsk={askDelete(src.id)} />
         : launcher || reviewing ? null : <TopNav here={onHome && !solo ? "projects" : null} onAdd={pickAddSource} adminPath={adminPath} onSignOut={signOut}
         tools={<>
           {soloLine ? <span className="tn-solo">{soloLine}</span> : null}
