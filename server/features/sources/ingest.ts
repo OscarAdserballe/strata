@@ -54,7 +54,7 @@ export function insertSections(boardId: string, rid: string, filename: string, i
   return rows.length;
 }
 
-export interface SourceInput { filename: string; kind: string; text?: string; data?: string; mime?: string; originUrl?: string | null; sections?: IncomingSection[]; pageText?: string[]; importPlan?: unknown; outline?: ImportHeading[]; createPair?: boolean; importId?: string; tokens?: number | null; study?: boolean }
+export interface SourceInput { filename: string; kind: string; text?: string; data?: string; mime?: string; originUrl?: string | null; sections?: IncomingSection[]; pageText?: string[]; importPlan?: unknown; outline?: ImportHeading[]; createPair?: boolean; importId?: string; tokens?: number | null; study?: boolean; primer?: boolean }
 
 export interface PreparedSource { rid: string; input: SourceInput; selected?: StudyUnit[]; tokens: number | null; pageText: string | null; bytes: Buffer | null }
 
@@ -86,6 +86,7 @@ export function writeSource(boardId: string, p: PreparedSource, ssn?: string | n
     const count = insertSections(boardId, rid, r.filename, r.sections, r.pageText, tokens, selected);
     if (r.createPair !== false || count > 1) pairForResource(boardId, r.filename.replace(/\.[^.]+$/, ""), rid);
     if (r.study === false) for (const s of q.sectionsOf.all(rid)) q.upsertTree.run(s.id, rid, boardId, s.label, "", null, null, "unstudied", null, 0, now());
+    if (r.primer) q.requestPrimer.run(rid, boardId, now());
     if (r.importId) finishImport(r.importId, rid);
   });
   // Queued, never awaited: the upload must not wait minutes for a distil.
@@ -135,6 +136,7 @@ export function reviseSource(boardId: string, rid: string, p: PreparedSource): b
       for (const m of q.marksOfResource.all(rid)) q.setMarkOffsets.run(...reanchor(was.text, r.text ?? "", m.start_off, m.end_off), m.id);
     }
     if (bytes) q.insBlob.run(rid, bytes, null); else q.delBlob.run(rid);
+    q.stalePrimer.run(rid);
     q.dropImportsOf.run(rid);
     if (r.importId) finishImport(r.importId, rid);
     return true;

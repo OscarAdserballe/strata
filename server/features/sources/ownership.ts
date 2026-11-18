@@ -28,7 +28,7 @@ export function fileSource(db: DatabaseSync, resourceId: string, to: string): vo
   let idx = Number(db.prepare("SELECT COALESCE(MAX(idx)+1,0) n FROM messages WHERE board_id = ?").get(to)!.n);
   const messages = db.prepare("SELECT id FROM messages WHERE resource_id = ? AND board_id != ? ORDER BY idx, id").all(resourceId, to);
   for (const m of messages) db.prepare("UPDATE messages SET board_id = ?, idx = ? WHERE id = ?").run(to, idx++, m.id);
-  for (const table of ["sections", "trees", "source_trees", "marks", "mark_replies", "asks", "page_states"]) {
+  for (const table of ["sections", "trees", "source_trees", "marks", "mark_replies", "asks", "page_states", "primers"]) {
     db.prepare(`UPDATE ${table} SET board_id = ? WHERE resource_id = ?`).run(to, resourceId);
   }
   db.prepare("UPDATE resources SET board_id = ?, generation = generation + 1 WHERE id = ?").run(to, resourceId);
@@ -38,7 +38,7 @@ export function fileSource(db: DatabaseSync, resourceId: string, to: string): vo
 
 /** Read-only preflight for historical split ownership; never guesses away missing data. */
 export function sourceOwnershipIssues(db: DatabaseSync): { table: string; resource: string; board: string; expected: string | null; count: number }[] {
-  return ["pairs", "sections", "trees", "source_trees", "marks", "mark_replies", "asks", "messages", "page_states"].flatMap(table =>
+  return ["pairs", "sections", "trees", "source_trees", "marks", "mark_replies", "asks", "messages", "page_states", "primers"].flatMap(table =>
     db.prepare(`SELECT d.resource_id AS resource, d.board_id AS board, r.board_id AS expected, COUNT(*) AS count
       FROM ${table} d LEFT JOIN resources r ON r.id = d.resource_id
       WHERE d.resource_id IS NOT NULL AND (r.id IS NULL OR d.board_id != r.board_id)

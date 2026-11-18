@@ -40,10 +40,12 @@ test("filing carries chapters, trees, archived conversations, marks and authored
   q.upsertCourse.run("personal", "Cards", "{}", 1);
   q.insCard.run("personal/card", "personal", "personal/yours", "flashcard", '{"board":"old","front":"Question"}', 0);
   q.setMintedCard.run("personal/card", 1, "old", "book-mint");
+  q.setPrimer.run("book", "old", "<p>Before page 1</p>", 1);
   move("book", "new");
   assert.deepEqual(sourceOwnershipIssues(db), []);
   assert.equal(q.sectionsOf.all("book").length, 2);
   assert.deepEqual(q.repliesOf.all("new").map((r) => r.text), ["Because it holds."], "a note's replies move with it");
+  assert.equal(q.primer.get("book")?.board_id, "new", "its primer moves with it");
   assert.equal(q.pairsOf.all("new").filter(p => p.resource_id === "book").length, 2);
   assert.equal(q.minted.get("new", "book-mint")?.pair_id, "book-p1");
   assert.equal(JSON.parse(q.cardAny.get("personal/card")!.payload).board, "new");

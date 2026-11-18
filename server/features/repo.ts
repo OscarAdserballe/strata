@@ -11,6 +11,7 @@ import { distilRepo } from "./distil/repo.ts";
 import { askRepo } from "./ask/repo.ts";
 import { progressRepo } from "./progress/repo.ts";
 import { feedbackRepo } from "./feedback/repo.ts";
+import { primersRepo } from "./primers/repo.ts";
 
 export const q = {
   ...boardsRepo,
@@ -26,4 +27,5 @@ export const q = {
   ...askRepo,
   ...progressRepo,
   ...feedbackRepo,
+  ...primersRepo,
 };

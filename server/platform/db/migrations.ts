@@ -293,6 +293,8 @@ const MIGRATIONS: [name: string, run: () => void][] = [
     addColumn("boards", "archived_at", "INTEGER");
     addColumn("board_groups", "by_date", "TEXT");
   }],
+  // An agent's upload can ask for a primer, made once the source lands.
+  ["import-primer", () => addColumn("imports", "primer", "INTEGER NOT NULL DEFAULT 0")],
 ];
 
 // A comment thread is now a note with replies: the reader's first words are the note, everything after a reply.
