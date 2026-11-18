@@ -1,4 +1,5 @@
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { deleteAsk } from "../sources/deleteAsk.ts";
 import { createPortal } from "react-dom";
 import type { RegisterEntry, RegisterStatus } from "../../../shared/types/index.ts";
 import { ago } from "../../shell/format.js";
@@ -75,7 +76,7 @@ function RowMenu({ e, onRename, onDelete, startRename }: { e: RegisterEntry; onR
           onClick={() => {
             if (armed) { setOpen(false); setArmed(false); onDelete(e); }
             else setArmed(true);
-          }}>{armed ? "delete this source?" : "delete"}</button> : null}
+          }}>{armed ? deleteAsk({ kept: e.kept }) : "delete"}</button> : null}
       </span> : null}
     </span>
   );

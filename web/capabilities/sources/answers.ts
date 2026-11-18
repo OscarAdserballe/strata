@@ -40,6 +40,14 @@ export function sourceAnswers(room: SourceAnswersRoom) {
     if (room.libraryUp()) reviewStrip.refresh();
   }
 
+  // a source being deleted is left at once, so no page stands open while its source is gone
+  function leaveSource(id: string, rid: string) {
+    const s = now();
+    if (id !== s.activeId || !s.pair || s.pair.resourceId !== rid) return;
+    setPairIdx(0);
+    blankDrill();
+  }
+
   function landCapture(r: Wire, msg: string | null) {
     setBoard(r.state);
     kickDistil();
@@ -100,5 +108,5 @@ export function sourceAnswers(room: SourceAnswersRoom) {
     if (t.jump) setTimeout(() => jumpToAnchor("p. " + t.jump), 80);
   }
 
-  return { syncSourceMutation, landCapture, benchDeckChanged, boardState, asideDone, keepTile, openTile };
+  return { syncSourceMutation, leaveSource, landCapture, benchDeckChanged, boardState, asideDone, keepTile, openTile };
 }

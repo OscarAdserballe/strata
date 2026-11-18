@@ -180,3 +180,37 @@ test("a board create out of retries frees the new-board lane for the next one", 
   await again;
   assert.deepEqual(store.get<BoardListEntry[]>(BOARDS)?.map((b) => b.id), ["b3", "b1"]);
 });
+
+test("a held source delete is gone from the register and the board at once, comes back on withdraw, and is sent once its hold is up", async () => {
+  const { store, sent } = room();
+  const timers: (() => void)[] = [];
+  const m = new Mutator({ store, transport: (req) => new Promise<SendAnswer>((resolve) => sent.push({ req, reply: resolve })), setTimer: (fn) => timers.push(fn), clearTimer: () => {} });
+  applyBoardState({ ...state("b1"), resources: [{ id: "r1", filename: "old.md" }, { id: "r3", filename: "keep.md" }] } as never, { stamp: 6 }, store);
+  const onBoard = () => (store.get<BoardEntity>(boardKey("b1"))?.resources ?? []).map((r) => r.id).join(",");
+  const listed = () => (store.get<BoardListEntry[]>(BOARDS) ?? []).flatMap((b) => b.resources.map((r) => r.id)).join(",");
+  store.apply(BOARDS, 6, [{ ...board("b1", "One"), resources: [{ id: "r1", filename: "old.md", kind: "text" }] }], "wire", { stamp: 6 });
+
+  const undone = m.mutate(sourceOps.remove("b1", "r1", store, { key: "del-r1", ms: 8000 })).catch((e) => e);
+  assert.equal(names(store), "other.md", "gone from the register");
+  assert.equal(onBoard(), "r3", "and from the board's sources");
+  assert.equal(listed(), "", "and from the boards list");
+  assert.equal(sent.length, 0, "nothing sent inside the hold");
+  assert.equal(m.withdraw("del-r1"), true);
+  assert.equal((await undone).withdrawn, true);
+  assert.equal(names(store), "old.md,other.md", "undone: back");
+  assert.equal(onBoard(), "r1,r3");
+  assert.equal(sent.length, 0, "and never sent");
+
+  const deleting = m.mutate(sourceOps.remove("b1", "r1", store, { key: "del-r1b", ms: 8000 }));
+  assert.equal(sent.length, 0);
+  timers.at(-1)!();
+  assert.equal(sent.length, 1, "sent once the hold is up");
+  assert.equal(sent[0].req.method, "DELETE");
+  assert.equal(sent[0].req.path, "/api/boards/b1/resources/r1?pairs=1");
+  assert.equal(sent[0].req.headers["Idempotency-Key"], "del-r1b");
+  sent[0].reply({ status: 200, body: { state: { ...state("b1"), resources: [{ id: "r3", filename: "keep.md" }], rev: 30 } }, rev: 30, epoch: "" });
+  await deleting;
+  assert.equal(onBoard(), "r3", "the answer's board, with no layer left");
+  assert.equal(store.entry(boardKey("b1"))?.layers.length, 0);
+  assert.equal(names(store), "other.md", "folded into the held register too");
+});

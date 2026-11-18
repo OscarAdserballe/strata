@@ -20,6 +20,9 @@ export interface ReaderBarProps {
   onNewCard(): void;
   adminPath: string | null;
   onSignOut(): void;
+  /** deletes the open source (after an armed second click whose words deleteAsk gives) */
+  onDelete?: () => void;
+  deleteAsk?: () => string;
 }
 
 const KIND: Record<string, string> = { pdf: "PDF", html: "HTML", transcript: "transcript" };
@@ -30,8 +33,9 @@ export default function ReaderBar(p: ReaderBarProps) {
   const sw = useSyncExternalStore(switches.subscribe, switches.getSnapshot);
   const [menu, setMenu] = useState(false);
   const [study, setStudy] = useState(true);
+  const [armDel, setArmDel] = useState<string | null>(null);
   useEffect(() => {
-    if (!menu) return;
+    if (!menu) { setArmDel(null); return; }
     const shut = () => setMenu(false);
     document.addEventListener("click", shut);
     document.addEventListener("keydown", shut, true);
@@ -66,6 +70,9 @@ export default function ReaderBar(p: ReaderBarProps) {
           <button onPointerDown={() => void loadCapture().catch(() => {})} onClick={() => add("link")}><b>Add from a link</b>youtube / article</button>
           <button onClick={() => { setMenu(false); p.onNewCard(); }}><b>New card</b>c</button>
           {p.follow !== null ? <button aria-pressed={p.follow} onClick={p.onFollow}><b>Follow chapters</b>{p.follow ? "on" : "off"}</button> : null}
+          {p.onDelete ? <button className={"rbar-del" + (armDel ? " arm" : "")}
+            onClick={() => { if (armDel) { setMenu(false); p.onDelete!(); } else setArmDel(p.deleteAsk ? p.deleteAsk() : "delete this source?"); }}>
+            <b>{armDel ?? "Delete this source"}</b></button> : null}
           <button onClick={() => { setMenu(false); openKeysSheet(); }}><b>Shortcuts</b>?</button>
           <Suggest />
           {p.adminPath ? <button onClick={() => location.assign(p.adminPath!)}><b>Admin</b></button> : null}

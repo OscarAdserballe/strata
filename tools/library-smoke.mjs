@@ -140,7 +140,14 @@ try {
   await row(droppedName).getByRole("menuitem",{name:"delete",exact:true}).click();
   await row(droppedName).getByRole("menuitem",{name:"delete this source?",exact:true}).click();
   await row(droppedName).waitFor({state:"detached"});
-  assert.equal((await fetch(`${base}/api/boards/inbox/resources/${droppedId}/raw`)).status,404);
+  // gone from the page at once; sent once the toast's Undo has had its eight seconds
+  await page.locator(".toast-act",{hasText:"Undo"}).waitFor();
+  let rawStatus=0;
+  for (const until=Date.now()+20_000; Date.now()<until; await new Promise(r=>setTimeout(r,250))) {
+    rawStatus=(await fetch(`${base}/api/boards/inbox/resources/${droppedId}/raw`)).status;
+    if (rawStatus===404) break;
+  }
+  assert.equal(rawStatus,404);
   const deleted = expectResponse(page,response=>response.url()===`${base}/api/boards/${id}` && response.request().method()==="DELETE");
   await projectCard(page,renamed).click();
   await page.getByRole("button",{name:"Project menu",exact:true}).click();
