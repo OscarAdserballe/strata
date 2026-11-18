@@ -14,7 +14,7 @@ const PORT = await freePort();
 const BASE = `http://127.0.0.1:${PORT}`;
 const DB = join(tmpdir(), `strata-plantest-${process.pid}.db`);
 const OLD = "b-oldboard";
-const EMPTY = { purpose: "", endsAt: "", archivedAt: null, groups: [], milestones: [], places: {} };
+const EMPTY = { purpose: "", endsAt: "", archivedAt: null, starredAt: null, groups: [], milestones: [], places: {} };
 const bare = ({ rev: _rev, ...plan }: { rev?: number; [k: string]: unknown }) => plan;
 let server: ChildProcess;
 
@@ -305,6 +305,23 @@ test("a project's end, its archive and a unit's date: set, cleared, refused when
   assert.equal(r.body.plan.groups[1].byDate, "2026-11-21", "a rename keeps the date");
   r = await send("PATCH", `/api/boards/${id}/plan/groups/${u1}`, { byDate: null });
   assert.equal(r.body.plan.groups[1].byDate, "", "null clears the date");
+});
+
+test("a starred project: set once, kept on a second star, cleared, refused when not a flag, listed in the register, and it moves plan_rev", async () => {
+  const id = await newBoard("A starred project");
+  const rev = () => Number(rows("SELECT plan_rev FROM boards WHERE id = ?", id)[0].plan_rev);
+  const r0 = rev();
+  let r = await send("PATCH", `/api/boards/${id}/plan/project`, { starred: true, endsAt: "2026-12-14" });
+  assert.equal(r.status, 200);
+  const at = r.body.plan.starredAt;
+  assert.ok(typeof at === "number" && rev() > r0, "starring sets a time and moves plan_rev");
+  r = await send("PATCH", `/api/boards/${id}/plan/project`, { starred: true });
+  assert.deepEqual([r.body.plan.starredAt, r.body.plan.endsAt], [at, "2026-12-14"], "starring twice keeps the first time and the end");
+  const reg = (await api("/api/register")).body;
+  assert.equal(reg.projects.find((x: { id: string }) => x.id === id).starredAt, at);
+  r = await send("PATCH", `/api/boards/${id}/plan/project`, { starred: false });
+  assert.equal(r.body.plan.starredAt, null);
+  assert.equal((await send("PATCH", `/api/boards/${id}/plan/project`, { starred: "yes" })).status, 400);
 });
 
 test("the register lists each board as a project with its units and places, and the inbox is not one", async () => {

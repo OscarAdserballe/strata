@@ -25,3 +25,8 @@
 }
 .pj-unfiled{max-width:1360px;margin:0 auto;padding:0 40px 60px;box-sizing:border-box;}
 .pj-unfiled h2{font:600 21px/1.2 var(--serif);margin:0 0 10px;}
+.pj-cell{position:relative;display:flex;flex-direction:column;}
+.pj-cell .pj-card{flex:1;}
+.pj-card.starred{border-color:var(--accent-line);}
+.pj-star{position:absolute;top:14px;right:14px;z-index:1;border:none;background:none;padding:2px 4px;font:400 17px/1 var(--sans);color:var(--ink-faint);cursor:pointer;}
+.pj-star.on{color:var(--accent-deep);}

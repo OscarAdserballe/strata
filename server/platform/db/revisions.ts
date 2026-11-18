@@ -88,11 +88,11 @@ export function revisionTriggers(db: DatabaseSync): Map<string, string> {
     trigger(name("update"), t.table, t.row ? updateOf(db, t.table) : "UPDATE", scopeStamp(t, ["OLD", "NEW"]) + row);
     trigger(name("delete"), t.table, "DELETE", scopeStamp(t, ["OLD"]));
   }
-  // the board's purpose, end and archive are also the plan's, so changing one moves plan_rev
+  // the board's purpose, end, archive and star are also the plan's, so changing one moves plan_rev
   trigger(`${TRIGGER_PREFIX}_boards_insert`, "boards", "INSERT", `UPDATE boards SET rev = ${STAMP} WHERE id = NEW.id;`);
   // Only columns that exist yet: an older migration's trigger sync runs before the later columns are added.
   const boardCols = new Set((db.prepare("PRAGMA table_info(boards)").all() as { name: string }[]).map((c) => c.name));
-  const planCols = ["purpose", "ends_at", "archived_at"].filter((c) => boardCols.has(c)).map((c) => `OLD.${c} IS NOT NEW.${c}`);
+  const planCols = ["purpose", "ends_at", "archived_at", "starred_at"].filter((c) => boardCols.has(c)).map((c) => `OLD.${c} IS NOT NEW.${c}`);
   trigger(`${TRIGGER_PREFIX}_boards_update`, "boards", updateOf(db, "boards"), `UPDATE boards SET rev = ${STAMP},`
     + ` plan_rev = CASE WHEN ${planCols.join(" OR ") || "0"} THEN ${STAMP} ELSE plan_rev END WHERE id = NEW.id;`);
   trigger(`${TRIGGER_PREFIX}_courses_insert`, "courses", "INSERT", `UPDATE courses SET rev = ${STAMP} WHERE slug = NEW.slug;`);

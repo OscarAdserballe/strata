@@ -22,7 +22,7 @@ export interface PlanWrite {
   rebuild?: (theirs: BoardPlan) => PlanWrite | null;
 }
 
-const EMPTY: BoardPlan = { purpose: "", endsAt: "", archivedAt: null, groups: [], milestones: [], places: {} };
+const EMPTY: BoardPlan = { purpose: "", endsAt: "", archivedAt: null, starredAt: null, groups: [], milestones: [], places: {} };
 
 export const planOps = {
   write(board: string, w: PlanWrite, s: Store = roomStore): Op<PlanAnswer> {
@@ -59,7 +59,7 @@ type Place = BoardPlan["places"][string];
 const NO_PLACE: Place = { group: null, milestone: null, pinned: false, ord: null };
 type PlacePatch = Partial<Place>;
 type GroupPatch = Partial<Omit<BoardPlan["groups"][number], "id" | "ord">> & { move?: number };
-type ProjectPatch = { endsAt?: string; archived?: boolean };
+type ProjectPatch = { endsAt?: string; archived?: boolean; starred?: boolean };
 type MilestonePatch = Partial<Omit<BoardPlan["milestones"][number], "doneAt">> & { move?: number; done?: boolean };
 
 /** A group's whole order; after a 409: your order first, then what the other device added since. */
@@ -90,7 +90,8 @@ export const planGestures = {
   project: (patch: ProjectPatch): PlanWrite => ({
     method: "PATCH", path: "/project", body: patch,
     guess: (p) => ({ ...p, ...(patch.endsAt !== undefined ? { endsAt: patch.endsAt } : {}),
-      ...(patch.archived !== undefined ? { archivedAt: patch.archived ? p.archivedAt ?? Date.now() : null } : {}) }),
+      ...(patch.archived !== undefined ? { archivedAt: patch.archived ? p.archivedAt ?? Date.now() : null } : {}),
+      ...(patch.starred !== undefined ? { starredAt: patch.starred ? p.starredAt ?? Date.now() : null } : {}) }),
   }),
   addGroup: (name = "New unit", byDate = ""): PlanWrite => ({ method: "POST", path: "/groups", body: { name, ...(byDate ? { byDate } : {}) } }),
   group: (gid: string, patch: GroupPatch = {}): PlanWrite => ({

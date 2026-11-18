@@ -113,11 +113,11 @@ export const starCount = (views: readonly ProjectView[]): number =>
 /** The same view from a board's own state, so the project page agrees with Today without the register. */
 export function boardProject(
   id: string, title: string,
-  plan: { purpose: string; endsAt?: string; archivedAt?: number | null; groups: ProjectEntry["groups"]; places: Record<string, { group: string | null; ord: number | null; pinned: boolean }> },
+  plan: { purpose: string; endsAt?: string; archivedAt?: number | null; starredAt?: number | null; groups: ProjectEntry["groups"]; places: Record<string, { group: string | null; ord: number | null; pinned: boolean }> },
   resources: readonly { id: string; filename: string; kind: string; readPct?: number; lastReadAt?: number | null; doneAt?: number | null; createdAt: number }[],
   now = new Date(),
 ): ProjectView {
-  const p: ProjectEntry = { id, title, purpose: plan.purpose, endsAt: plan.endsAt ?? "", archivedAt: plan.archivedAt ?? null, touchedAt: null,
+  const p: ProjectEntry = { id, title, purpose: plan.purpose, endsAt: plan.endsAt ?? "", archivedAt: plan.archivedAt ?? null, starredAt: plan.starredAt ?? null, touchedAt: null,
     groups: plan.groups.map((g) => ({ ...g, byDate: g.byDate ?? "" })), places: plan.places };
   const entries: RegisterEntry[] = resources.map((r) => ({
     resourceId: r.id, pairId: null, boardId: id, boardTitle: title, unfiled: false, filename: r.filename, kind: r.kind, originUrl: null,

@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { RegisterResponse } from "../../../shared/types/index.ts";
+import { plan, planGestures } from "../../data/entities/plan.ts";
+import { refreshRegister } from "../../data/entities/register.ts";
 import { daysUntil, projectView, shortDay, type ProjectView } from "../../capabilities/today/projects.ts";
 import "./projects.css";
 
@@ -24,9 +26,17 @@ const Segments = ({ v }: { v: ProjectView }) => v.units.length ? <div className=
 
 export default function ProjectsIndex({ reg, onOpen, onWarm, onNew }: ProjectsIndexProps) {
   const [shelf, setShelf] = useState<"active" | "archived">("active");
+  const [flip, setFlip] = useState<Record<string, boolean>>({});
+  const starred = (v: ProjectView) => flip[v.project.id] ?? !!v.project.starredAt;
+  function star(v: ProjectView) {
+    const id = v.project.id, to = !starred(v);
+    setFlip((f) => ({ ...f, [id]: to }));
+    void plan.write(id, planGestures.project({ starred: to })).catch(() => setFlip((f) => ({ ...f, [id]: !to }))).finally(() => refreshRegister());
+  }
+  useEffect(() => { setFlip({}); }, [reg]);
   const views = useMemo<ProjectView[]>(() => (reg ? reg.projects.map((p) => projectView(p, reg.entries)) : []), [reg]);
   const active = views.filter((v) => !v.project.archivedAt)
-    .sort((a, b) => (a.project.endsAt || "9999").localeCompare(b.project.endsAt || "9999") || (b.project.touchedAt ?? 0) - (a.project.touchedAt ?? 0));
+    .sort((a, b) => Number(starred(b)) - Number(starred(a)) || (a.project.endsAt || "9999").localeCompare(b.project.endsAt || "9999") || (b.project.touchedAt ?? 0) - (a.project.touchedAt ?? 0));
   const archived = views.filter((v) => v.project.archivedAt).sort((a, b) => (b.project.archivedAt ?? 0) - (a.project.archivedAt ?? 0));
   const shown = shelf === "active" ? active : archived;
   return (
@@ -45,7 +55,10 @@ export default function ProjectsIndex({ reg, onOpen, onWarm, onNew }: ProjectsIn
       {reg === null ? <p className="td-quiet">Reading the room…</p>
         : !shown.length ? <p className="td-quiet">{shelf === "active" ? "No projects yet. Start one with New project." : "Nothing archived. A finished project goes here, and its kept cards keep coming back on Review."}</p>
         : <div className="pj-grid">
-          {shown.map((v) => <button key={v.project.id} className="pj-card" onClick={() => onOpen(v.project.id)}
+          {shown.map((v) => <div key={v.project.id} className="pj-cell">{v.project.archivedAt ? null
+            : <button className={"pj-star" + (starred(v) ? " on" : "")} aria-pressed={starred(v)} aria-label={(starred(v) ? "Unstar " : "Star ") + v.project.title}
+                title={starred(v) ? "Starred: sorts first. Click to unstar" : "Star: sort it first"} onClick={() => star(v)}>{starred(v) ? "★" : "☆"}</button>}
+            <button className={"pj-card" + (starred(v) ? " starred" : "")} onClick={() => onOpen(v.project.id)}
             {...(onWarm ? { onPointerEnter: () => onWarm(v.project.id), onPointerDown: () => onWarm(v.project.id) } : {})}>
             <span className="td-eyebrow">{v.project.archivedAt ? `archived ${new Date(v.project.archivedAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}` : ends(v)}</span>
             <span className="pj-title">{v.project.title}</span>
@@ -54,7 +67,7 @@ export default function ProjectsIndex({ reg, onOpen, onWarm, onNew }: ProjectsIn
             <Segments v={v} />
             {v.next || v.loose.length ? <span className="pj-next">{v.next ? <>Next: <b>{v.next}</b></> : null}
               {v.units.length && v.loose.length ? `${v.next ? " · " : ""}${v.loose.length} in loose ends` : ""}</span> : null}
-          </button>)}
+          </button></div>)}
         </div>}
     </div>
   );

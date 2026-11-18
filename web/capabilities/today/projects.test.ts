@@ -10,7 +10,7 @@ const entry = (id: string, board: string, readPct = 0, status: RegisterEntry["st
   createdAt, status, readPct, kept: 0, cards: 0, waiting: true, lastAt,
 });
 const project = (over: Partial<ProjectEntry> = {}): ProjectEntry => ({
-  id: "b", title: "Econometrics", purpose: "", endsAt: "", archivedAt: null, touchedAt: 0,
+  id: "b", title: "Econometrics", purpose: "", endsAt: "", archivedAt: null, starredAt: null, touchedAt: 0,
   groups: [{ id: "u2", name: "IV", ord: 1, byDate: "2026-11-20" }, { id: "u1", name: "OLS", ord: 0, byDate: "" }],
   places: { a: { group: "u1", ord: 0, pinned: false }, b: { group: "u2", ord: 1, pinned: true }, c: { group: "u2", ord: 0, pinned: false } },
   ...over,

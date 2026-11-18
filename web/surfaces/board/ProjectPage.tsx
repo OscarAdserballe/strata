@@ -34,7 +34,7 @@ export interface ProjectPageProps {
   tools?: ReactNode;
 }
 
-const EMPTY: BoardPlan = { purpose: "", endsAt: "", archivedAt: null, groups: [], milestones: [], places: {} };
+const EMPTY: BoardPlan = { purpose: "", endsAt: "", archivedAt: null, starredAt: null, groups: [], milestones: [], places: {} };
 const dayLong = (ts: number) => new Date(ts).toLocaleDateString(undefined, { day: "numeric", month: "long" });
 
 function Dot({ s }: { s: ProjectSource }) {
@@ -134,6 +134,8 @@ export default function ProjectPage(p: ProjectPageProps) {
       <span className="pp-sright">
         <button className={"pp-star" + (s.pinned ? " on" : "")} aria-pressed={s.pinned} title={s.pinned ? "On Today — click to unstar" : "Star: keep it on Today"}
           aria-label={(s.pinned ? "Unstar " : "Star ") + s.name} onClick={() => star(s)}>{s.pinned ? "★" : "☆"}</button>
+        {t?.del && p.onDel ? <button className={"pp-del" + (arm === "del:" + s.id ? " arm" : "")} aria-label={"Delete " + s.name} onBlur={() => setArm(null)}
+          onClick={() => { if (arm === "del:" + s.id) { setArm(null); p.onDel!(t); } else setArm("del:" + s.id); }}>{arm === "del:" + s.id ? "delete it and its cards?" : "Delete"}</button> : null}
         {t ? <Verbs t={t} {...verbs} onRename={p.onRenamed ? () => setRenaming("src:" + s.id) : undefined} /> : null}
         <span className="pp-state">{s.finished ? "done" : s.pct ? `${s.pct}%` : ""}</span>
       </span>
@@ -193,6 +195,9 @@ export default function ProjectPage(p: ProjectPageProps) {
             <div><b>{view.done} of {view.total} sources</b>{plan.endsAt ? <span>ends {shortDay(plan.endsAt, true)}</span> : null}</div>
             <span className="pp-tbar"><b style={{ width: `${pct}%` }} /></span>
           </div>}
+          {archived ? null : <button className={"pp-pstar" + (plan.starredAt ? " on" : "")} aria-pressed={!!plan.starredAt}
+            aria-label={plan.starredAt ? "Unstar this project" : "Star this project"} title={plan.starredAt ? "Starred: sorts first on Today and Projects" : "Star: sort it first on Today and Projects"}
+            onClick={() => void planApi.project({ starred: !plan.starredAt }).finally(() => refreshRegister())}>{plan.starredAt ? "★" : "☆"}</button>}
           <span className="pp-pop">
             <button className="pp-more" aria-label="Project menu" aria-expanded={menu} onClick={(e) => { e.stopPropagation(); setMenu(!menu); }}>···</button>
             {menu ? <span className="pp-menu" onClick={(e) => e.stopPropagation()}>

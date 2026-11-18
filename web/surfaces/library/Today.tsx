@@ -38,7 +38,8 @@ export default function Today({ reg, review, onReview, onOpen, onResume, onWarm,
   useEffect(() => { setUnstarred([]); }, [reg]);
   const reading = readingList(views, keptAt).filter((r) => !unstarred.includes(r.source.id));
   const active = views.filter((v) => !v.project.archivedAt)
-    .sort((a, b) => (a.project.endsAt || "9999").localeCompare(b.project.endsAt || "9999") || (b.project.touchedAt ?? 0) - (a.project.touchedAt ?? 0));
+    .sort((a, b) => Number(!!b.project.starredAt) - Number(!!a.project.starredAt) || (a.project.endsAt || "9999").localeCompare(b.project.endsAt || "9999") || (b.project.touchedAt ?? 0) - (a.project.touchedAt ?? 0));
+  const anyStarred = active.some((v) => v.project.starredAt);
   const stars = starCount(views) - unstarred.length;
   const warm = (board: string) => (onWarm ? { onPointerEnter: () => onWarm(board), onPointerDown: () => onWarm(board) } : {});
 
@@ -64,7 +65,6 @@ export default function Today({ reg, review, onReview, onOpen, onResume, onWarm,
       <p className="td-sum">{todayCards} card{todayCards === 1 ? "" : "s"}{read ? `, ${read} minute${read === 1 ? "" : "s"} of reading` : ""} today.<br />
         {tomorrow ? `Tomorrow: ${tomorrow} card${tomorrow === 1 ? "" : "s"} (about ${minutesFor(tomorrow)} minute${minutesFor(tomorrow) === 1 ? "" : "s"}).` : "Nothing due tomorrow."}</p>
       <div className="td-clear-row">
-        <div className="td-big"><b>{days.total}</b><span>days with Strata</span></div>
         <div className="td-big streak"><b>{days.streak}</b><span>in a row</span></div>
         <div><DayGrid days={days} big /><span className="td-cap">26 weeks · ink = minutes read and reviewed</span></div>
       </div>
@@ -116,13 +116,9 @@ export default function Today({ reg, review, onReview, onOpen, onResume, onWarm,
       </main>
 
       <aside className="td-side">
-        {days ? <div className="td-counter">
-          <div className="td-day"><b>Day {days.total}</b><span>{days.streak} in a row</span></div>
-          <DayGrid days={days} />
-        </div> : null}
         <div className="td-head small"><span>Projects</span><span>{active.length} active</span></div>
-        {active.map((v) => <button key={v.project.id} className="td-proj" {...warm(v.project.id)} onClick={() => onOpen(v.project.id)}>
-          <span className="td-proj-top"><span className="td-proj-name">{v.project.title}</span><span className="td-end">{endLabel(v.project)}</span></span>
+        {active.map((v) => <button key={v.project.id} className={"td-proj" + (v.project.starredAt ? " starred" : anyStarred ? " quiet" : "")} {...warm(v.project.id)} onClick={() => onOpen(v.project.id)}>
+          <span className="td-proj-top"><span className="td-proj-name">{v.project.starredAt ? <i className="td-pstar" aria-label="starred">★ </i> : null}{v.project.title}</span><span className="td-end">{endLabel(v.project)}</span></span>
           {v.next || v.due || v.fresh ? <span className="td-next">{v.next ? <>Next: {v.next}</> : null}
             {v.due ? <i className="td-mark due">due {v.due}</i> : null}{v.fresh ? <i className="td-mark new">{v.fresh} new</i> : null}</span> : null}
           <span className="td-prog"><span className="td-bar"><b style={{ width: `${v.total ? (100 * v.done) / v.total : 0}%` }} /></span><span>{v.done}/{v.total}</span></span>
