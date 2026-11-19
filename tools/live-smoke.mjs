@@ -85,12 +85,14 @@ try {
   const at = await gf2.evaluate(() => {
     const r = [...CSS.highlights.get("strata-noted")][0], rs = [...r.getClientRects()], x = rs[0].left + 4, y = rs[0].top + rs[0].height / 2;
     document.elementFromPoint(x, y).dispatchEvent(new MouseEvent("click", { clientX: x, clientY: y, bubbles: true, composed: true, button: 0 }));
-    return { bottom: Math.max(...rs.map((b) => b.bottom)), grid: document.body.firstElementChild.getBoundingClientRect().bottom };
+    return { top: rs[0].top, bottom: Math.max(...rs.map((b) => b.bottom)), grid: document.body.firstElementChild.getBoundingClientRect().bottom };
   });
   await gf2.waitForFunction(() => [...document.querySelectorAll("strata-fold")].some((h) => h.shadowRoot?.querySelector(".fi.note")), null, { timeout: 5000 });
   const sheetTop = await gf2.evaluate(() => [...document.querySelectorAll("strata-fold")].find((h) => h.shadowRoot?.querySelector(".fi.note")).getBoundingClientRect().top);
   assert.ok(at.grid - at.bottom > 200, "the fixture's grid reaches far below the words: " + JSON.stringify(at));
-  assert.ok(sheetTop > at.bottom && sheetTop - at.bottom < 40, `the note's sheet hangs just under its words, not under the grid: ${JSON.stringify({ ...at, sheetTop })}`);
+  // in the margin beside its words when the page leaves one, else just under them; never under the grid
+  const near = (sheetTop > at.bottom && sheetTop - at.bottom < 40) || Math.abs(sheetTop - at.top) < 40;
+  assert.ok(near, `the note's sheet lies by its words, not under the grid: ${JSON.stringify({ ...at, sheetTop })}`);
   assert.deepEqual(errors, []);
   console.log("✓ a note in a grid's cell hangs just under its words, as a card does");
 } finally { await browser.close(); await api(`/api/boards/${board.id}`, "DELETE"); }

@@ -31,11 +31,16 @@ try {
     assert.equal(before, placed ? 1 : 0, "a card still to answer opens by itself, and only a placed one");
     const under = await page.evaluate((q) => {
       const sheet = [...document.querySelectorAll(".layer-plane > [data-fold]")].find((f) => f.textContent.includes(q));
-      return sheet ? { top: sheet.getBoundingClientRect().top } : null;
+      const b = sheet?.getBoundingClientRect(), c = document.querySelector(".page-col");
+      const colRight = c ? c.getBoundingClientRect().right - parseFloat(getComputedStyle(c).paddingRight || "0") : 0;
+      return b ? { top: b.top, left: b.left, colRight } : null;
     }, "Attribution " + source);
     if (placed) {
       assert.ok(words && /^Diversification reduces the risk of individual investments/.test(words.text), `the card's words are its quote, not ${JSON.stringify(words)}`);
-      assert.ok(under && under.top > words.bottom && under.top - words.bottom < 40, `the card's sheet hangs just under its words: ${JSON.stringify({ words, under })}`);
+      // beside its words in the margin when the column leaves one, else just under them
+      const beside = !!under && under.left >= under.colRight - 4 && Math.abs(under.top - (words.y - 12)) < 40;
+      const below = !!under && under.top > words.bottom && under.top - words.bottom < 40;
+      assert.ok(beside || below, `the card's sheet lies beside or just under its words: ${JSON.stringify({ words, under })}`);
     } else assert.ok(!words && !under, `a card with no quote is placed nowhere, not on ${JSON.stringify(words)}`);
     await api(`/api/boards/${board.id}/minted/${made.id}`, "DELETE");
   }
