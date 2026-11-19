@@ -110,7 +110,7 @@ export class HtmlEngine {
       case "layer": {
         const on = this.layerOn;
         if (!on) break;
-        if (m.intent === "edit" || m.intent === "remove" || m.intent === "show" || m.intent === "later" || m.intent === "discard") on[m.intent](m.id);
+        if (m.intent === "edit" || m.intent === "remove" || m.intent === "show" || m.intent === "later" || m.intent === "discard" || m.intent === "reopen") on[m.intent](m.id);
         else if (m.intent === "keep") on.keep(m.id, String(m.text ?? ""), String(m.back ?? ""));
         else if (m.intent === "grade") on.grade(m.id, !!m.got);
         else if (m.intent === "capture") on.capture(m.id, Number(m.text));

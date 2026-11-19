@@ -346,6 +346,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
         later: (id) => { bySheet = Date.now(); shut.add(id); pinned.delete(id); on.later(id); redraw(); },
         grade: (id, got) => { bySheet = Date.now(); on.grade(id, got); },
         show: (id) => { bySheet = Date.now(); on.show(id); },
+        reopen: (id) => { bySheet = Date.now(); shut.delete(id); pinned.add(id); asked.add(id); on.reopen(id); },
         // shrinks the sheet to its tab: it stays a tab until opened again
         shut: () => {
           for (const it of g.items) { pinned.delete(it.id); shut.add(it.id); }

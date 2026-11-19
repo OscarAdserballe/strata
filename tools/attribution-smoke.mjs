@@ -36,9 +36,28 @@ try {
     if (placed) {
       assert.ok(words && /^Diversification reduces the risk of individual investments/.test(words.text), `the card's words are its quote, not ${JSON.stringify(words)}`);
       assert.ok(under && Math.abs(under.top - words.top) < 40 && under.left >= words.right, `the card's sheet lies beside the column, level with its words: ${JSON.stringify({ words, under })}`);
+      // its ◢ corner resizes it; – shrinks it to a tab named by its question; the tab opens it again; ↺ puts back an answered card
+      const sheet = page.locator(".layer-plane > .fold", { hasText: "Attribution " + source });
+      const was = await sheet.boundingBox(), corner = await sheet.locator(".fold-rs").boundingBox();
+      await page.mouse.move(corner.x + 5, corner.y + 5);
+      await page.mouse.down();
+      await page.mouse.move(corner.x - 55, corner.y + 85, { steps: 5 });
+      await page.mouse.up();
+      const now = await sheet.boundingBox();
+      assert.ok(now.width < was.width - 40 && now.height > was.height + 60, `the corner resizes the sheet: ${JSON.stringify({ was, now })}`);
+      await sheet.locator(".fold-shut").click();
+      const tab = page.locator(".layer-plane > .ftab-at .ftab");
+      await tab.waitFor({ timeout: 3000 });
+      assert.match(await tab.textContent(), /^Attribution/, "the tab carries the card's question");
+      assert.equal(await page.locator(".layer-plane > .fold").count(), 0, "the shrunk sheet is gone");
+      await tab.click();
+      await sheet.getByRole("button", { name: "Show answer" }).click();
+      await sheet.getByRole("button", { name: "Got it" }).click();
+      await sheet.locator(".fi.card.done .fi-re").click();
+      await sheet.getByRole("button", { name: "Show answer" }).waitFor({ timeout: 3000 });
     } else assert.ok(!words && !under, `a card with no quote is placed nowhere, not on ${JSON.stringify(words)}`);
     await api(`/api/boards/${board.id}/minted/${made.id}`, "DELETE");
   }
   assert.deepEqual(errors, []);
-  console.log("✓ a quote puts the card on its words, its sheet open in the margin beside them; a heading reference places it nowhere");
+  console.log("✓ a quote puts the card on its words, its sheet open in the margin beside them, shrinkable to a tab and answerable again; a heading reference places it nowhere");
 } finally { await browser.close(); await api(`/api/boards/${board.id}`, "DELETE"); }

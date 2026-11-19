@@ -48,6 +48,8 @@ export interface FoldIntents {
   ask(id: string, text: string): void;
   /** an answer in an ask, made into a card (its question on the front) */
   capture(id: string, turn: number): void;
+  /** a card answered already, put back to be answered again */
+  reopen(id: string): void;
 }
 export type TickMark = "note" | "card" | "card-done" | "ask";
 
@@ -162,9 +164,16 @@ function replyRow(doc: Document, id: string, on: FoldIntents): HTMLElement {
 
 function cardItem(doc: Document, it: FoldCard, on: FoldIntents): HTMLElement {
   if (it.state === "done" && !it.held) {
-    const line = el(doc, "div", "fi line card");
-    line.append(el(doc, "span", "fi-ck", "✓"), el(doc, "span", "fi-lq", it.q), el(doc, "span", "fi-r", it.got === null ? "seen" : it.got ? "got it" : "not yet"));
-    return line;
+    const box = el(doc, "div", "fi card done");
+    const lab = el(doc, "div", "fi-lab");
+    const again = el(doc, "button", "fi-re", "↺");
+    again.type = "button";
+    again.title = "answer it again";
+    again.setAttribute("aria-label", "answer this card again");
+    again.onclick = () => on.reopen(it.id);
+    lab.append(el(doc, "b", "", "CARD"), el(doc, "span", "fi-r", "✓ " + (it.got === null ? "seen" : it.got ? "got it" : "not yet")), again);
+    box.append(lab, el(doc, "div", "fq", it.q));
+    return box;
   }
   const box = el(doc, "div", "fi card" + (it.held ? " hand" : ""));
   const lab = el(doc, "div", "fi-lab");
@@ -386,6 +395,9 @@ export const FOLD_CSS = `
 .ftab[data-kind="note"] .ftab-dot{background:var(--warn,#bd7138);}
 .ftab[data-kind="ask"] .ftab-dot{background:var(--ink-soft,#58514c);}
 .ftab-t{overflow:hidden;text-overflow:ellipsis;}
+.fi-re{position:relative;z-index:2;margin-left:6px;background:none;border:0;padding:0 3px;border-radius:3px;cursor:pointer;font:500 12px/1 var(--sans,system-ui,sans-serif);color:var(--ink-faint,#857f7a);}
+.fi-re:hover,.fi-re:focus-visible{color:var(--accent,#41678a);background:var(--fold-sunk,oklch(0.955 0.009 85));outline:none;}
+.fi.card.done .fq{font-size:14.5px;color:var(--ink-soft,#58514c);}
 .fold-shut:hover{color:var(--ink,#2a241f);background:var(--fold-sunk,oklch(0.955 0.009 85));}
 .fold-threads{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none;z-index:39;}
 .fold .fi{border:0;box-shadow:none;background:transparent;border-radius:0;padding:0;}
