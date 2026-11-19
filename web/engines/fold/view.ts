@@ -253,16 +253,19 @@ export function drawFold(host: HTMLElement, m: FoldModel, on: FoldIntents): void
   if (!inner) {
     inner = el(doc, "div", "fold-in");
     const hd = el(doc, "div", "fold-hd");
-    const shut = el(doc, "button", "fold-shut", "×");
+    const shut = el(doc, "button", "fold-shut", "–");
     shut.type = "button";
-    shut.title = "close to its tick";
-    shut.setAttribute("aria-label", "close");
+    shut.title = "shrink to a tab";
+    shut.setAttribute("aria-label", "shrink to a tab");
     const grip = el(doc, "i", "fold-grip");
     grip.setAttribute("aria-hidden", "true");
     hd.title = "drag to move · double-click to put back";
     hd.append(grip, el(doc, "span", "fold-where"), el(doc, "span", "fold-grow"), el(doc, "span", "fold-count"), shut);
     inner.append(hd);
-    host.append(inner);
+    const rs = el(doc, "i", "fold-rs");
+    rs.title = "drag to resize";
+    rs.setAttribute("aria-hidden", "true");
+    host.append(inner, rs);
   }
   host.classList.add("fold");
   (inner.querySelector(".fold-where") as HTMLElement).textContent = m.where;
@@ -318,6 +321,33 @@ export function drawTick(block: HTMLElement, key: string, marks: readonly TickMa
   block.append(t, p);
 }
 
+/** A sheet shrunk to a tab: a dot in its layer's colour and its first words; a click opens it again. */
+export function drawTab(host: HTMLElement, kind: string, label: string, open: () => void): void {
+  const doc = host.ownerDocument;
+  let b = host.querySelector<HTMLButtonElement>(":scope > .ftab");
+  if (!b) { b = el(doc, "button", "ftab"); b.type = "button"; host.append(b); }
+  b.dataset.kind = kind;
+  b.title = label;
+  b.setAttribute("aria-label", "open " + label);
+  if (b.dataset.label !== label) { b.dataset.label = label; b.replaceChildren(el(doc, "i", "ftab-dot"), el(doc, "span", "ftab-t", label)); }
+  b.onclick = (e) => { e.stopPropagation(); open(); };
+}
+
+/** A tab's words: a single note's or card's opening, an ask's question, or how many a passage holds. */
+export function tabLabel(items: readonly FoldItem[]): string {
+  const first = (s: string, n = 26) => { const t = s.replace(/\s+/g, " ").trim(); return t.length > n ? t.slice(0, n).replace(/\s+\S*$/, "") + "…" : t; };
+  if (items.length > 1) {
+    const k = items[0].kind, same = items.every((it) => it.kind === k);
+    return `${items.length} ${same && k === "card" ? "cards" : same && k === "note" ? "notes" : same && k === "ask" ? "asks" : "items"}`;
+  }
+  const it = items[0];
+  if (!it) return "";
+  if (it.kind === "note") return first(it.text.split("\n")[0] || it.quote);
+  if (it.kind === "card") return first(it.q) || "card";
+  if (it.kind === "ask") return `Ask: “${first(it.turns.find((t) => t.who === "you")?.text ?? it.quote, 20)}”`;
+  return "new card";
+}
+
 export function clearTicks(root: ParentNode): void {
   root.querySelectorAll(".ftick, .fpeek").forEach((n) => n.remove());
 }
@@ -343,6 +373,19 @@ export const FOLD_CSS = `
 .fold-count.cards{color:var(--accent,#41678a);}
 .fold-count.asks{color:var(--ink-soft,#58514c);}
 .fold-shut{position:absolute;right:6px;top:4px;width:19px;height:19px;display:inline-flex;align-items:center;justify-content:center;background:none;border:0;border-radius:4px;padding:0;cursor:pointer;color:inherit;font:400 14px/1 var(--sans,system-ui,sans-serif);letter-spacing:0;text-transform:none;}
+.fold-rs{position:absolute;right:2px;bottom:2px;width:11px;height:11px;cursor:nwse-resize;touch-action:none;z-index:3;opacity:.55;
+  background:linear-gradient(135deg,transparent 0 50%,var(--ink-faint,#857f7a) 50% 58%,transparent 58% 70%,var(--ink-faint,#857f7a) 70% 78%,transparent 78%);}
+.fold-rs:hover,.fold.sizing .fold-rs{opacity:1;}
+.ftab-at{position:absolute;z-index:40;}
+.ftab{display:inline-flex;align-items:center;gap:5px;height:22px;max-width:190px;box-sizing:border-box;padding:0 9px 0 8px;border:1px solid var(--accent,#41678a);border-radius:11px;background:var(--card-bg,#fffdfa);
+  font:500 10.5px/1 var(--sans,system-ui,sans-serif);color:var(--ink,#2a241f);cursor:pointer;white-space:nowrap;box-shadow:0 1px 2px oklch(0.35 0.03 60 / 0.08);}
+.ftab:hover,.ftab:focus-visible{background:var(--fold-sunk,oklch(0.955 0.009 85));outline:none;}
+.ftab[data-kind="note"]{border-color:var(--warn,#bd7138);}
+.ftab[data-kind="ask"]{border-color:var(--ink-soft,#58514c);}
+.ftab-dot{width:6px;height:6px;border-radius:50%;flex:none;background:var(--accent,#41678a);}
+.ftab[data-kind="note"] .ftab-dot{background:var(--warn,#bd7138);}
+.ftab[data-kind="ask"] .ftab-dot{background:var(--ink-soft,#58514c);}
+.ftab-t{overflow:hidden;text-overflow:ellipsis;}
 .fold-shut:hover{color:var(--ink,#2a241f);background:var(--fold-sunk,oklch(0.955 0.009 85));}
 .fold-threads{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none;z-index:39;}
 .fold .fi{border:0;box-shadow:none;background:transparent;border-radius:0;padding:0;}

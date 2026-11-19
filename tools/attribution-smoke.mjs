@@ -21,24 +21,24 @@ try {
     await page.goto(`${base}/?board=${board.id}&pair=${pair.id}`, { waitUntil: "networkidle" });
     await page.locator(".page-col [data-b]").first().waitFor();
     await page.waitForTimeout(1200);
-    // a card still to answer opens on its words by itself, its sheet hanging just under them
+    // a card opens by itself in the margin beside the column, level with its words
     const words = await page.evaluate(() => {
       const h = CSS.highlights.get("strata-card"), r = h && [...h][0];
       const rs = r ? [...r.getClientRects()] : [];
-      return rs.length ? { text: r.toString(), x: rs[0].left + 4, y: rs[0].top + rs[0].height / 2, bottom: Math.max(...rs.map((x) => x.bottom)) } : null;
+      return rs.length ? { text: r.toString(), x: rs[0].left + 4, y: rs[0].top + rs[0].height / 2, top: rs[0].top, right: Math.max(...[...document.querySelectorAll(".page-col [data-b]")].map((b) => b.getBoundingClientRect().right)) } : null;
     });
-    const before = await page.locator(".layer-plane > [data-fold]").count();
-    assert.equal(before, placed ? 1 : 0, "a card still to answer opens by itself, and only a placed one");
+    const before = await page.locator(".layer-plane > .fold[data-fold]").count();
+    assert.equal(before, placed ? 1 : 0, "a placed card opens by itself, and only a placed one");
     const under = await page.evaluate((q) => {
-      const sheet = [...document.querySelectorAll(".layer-plane > [data-fold]")].find((f) => f.textContent.includes(q));
-      return sheet ? { top: sheet.getBoundingClientRect().top } : null;
+      const sheet = [...document.querySelectorAll(".layer-plane > .fold[data-fold]")].find((f) => f.textContent.includes(q));
+      return sheet ? { top: sheet.getBoundingClientRect().top, left: sheet.getBoundingClientRect().left } : null;
     }, "Attribution " + source);
     if (placed) {
       assert.ok(words && /^Diversification reduces the risk of individual investments/.test(words.text), `the card's words are its quote, not ${JSON.stringify(words)}`);
-      assert.ok(under && under.top > words.bottom && under.top - words.bottom < 40, `the card's sheet hangs just under its words: ${JSON.stringify({ words, under })}`);
+      assert.ok(under && Math.abs(under.top - words.top) < 40 && under.left >= words.right, `the card's sheet lies beside the column, level with its words: ${JSON.stringify({ words, under })}`);
     } else assert.ok(!words && !under, `a card with no quote is placed nowhere, not on ${JSON.stringify(words)}`);
     await api(`/api/boards/${board.id}/minted/${made.id}`, "DELETE");
   }
   assert.deepEqual(errors, []);
-  console.log("✓ a quote puts the card on its words, open until it is answered; a heading reference places it nowhere");
+  console.log("✓ a quote puts the card on its words, its sheet open in the margin beside them; a heading reference places it nowhere");
 } finally { await browser.close(); await api(`/api/boards/${board.id}`, "DELETE"); }

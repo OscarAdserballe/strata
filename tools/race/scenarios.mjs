@@ -1022,8 +1022,8 @@ const liveNotes = {
     const where = rows.map((r) => (r.box ? `box ${r.box}` : "words")).sort().join(", ");
     t.check("notes", rows.length === 2 && where === "box S3, words", `${rows.length} note(s): ${where}`);
     t.check("said", rows.map((r) => r.note).sort().join("|") === [...said].sort().join("|"), rows.map((r) => r.note).join(" · "));
-    // a note written from a selection shuts when saved: each is opened to be read, from its words or its box's tick
-    const ticks = frame.locator(".ftick:has(.fmk.note)");
+    // a live page has no margin: each note is a tab on its right edge, opened to be read from the tab or its words
+    const ticks = frame.locator(".ftab[data-kind=note]");
     for (let i = 0; i < 4 && await ticks.count(); i++) { await ticks.first().click(); await sleep(200); }
     const live = page.frames().find((f) => f.url().includes("/live"));
     if (live) { await clickWords(live, null, "strata-noted"); await sleep(300); }
@@ -1064,7 +1064,7 @@ const liveNoteRemove = {
     }
     await t.net.idle(500);
     t.check("server", rows.length === 1 && rows[0].note === "Keep me.", rows.map((r) => r.note).join(" · ") || "none");
-    await frame.locator(".ftick").first().click({ timeout: 10_000 });
+    await frame.locator(".ftab").first().click({ timeout: 10_000 });
     const shown = await frame.locator(".fi-note").allTextContents();
     t.check("shown", shown.join("|") === "Keep me.", `page: ${shown.join(" · ") || "none"}`);
   },

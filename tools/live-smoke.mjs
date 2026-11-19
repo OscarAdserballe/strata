@@ -38,8 +38,9 @@ try {
   await tab.close();
   console.log("✓ a link in a live page opens in a new tab, not inside the frame");
 
-  // cards land on the page by their quotes: one inside a list item, one in a paragraph. Each still to answer opens on its
-  // words by itself; the page draws the sheets over itself, never inside it, and no sheet covers another.
+  // cards land on the page by their quotes: one inside a list item, one in a paragraph. A live page has no margin, so each
+  // is a tab on its right edge, level with its words; a tab opens its sheet over the page, never inside it, and no sheet
+  // covers another.
   const tree = { title: "Delegation-loss curve", question: "?", nodes: [{ label: "hops lose", kind: "claim", anchor: "#delegation-loss-curve", children: [] }] };
   await api(`/api/boards/${board.id}/resources/${r.id}/tree`, "PUT", { tree, cards: [
     { node: "n1", type: "flashcard", source: `quote: ${JSON.stringify("The first hop drops the brief's constraints.")}`, front: "What does the first hop drop?", back: "The constraints." },
@@ -49,8 +50,15 @@ try {
   const again = await (await page.waitForSelector("iframe.html-frame", { timeout: 15000 })).contentFrame();
   await again.waitForFunction(() => CSS.highlights.get("strata-card")?.size === 2, null, { timeout: 15000 });
   await again.waitForTimeout(400);
-  const sheetsNow = () => again.evaluate(() => [...document.querySelectorAll("strata-fold")].filter((h) => h.shadowRoot?.querySelector(".fi.card")).length);
+  const tabs = await again.waitForFunction(() => {
+    const ts = [...document.querySelectorAll("strata-fold")].map((h) => h.shadowRoot?.querySelector(".ftab")).filter(Boolean);
+    return ts.length === 2 && ts.map((t) => ({ label: t.textContent, right: Math.round(t.getBoundingClientRect().right), edge: document.documentElement.clientWidth }));
+  }, null, { timeout: 5000 }).then((h) => h.jsonValue());
+  assert.ok(tabs.every((t) => t.edge - t.right < 20), "each card's tab lies on the page's right edge: " + JSON.stringify(tabs));
+  assert.equal(await again.evaluate(() => [...document.querySelectorAll("strata-fold")].filter((h) => h.shadowRoot?.querySelector(".fi.card")).length), 0, "no card's sheet is open before its tab is clicked");
+  for (let i = 0; i < 2; i++) await again.evaluate(() => [...document.querySelectorAll("strata-fold")].map((h) => h.shadowRoot?.querySelector(".ftab")).find(Boolean).click());
   await again.waitForFunction(() => [...document.querySelectorAll("strata-fold")].filter((h) => h.shadowRoot?.querySelector(".fi.card")).length === 2, null, { timeout: 5000 });
+  await again.waitForTimeout(300);
   const laid = await again.evaluate(() => {
     const hosts = [...document.querySelectorAll("strata-fold")].filter((h) => h.shadowRoot?.querySelector(".fold"));
     const rs = hosts.map((h) => h.getBoundingClientRect());
@@ -65,7 +73,7 @@ try {
   assert.ok(!laid.overlap, "no sheet covers another: " + JSON.stringify(laid));
   assert.match(await page.locator(".rbar-keep").textContent(), /0\/2/, "the reader's bar counts the deck");
   assert.deepEqual(errors, []);
-  console.log("✓ a live page's cards open on their words by themselves, over the page, neither covering the other");
+  console.log("✓ a live page's cards are tabs on its right edge; each opens over the page, neither covering the other");
 
   // a note hangs off its own words, like a card: in a grid's cell, the box around them is the whole grid, far below
   const filler = Array.from({ length: 40 }, (_, i) => `Filler sentence ${i} keeps this cell tall.`).join(" ");

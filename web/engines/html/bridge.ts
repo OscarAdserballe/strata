@@ -363,6 +363,7 @@ const pageDom: LayerDom = {
   },
   clearTicks() { if (overlay) { clearTicks(overlay.root); overlay.root.replaceChildren(); } },
   surface: () => document,
+  rail: true,
 };
 const drawer = layerDrawer(pageDom);
 let layerItems: LayerItem[] = [];

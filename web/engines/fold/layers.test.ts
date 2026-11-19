@@ -1,69 +1,58 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { type Place, dockOf, onWords, threadOf } from "./layers.ts";
+import { type Place, dockOf, layOf, leaderOf, onWords, tabOf } from "./layers.ts";
 
 const place = (over: Partial<Place> = {}): Place => ({
   passage: { top: 100, bottom: 180, left: 40, right: 600 }, column: { left: 40, right: 600 }, width: 680, unit: 1, perClient: 1, ...over,
 });
 
-test("a sheet lies just under its passage, inside the column", () => {
-  const at = dockOf(place());
-  assert.equal(at.y, 188);
-  assert.ok(at.x >= 40 && at.x + at.w <= 600, JSON.stringify(at));
+test("a wide plane leaves the margin to the sheets; a narrow one or a live page puts them on the rail", () => {
+  assert.equal(layOf(place({ width: 1000 })), "beside");
+  assert.equal(layOf(place()), "rail", "80px right of the column is no margin");
+  assert.equal(layOf(place({ width: 1000 }), true), "rail");
 });
 
-test("a sheet never hangs off a narrow plane", () => {
-  const at = dockOf(place({ column: { left: 10, right: 250 }, width: 260 }));
-  assert.ok(at.x >= 0 && at.x + at.w <= 260, JSON.stringify(at));
+test("beside the column, a sheet lies level with its words' first line, inside the plane", () => {
+  const at = dockOf(place({ width: 1000 }), "beside");
+  assert.equal(at.x, 628);
+  assert.equal(at.y, 96);
+  assert.ok(at.x + at.w <= 1000, JSON.stringify(at));
+  assert.equal(at.w, 300);
 });
 
-test("a slide's sheet lies where the page says, over the slide", () => {
-  assert.equal(dockOf(place({ dock: 140 })).y, 140);
+test("on the rail, a sheet lies on the right edge just under its words, over the page", () => {
+  const at = dockOf(place({ hang: { x: 300, y: 160 } }), "rail");
+  assert.equal(at.y, 168);
+  assert.equal(at.x + at.w, 672);
+  assert.ok(at.x >= 0);
+});
+
+test("on the rail, a box's sheet lies level with the box, over its right side", () => {
+  assert.equal(dockOf(place(), "rail").y, 100);
+});
+
+test("a slide's sheet on the rail lies where the page says", () => {
+  assert.equal(dockOf(place({ dock: 140 }), "rail").y, 140);
 });
 
 test("a live page's sheet is drawn at its scale", () => {
-  assert.equal(dockOf(place({ column: { left: 0, right: 2000 }, width: 2000, unit: 2 })).w, 920);
+  assert.equal(dockOf(place({ column: { left: 0, right: 2000 }, width: 2000, unit: 2 }), "rail").w, 600);
 });
 
-test("the bracket is on the side nearer the sheet, and the thread ends at the sheet's corner", () => {
-  const p = place();
-  const left = threadOf(p, { x: 80, y: 188, w: 460 });
-  assert.match(left.bracket, /^M31 /);
-  assert.deepEqual(left.to, [94, 188]);
-  const right = threadOf(p, { x: 700, y: 300, w: 300 });
-  assert.match(right.bracket, /^M609 /);
-  assert.deepEqual(right.to, [986, 300]);
+test("a tab lies level with its words: beside the column, or by its right end on the plane's edge", () => {
+  const p = place({ width: 1000 });
+  assert.deepEqual(tabOf(p, "beside"), { x: 628, y: 98, w: 150 });
+  assert.equal(tabOf(p, "rail").x + tabOf(p, "rail").w, 992);
 });
 
-test("a sheet over its own passage is tied from beside it, not from the passage's end", () => {
-  const th = threadOf(place({ passage: { top: 0, bottom: 1000, left: 40, right: 600 } }), { x: 80, y: 500, w: 460 });
-  assert.equal(th.from[1], 500);
-});
-
-test("a card's sheet hangs just under its words, starting where their last line does", () => {
-  const p = place({ passage: { top: 100, bottom: 160, left: 40, right: 600 }, hang: { x: 300, y: 160 } });
-  const at = dockOf(p);
-  assert.equal(at.y, 170);
-  assert.equal(at.x, 160, "shifted left to stay in the column");
-  const th = threadOf(p, at);
-  assert.equal(th.bracket, "");
-  assert.equal(th.thread, "");
-  assert.match(th.caret, /^M305 171 L312 163 L319 171 Z$/);
-});
-
-test("a card's sheet near the column's right edge stays by the column, its caret still on the words", () => {
-  const p = place({ passage: { top: 100, bottom: 160, left: 40, right: 600 }, hang: { x: 560, y: 160 } });
-  const at = dockOf(p);
-  assert.ok(at.x + at.w <= 620, JSON.stringify(at));
-  assert.ok(threadOf(p, at).caret, "a caret, not a thread");
-});
-
-test("a card's sheet moved away from its words is tied to them by a thread, not a bracket", () => {
-  const p = place({ hang: { x: 300, y: 160 } });
-  const th = threadOf(p, { x: 700, y: 500, w: 300 });
-  assert.equal(th.caret, "");
-  assert.equal(th.bracket, "");
-  assert.deepEqual(th.from, [300, 160]);
+test("a leader runs from the column's edge at the words' line to the sheet's strip, and bends when the sheet is pushed down", () => {
+  const p = place({ width: 1000 });
+  const level = leaderOf(p, { x: 628, y: 94, w: 300 });
+  assert.equal(level.d, "M606 110 H628");
+  const pushed = leaderOf(p, { x: 628, y: 300, w: 300 });
+  assert.deepEqual(pushed.from, [606, 110]);
+  assert.deepEqual(pushed.to, [628, 316]);
+  assert.match(pushed.d, /^M606 110 C/);
 });
 
 test("a click is on a card's words only within their lines", () => {
