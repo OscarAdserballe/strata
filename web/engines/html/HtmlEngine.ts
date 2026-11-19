@@ -114,6 +114,7 @@ export class HtmlEngine {
         else if (m.intent === "keep") on.keep(m.id, String(m.text ?? ""), String(m.back ?? ""));
         else if (m.intent === "grade") on.grade(m.id, !!m.got);
         else if (m.intent === "capture") on.capture(m.id, Number(m.text));
+        else if (m.intent === "again") on.again?.(m.id);
         else on[m.intent](m.id, String(m.text ?? ""));
         break;
       }

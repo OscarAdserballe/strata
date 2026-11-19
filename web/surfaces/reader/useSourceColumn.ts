@@ -202,6 +202,14 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
       if (v.card && v.card.id === id) v.cardActs?.grade(got);
       else v.cardActs?.gradeAt(i, got);
     },
+    again: (id: string) => {
+      const v = room.live(), i = v.cards.findIndex((c) => c.id === id);
+      if (i < 0) return;
+      answered.forget(v.pair.deck, id);
+      turned.drop(v.pair.deck, id);
+      if (v.card && v.card.id === id) v.cardActs?.seek(i);
+      paintLayer();
+    },
     // conversations at words on this source: its thread's turns that name them, and the one being started
     asks: () => {
       const v = room.live(), s = v.src, bid = v.activeId;

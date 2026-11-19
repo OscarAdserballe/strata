@@ -28,7 +28,11 @@ export interface FoldAsk {
   rich?: boolean;
 }
 export type FoldItem = FoldNote | FoldCard | FoldDraft | FoldAsk;
-export interface FoldModel { where: string; count: string; items: FoldItem[] }
+export interface FoldModel {
+  where: string; count: string; items: FoldItem[];
+  /** what the sheet's tab says when it is shrunk: a note's first words, a card's question */
+  tab?: string;
+}
 export interface FoldIntents {
   shut(): void;
   edit(id: string): void;
@@ -48,6 +52,10 @@ export interface FoldIntents {
   ask(id: string, text: string): void;
   /** an answer in an ask, made into a card (its question on the front) */
   capture(id: string, turn: number): void;
+  /** a card answered here, asked again */
+  again?(id: string): void;
+  /** the sheet shrunk to its tab, or opened from it */
+  mini?(on: boolean): void;
 }
 export type TickMark = "note" | "card" | "card-done" | "ask";
 
@@ -164,6 +172,7 @@ function cardItem(doc: Document, it: FoldCard, on: FoldIntents): HTMLElement {
   if (it.state === "done" && !it.held) {
     const line = el(doc, "div", "fi line card");
     line.append(el(doc, "span", "fi-ck", "✓"), el(doc, "span", "fi-lq", it.q), el(doc, "span", "fi-r", it.got === null ? "seen" : it.got ? "got it" : "not yet"));
+    if (on.again) line.append(againButton(doc, it.id, on));
     return line;
   }
   const box = el(doc, "div", "fi card" + (it.held ? " hand" : ""));
@@ -187,9 +196,17 @@ function cardItem(doc: Document, it: FoldCard, on: FoldIntents): HTMLElement {
   } else if (it.state === "revealed") {
     btn("fi-good", "Got it", () => on.grade(it.id, true));
     btn("fi-pill", "Not yet", () => on.grade(it.id, false));
-  }
+  } else if (on.again) acts.append(againButton(doc, it.id, on));
   if (acts.childElementCount) box.append(acts);
   return box;
+}
+
+function againButton(doc: Document, id: string, on: FoldIntents): HTMLButtonElement {
+  const b = el(doc, "button", "fi-again", "↺ ask again");
+  b.type = "button";
+  b.title = "turn this card back to its question";
+  b.onclick = (e) => { e.stopPropagation(); on.again?.(id); };
+  return b;
 }
 
 function draftItem(doc: Document, it: FoldDraft, on: FoldIntents): HTMLElement {
@@ -259,10 +276,20 @@ export function drawFold(host: HTMLElement, m: FoldModel, on: FoldIntents): void
     shut.setAttribute("aria-label", "close");
     const grip = el(doc, "i", "fold-grip");
     grip.setAttribute("aria-hidden", "true");
+    const mini = el(doc, "button", "fold-mini", "–");
+    mini.type = "button";
+    mini.title = "shrink to a tab";
+    mini.setAttribute("aria-label", "shrink to a tab");
     hd.title = "drag to move · double-click to put back";
-    hd.append(grip, el(doc, "span", "fold-where"), el(doc, "span", "fold-grow"), el(doc, "span", "fold-count"), shut);
+    hd.append(grip, el(doc, "span", "fold-where"), el(doc, "span", "fold-grow"), el(doc, "span", "fold-count"), mini, shut);
     inner.append(hd);
-    host.append(inner);
+    const size = el(doc, "i", "fold-size");
+    size.title = "drag to resize · double-click for the usual size";
+    size.setAttribute("aria-hidden", "true");
+    const tab = el(doc, "button", "fold-tab");
+    tab.type = "button";
+    tab.append(el(doc, "i", "fold-tab-dot"), el(doc, "span", "fold-tab-t"));
+    host.append(inner, size, tab);
   }
   host.classList.add("fold");
   (inner.querySelector(".fold-where") as HTMLElement).textContent = m.where;
@@ -273,6 +300,15 @@ export function drawFold(host: HTMLElement, m: FoldModel, on: FoldIntents): void
   count.classList.toggle("asks", asks);
   host.dataset.kind = cards ? "card" : asks ? "ask" : "note";
   (inner.querySelector(".fold-shut") as HTMLButtonElement).onclick = () => on.shut();
+  const mini = inner.querySelector(".fold-mini") as HTMLButtonElement, tab = host.querySelector(":scope > .fold-tab") as HTMLButtonElement | null;
+  mini.hidden = !on.mini;
+  mini.onclick = () => on.mini?.(true);
+  if (tab) {
+    (tab.querySelector(".fold-tab-t") as HTMLElement).textContent = m.tab ?? "";
+    tab.title = m.tab ?? "";
+    tab.setAttribute("aria-label", "open " + (m.tab ?? "sheet"));
+    tab.onclick = (e) => { e.stopPropagation(); on.mini?.(false); };
+  }
   const kept = new Map<string, HTMLElement>();
   for (const c of inner.querySelectorAll<HTMLElement>(":scope > .fi")) kept.set(c.dataset.id || "", c);
   let prev: Element = inner.firstElementChild as Element;
@@ -342,6 +378,31 @@ export const FOLD_CSS = `
 .fold-count{position:absolute;right:31px;top:9px;color:var(--warn,#bd7138);letter-spacing:0;text-transform:none;font-size:9.3px;}
 .fold-count.cards{color:var(--accent,#41678a);}
 .fold-count.asks{color:var(--ink-soft,#58514c);}
+.fold-mini{position:absolute;right:26px;top:4px;width:19px;height:19px;display:inline-flex;align-items:center;justify-content:center;background:none;border:0;border-radius:4px;padding:0;cursor:pointer;color:inherit;font:500 14px/1 var(--sans,system-ui,sans-serif);letter-spacing:0;text-transform:none;}
+.fold-mini:hover{color:var(--ink,#2a241f);background:var(--fold-sunk,oklch(0.955 0.009 85));}
+.fold-mini[hidden]{display:none;}
+.fold-hd:has(.fold-mini:not([hidden])) .fold-count{right:50px;}
+.fold-hd:has(.fold-mini:not([hidden])) + .fi .fi-lab,.fold-hd:has(.fold-mini:not([hidden])) + .fi.line{margin-right:78px;}
+.fold-in{height:var(--fold-h,auto);}
+.fold-size{position:absolute;right:1px;bottom:1px;width:14px;height:14px;cursor:nwse-resize;z-index:3;touch-action:none;opacity:.55;
+  background:linear-gradient(135deg,transparent 0 55%,var(--ink-faint,#857f7a) 55% 61%,transparent 61% 72%,var(--ink-faint,#857f7a) 72% 78%,transparent 78%);border-bottom-right-radius:7px;}
+.fold-size:hover,.fold.sizing .fold-size{opacity:1;}
+.fold-tab{display:none;align-items:center;gap:6px;max-width:100%;height:24px;padding:0 10px 0 8px;box-sizing:border-box;background:var(--card-bg,#fffdfa);border:1px solid var(--line,#e2ded7);border-radius:12px;cursor:pointer;
+  font:12px/1 var(--sans,system-ui,sans-serif);color:var(--ink-soft,#58514c);box-shadow:0 1px 2px oklch(0.35 0.03 60 / 0.08),0 4px 10px -4px oklch(0.35 0.03 60 / 0.22);}
+.fold-tab:hover{color:var(--ink,#2a241f);border-color:var(--ink-faint,#857f7a);}
+.fold-tab-dot{flex:none;width:6px;height:6px;border-radius:50%;background:var(--warn,#bd7138);}
+.fold[data-kind="card"] .fold-tab-dot{background:var(--accent,#41678a);}
+.fold[data-kind="ask"] .fold-tab-dot{background:var(--ink-soft,#58514c);}
+.fold-tab-t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}
+.fold.mini{width:auto !important;animation:none;}
+.fold.mini .fold-in,.fold.mini .fold-size{display:none;}
+.fold.mini .fold-tab{display:inline-flex;}
+.fold .fi.line{flex-wrap:wrap;row-gap:3px;}
+.fold .fi.line .fi-lq{order:-1;flex:1 1 100%;white-space:normal;font:14px/1.4 var(--serif,Georgia,serif);color:var(--ink,#2a241f);}
+.fold .fi.line .fi-r{margin-left:0;}
+.fi-again{margin-left:8px;background:none;border:0;padding:0;cursor:pointer;font:500 9.7px var(--mono,ui-monospace,monospace);color:var(--accent,#41678a);white-space:nowrap;}
+.fi-again:hover{text-decoration:underline;}
+.fi-acts .fi-again{margin-left:0;}
 .fold-shut{position:absolute;right:6px;top:4px;width:19px;height:19px;display:inline-flex;align-items:center;justify-content:center;background:none;border:0;border-radius:4px;padding:0;cursor:pointer;color:inherit;font:400 14px/1 var(--sans,system-ui,sans-serif);letter-spacing:0;text-transform:none;}
 .fold-shut:hover{color:var(--ink,#2a241f);background:var(--fold-sunk,oklch(0.955 0.009 85));}
 .fold-threads{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none;z-index:39;}

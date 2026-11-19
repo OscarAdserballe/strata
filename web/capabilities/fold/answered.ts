@@ -18,6 +18,13 @@ export const answered = {
     const v = load(deck)[id];
     return v === undefined ? null : v;
   },
+  forget(deck: string | null | undefined, id: string): void {
+    if (!deck) return;
+    const m = load(deck);
+    if (!(id in m)) return;
+    delete m[id];
+    try { localStorage.setItem(KEY(deck), JSON.stringify(m)); } catch { /* private mode: this visit still remembers */ }
+  },
   set(deck: string | null | undefined, id: string, got: boolean): void {
     if (!deck) return;
     const m = load(deck);

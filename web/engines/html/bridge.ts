@@ -378,6 +378,7 @@ const intents = {
   discard: (id: string) => send({ t: "layer", intent: "discard", id }),
   ask: (id: string, text: string) => send({ t: "layer", intent: "ask", id, text }),
   capture: (id: string, turn: number) => send({ t: "layer", intent: "capture", id, text: String(turn) }),
+  again: (id: string) => send({ t: "layer", intent: "again", id }),
 };
 // our own sheets going in or out must not wake the observer that redraws them
 let redrawing = false;
