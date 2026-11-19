@@ -17,6 +17,7 @@
 
 /* Hold the layout width at --pz × 100% so page zoom actually enlarges a fit-to-width PDF. */
 .pdf-col{width:calc(var(--pz, 1) * 100%);max-width:820px;margin:0 auto;padding:40px 34px 150px;}
+@media (min-width: 881px){ .pdf-col{margin-left:max(0px,min((100% - min(var(--pz, 1) * 100%, 820px)) / 2,100% - 1140px));} }
 .pdf-head{font:500 9.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;color:oklch(0.74 0.01 70);margin-bottom:18px;display:flex;gap:10px;align-items:center;}
 .slide{position:relative;margin-bottom:22px;}
 .slide canvas{display:block;width:100%;height:auto;border:1px solid var(--line);border-radius:5px;box-shadow:var(--shadow-soft);background:#fff;}

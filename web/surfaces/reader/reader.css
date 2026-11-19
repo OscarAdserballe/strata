@@ -20,6 +20,8 @@
 .gen-progress .card-progress{margin:0;}
 .page{flex:1;min-width:0;overflow:auto;}
 .page-col{max-width:640px;margin:0 auto;padding:46px 34px 150px;}
+/* the column gives way left until a sheet's width is free on its right: the margin is where notes and cards lie */
+@media (min-width: 881px){ .page > .page-col:not(.treeview){margin-left:max(0px,min(50% - 320px,100% - 960px));} }
 /* sheets lie on a zero-height plane at the top of the scroller: they scroll with the page and sit above it */
 .layer-plane{position:relative;height:0;z-index:var(--layer-page-layers);}
 /* the words a card or a question sits on, washed in its layer's colour (a note's are its highlight) */
