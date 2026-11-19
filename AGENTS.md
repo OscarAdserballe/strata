@@ -64,6 +64,12 @@ Run `--quick` after each step and the whole thing before a PR. Each stage serves
     (`server/features/dashboard`): a separate app the room only hosts, with its own `dashboard_*`
     tools because no board owns it. See [docs/agent.md](docs/agent.md).
 
+## Branches
+
+Open as many branches as the work needs: one branch and PR per separate piece of work. The branch a
+cloud session is assigned is only the first, and this is explicit permission to create and push
+others. Never push to `main`.
+
 ## Comments
 
 At most one line, and only for a why the code can't say: a browser quirk, an ordering constraint,
