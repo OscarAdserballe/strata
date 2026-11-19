@@ -24,4 +24,11 @@ export const answered = {
     m[id] = got;
     try { localStorage.setItem(KEY(deck), JSON.stringify(m)); } catch { /* private mode: this visit still remembers */ }
   },
+  clear(deck: string | null | undefined, id: string): void {
+    if (!deck) return;
+    const m = load(deck);
+    if (!(id in m)) return;
+    delete m[id];
+    try { localStorage.setItem(KEY(deck), JSON.stringify(m)); } catch { /* private mode: this visit still remembers */ }
+  },
 };

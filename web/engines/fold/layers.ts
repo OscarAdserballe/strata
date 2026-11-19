@@ -1,5 +1,6 @@
 import { drawFold, type FoldAsk, type FoldCard, type FoldDraft, type FoldIntents, type FoldNote, type TickMark } from "./view.ts";
 import type { Anchor } from "../../../shared/reading/anchors.ts";
+import { sheetMemory } from "./memory.ts";
 
 // One drawer for every kind of source: a card lives on its own words and opens from them, like a reader's highlight;
 // notes and questions are grouped by passage, with a tick on a shut one. Sheets lie on a plane over the page, never in it.
@@ -66,12 +67,16 @@ export interface LayerDrawer {
 
 /** The key of the sheet the threads are drawn on, under every other sheet. */
 export const THREADS = "~threads";
-const SHEET_W = 460, INSET = 40, GAP = 8, BRACKET = 13, PUSH = 180, CARET = 7;
+const SHEET_W = 460, INSET = 40, GAP = 8, BRACKET = 13, PUSH = 180, CARET = 7, BESIDE = 28, SIDE_MIN = 260, MIN_W = 220, MIN_H = 72;
 
 const said = (it: LayerItem) => it.kind === "note" && !!it.text.trim();
 // a click on a said note's words opens it to read, like a card's; a bare highlight's opens it to write, in the reader
 const handled = (it: LayerItem) => it.kind !== "note" || said(it);
 const asking = (it: LayerItem) => it.kind === "card" && it.state !== "done";
+// a note with something said and a conversation with an answer lie open until the reader closes them
+const standing = (it: LayerItem) => said(it) || (it.kind === "ask" && it.turns.length > 0 && it.writing === null);
+// a sheet is remembered by the first of its items' ids: the same sheet on the next visit, whatever its passage's key
+const memOf = (items: readonly LayerItem[]) => items.map((it) => it.id).sort()[0] ?? "";
 const markOf = (it: LayerItem): TickMark => (it.kind === "note" ? "note" : it.kind === "ask" ? "ask" : it.kind === "card" && it.state === "done" ? "card-done" : "card");
 // an ask with nothing said yet is being asked; one being answered stays open while the answer comes
 const asking_ = (it: LayerItem) => it.kind === "ask" && (!it.turns.length || it.writing !== null);
@@ -81,10 +86,12 @@ const peekOf = (it: LayerItem): { kind: string; text: string } =>
 const colourOf = (items: readonly LayerItem[]) =>
   items.some((it) => it.kind === "card" || it.kind === "draft") ? "var(--accent,#41678a)" : items.every((it) => it.kind === "ask") ? "var(--ink-soft,#58514c)" : "var(--warn,#bd7138)";
 
-/** Where an unmoved sheet lies: under its words, starting where their last line does, or else inside its passage's
- *  column just under the passage; never off the plane. */
+/** Where an unmoved sheet lies: beside its passage, level with it, when the plane has room right of the column;
+ *  otherwise under its words, starting where their last line does, or inside the column just under the passage. */
 export function dockOf(p: Place): { x: number; y: number; w: number } {
   const u = p.unit, col = p.column.right - p.column.left;
+  const side = Math.min(SHEET_W * u, p.width - p.column.right - (BESIDE + 8) * u);
+  if (side >= SIDE_MIN * u) return { x: p.column.right + BESIDE * u, y: p.passage.top, w: side };
   const w = Math.max(Math.min(SHEET_W * u, col - 16 * u, p.width - 8 * u), Math.min(220 * u, p.width - 8 * u));
   let x = p.column.left + Math.max(0, Math.min(INSET * u, col - w));
   if (p.hang) x = Math.max(p.column.left - 20 * u, Math.min(p.hang.x - 24 * u, p.column.right + 20 * u - w));
@@ -96,6 +103,16 @@ export function dockOf(p: Place): { x: number; y: number; w: number } {
  *  under its words points at them with a caret instead, and is tied to them by a thread only once moved away. */
 export function threadOf(p: Place, at: { x: number; y: number; w: number }): { bracket: string; thread: string; from: [number, number]; to: [number, number]; caret: string } {
   const u = p.unit;
+  // a sheet beside the column is tied from the end of its words (or a bracket at the passage) straight across
+  if (at.x >= p.column.right) {
+    const fx = p.hang ? p.hang.x : p.column.right + BRACKET * u, fy = p.hang ? p.hang.y : Math.min(p.passage.bottom - 2 * u, Math.max(p.passage.top + 2 * u, at.y + 12 * u));
+    const tx = at.x, ty = at.y + 12 * u, mx = (fx + tx) / 2;
+    const top = p.passage.top + 2 * u, bot = Math.max(top + 6 * u, p.passage.bottom - 2 * u), bx = p.column.right + BRACKET * u;
+    return {
+      bracket: p.hang ? "" : `M${bx - 4 * u} ${top} H${bx} V${bot} H${bx - 4 * u}`,
+      thread: `M${fx} ${fy} C${mx} ${fy} ${mx} ${ty} ${tx} ${ty}`, from: [fx, fy], to: [tx, ty], caret: "",
+    };
+  }
   if (p.hang) {
     const h = p.hang, cx = Math.max(at.x + 16 * u, Math.min(h.x + 12 * u, at.x + at.w - 16 * u)), below = at.y - h.y;
     if (below >= 0 && below <= (GAP + 2 + CARET) * u * 2 && Math.abs(cx - (h.x + 12 * u)) < 2 * u)
@@ -150,7 +167,11 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
   // where the reader dropped a sheet, kept while this source is open; and which sheet is on top
   const moved = new Map<string, { x: number; y: number }>();
   let order: string[] = [];
-  let shown: { key: string; place: Place; dock: number; at: { x: number; y: number; w: number }; colour: string; host: HTMLElement }[] = [];
+  // how big the reader made a sheet, by key; with `moved`, kept on this device by the sheet's first item
+  const sized = new Map<string, { w: number; h: number }>();
+  // the notes and conversations lying open on their own, so a click on the page leaves them
+  let standingIds = new Set<string>();
+  let shown: { key: string; mem: string; place: Place; dock: number; at: { x: number; y: number; w: number }; colour: string; host: HTMLElement }[] = [];
   let last: { items: readonly LayerItem[]; on: LayerIntents } | null = null;
   // each sheet's height, as its observer last reported it: read after layout, never forced
   const tall = new Map<string, number>();
@@ -241,10 +262,44 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
         host.style.left = at.x + "px"; host.style.top = at.y + "px";
         threads();
       };
-      const up = () => { root.classList.remove("lifted"); hd.removeEventListener("pointermove", move); hd.removeEventListener("pointerup", up); hd.removeEventListener("pointercancel", up); };
+      const up = () => { root.classList.remove("lifted"); const at = moved.get(key); if (at) sheetMemory.set(s.mem, at); hd.removeEventListener("pointermove", move); hd.removeEventListener("pointerup", up); hd.removeEventListener("pointercancel", up); };
       hd.addEventListener("pointermove", move); hd.addEventListener("pointerup", up); hd.addEventListener("pointercancel", up);
     });
-    hd.addEventListener("dblclick", (e) => { if (e.target instanceof Element && e.target.closest("button")) return; moved.delete(key); redraw(); });
+    hd.addEventListener("dblclick", (e) => {
+      if (e.target instanceof Element && e.target.closest("button")) return;
+      const s = shown.find((x) => x.key === key);
+      moved.delete(key); sized.delete(key);
+      if (s) sheetMemory.set(s.mem, { x: undefined, y: undefined, w: undefined, h: undefined });
+      redraw();
+    });
+    // the corner sets a sheet's width and height; the height is the most it grows to, so a short sheet stays short
+    const corner = root.querySelector<HTMLElement>(":scope > .fold-size");
+    corner?.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      const s = shown.find((x) => x.key === key);
+      if (!s) return;
+      e.preventDefault(); e.stopPropagation();
+      const per = s.place.perClient / s.place.unit, u = s.place.unit;
+      const from = { cx: e.clientX, cy: e.clientY, w: s.at.w, h: root.querySelector<HTMLElement>(".fold-in")?.offsetHeight ?? tall.get(key) ?? 200 };
+      corner.setPointerCapture(e.pointerId);
+      root.classList.add("sizing");
+      const move = (m: PointerEvent) => {
+        const w = Math.max(MIN_W * u, Math.min(from.w + (m.clientX - from.cx) * s.place.perClient, s.place.width - s.at.x));
+        const h = Math.max(MIN_H, from.h + (m.clientY - from.cy) * per);
+        sized.set(key, { w, h });
+        s.at = { ...s.at, w };
+        host.style.width = w + "px";
+        root.style.setProperty("--fold-max", Math.round(h) + "px");
+        threads();
+      };
+      const up = () => {
+        root.classList.remove("sizing");
+        const z = sized.get(key);
+        if (z) sheetMemory.set(s.mem, z);
+        corner.removeEventListener("pointermove", move); corner.removeEventListener("pointerup", up); corner.removeEventListener("pointercancel", up);
+      };
+      corner.addEventListener("pointermove", move); corner.addEventListener("pointerup", up); corner.addEventListener("pointercancel", up);
+    });
     host.addEventListener("pointerdown", () => raise(key), true);
   }
 
@@ -279,6 +334,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
       groups.delete(y.spot.key);
     }
     targets = [];
+    const standingNow = new Set<string>();
     for (const [key, g] of groups) {
       if (g.spot.words && g.spot.tint && !g.spot.hidden && g.items.some(handled)) targets.push({ key, range: g.spot.tint, ids: g.items.filter(handled).map((it) => it.id) });
       for (const it of g.items) {
@@ -288,8 +344,10 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
         // an ask stays open once asked, so its answer and the next question have somewhere to be
         if (it.kind === "ask" && it.writing !== null && !shut.has(it.id) && !g.spot.hidden) pinned.add(it.id);
         const writing = (it.kind === "note" && it.editing) || it.kind === "draft" || (asking_(it) && !shut.has(it.id));
+        const stands = standing(it) && !shut.has(it.id) && !sheetMemory.get(it.id)?.closed;
+        if (stands) standingNow.add(it.id);
         if (!g.spot.hidden && wanted.has(it.id)) { opened(it); wanted.delete(it.id); }
-        if (!g.spot.hidden && (turned || writing || pinned.has(it.id))) { open.add(key); shows.add(it.id); }
+        if (!g.spot.hidden && (turned || writing || stands || pinned.has(it.id))) { open.add(key); shows.add(it.id); }
       }
     }
     for (const [key, g] of groups) if (open.has(key) && g.spot.words && g.spot.tint && g.items.some((it) => it.kind === "card")) wash["card-on"]!.push(g.spot.tint);
@@ -307,7 +365,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
         const first = g.items[0];
         dom.tick(g.spot, g.items.map(markOf), peekOf(first), () => {
           // everything on the passage opens; a card still to answer shuts again once it is graded
-          for (const it of g.items) { shut.delete(it.id); if (g.spot.hidden) wanted.add(it.id); else opened(it); }
+          for (const it of g.items) { reopen(it.id); if (g.spot.hidden) wanted.add(it.id); else opened(it); }
           if (!g.spot.hidden) raise(key);
           draw(items, on);
         });
@@ -315,7 +373,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
       }
       const vis = g.items.filter((it) => shows.has(it.id)), hid = g.items.filter((it) => !shows.has(it.id));
       // what the open sheet doesn't hold is still marked beside its passage, and opens into the sheet
-      if (hid.length && !g.spot.words) dom.tick(g.spot, hid.map(markOf), peekOf(hid[0]), () => { for (const it of hid) { shut.delete(it.id); opened(it); } raise(key); draw(items, on); });
+      if (hid.length && !g.spot.words) dom.tick(g.spot, hid.map(markOf), peekOf(hid[0]), () => { for (const it of hid) { reopen(it.id); opened(it); } raise(key); draw(items, on); });
       const n = vis.filter(said).length, cards = vis.filter((it) => it.kind === "card");
       const next = cards.findIndex(asking);
       const asks = vis.filter((it) => it.kind === "ask");
@@ -332,8 +390,11 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
         later: (id) => { bySheet = Date.now(); shut.add(id); pinned.delete(id); on.later(id); redraw(); },
         grade: (id, got) => { bySheet = Date.now(); on.grade(id, got); },
         show: (id) => { bySheet = Date.now(); on.show(id); },
+        // a graded card put back to its question: it lies open again until it is graded
+        again: (id) => { bySheet = Date.now(); shut.delete(id); pinned.delete(id); asked.delete(id); on.again(id); },
         shut: () => {
           for (const it of g.items) pinned.delete(it.id);
+          for (const it of g.items) if (standing(it)) { shut.add(it.id); sheetMemory.set(it.id, { closed: true }); }
           for (const it of g.items) if (it.kind === "card" || it.kind === "ask") shut.add(it.id);
           const mine = g.items.find((it) => it.kind === "note" && it.editing) as FoldNote | undefined;
           const draft = g.items.find((it) => it.kind === "draft");
@@ -345,19 +406,25 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
           else draw(items, on);
         },
       });
+      const mem = memOf(g.items), kept = sheetMemory.get(mem);
+      if (!moved.has(key) && kept?.x != null && kept.y != null) moved.set(key, { x: kept.x, y: kept.y });
+      if (!sized.has(key) && kept?.w != null && kept.h != null) sized.set(key, { w: kept.w, h: kept.h });
+      const size = sized.get(key);
       grip(key, sheet.host, sheet.root);
-      const at = { ...dockOf(place), ...(moved.get(key) ?? {}) };
+      const at = { ...dockOf(place), ...(moved.get(key) ?? {}), ...(size ? { w: Math.max(MIN_W * place.unit, Math.min(size.w, place.width)) } : {}) };
       // a sheet dropped near an edge stays reachable when the window narrows
       at.x = Math.max(0, Math.min(at.x, place.width - at.w));
       sheet.host.style.left = at.x + "px"; sheet.host.style.top = at.y + "px"; sheet.host.style.width = at.w + "px";
       // a sheet is never taller than most of the window, at whatever scale it is drawn
       const win = sheet.root.ownerDocument.defaultView;
-      if (win) sheet.root.style.setProperty("--fold-max", Math.round(win.innerHeight * 0.72 * place.perClient / place.unit) + "px");
+      if (size) sheet.root.style.setProperty("--fold-max", Math.round(size.h) + "px");
+      else if (win) sheet.root.style.setProperty("--fold-max", Math.round(win.innerHeight * 0.72 * place.perClient / place.unit) + "px");
       watch(key, sheet.host);
       if (!was.has(key) || !order.includes(key)) order = [...order.filter((k) => k !== key), key];
-      now.push({ key, place, dock: at.y, at, colour: colourOf(vis), host: sheet.host });
+      now.push({ key, mem, place, dock: at.y, at, colour: colourOf(vis), host: sheet.host });
     }
     shown = now;
+    standingIds = standingNow;
     settle();
     order = order.filter((k) => shown.some((s) => s.key === k));
     stack();
@@ -368,6 +435,10 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
     paintTints();
     threads();
     on.drawn?.();
+  }
+  function reopen(id: string): void {
+    shut.delete(id);
+    if (sheetMemory.get(id)?.closed) sheetMemory.set(id, { closed: undefined });
   }
   function opened(it: LayerItem): void {
     pinned.add(it.id);
@@ -395,7 +466,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
       const hits = hitAt(e.clientX, e.clientY);
       if (hits.length) {
         const ids = new Set(hits.flatMap((h) => h.ids));
-        for (const it of last.items) if (ids.has(it.id)) { shut.delete(it.id); opened(it); }
+        for (const it of last.items) if (ids.has(it.id)) { reopen(it.id); opened(it); }
         raise(hits[0].key);
         draw(last.items, last.on);
         return;
@@ -422,7 +493,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
   function shutWords(): boolean {
     if (!last) return false;
     const words = new Set(targets.map((t) => t.key)), ids = new Set<string>();
-    for (const s of shown) if (words.has(s.key) && !moved.has(s.key)) for (const t of targets) if (t.key === s.key) t.ids.forEach((id) => { if (pinned.has(id)) ids.add(id); });
+    for (const s of shown) if (words.has(s.key) && !moved.has(s.key)) for (const t of targets) if (t.key === s.key) t.ids.forEach((id) => { if (pinned.has(id) && !standingIds.has(id)) ids.add(id); });
     for (const id of ids) { pinned.delete(id); shut.add(id); }
     return ids.size > 0;
   }
@@ -430,9 +501,9 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
   return {
     draw,
     redraw,
-    openFor: (ids) => { for (const id of ids) { wanted.add(id); shut.delete(id); } redraw(); },
+    openFor: (ids) => { for (const id of ids) { wanted.add(id); reopen(id); } redraw(); },
     forget: () => {
-      pinned.clear(); wanted.clear(); shut.clear(); asked.clear(); moved.clear(); tall.clear(); order = []; shown = []; last = null;
+      pinned.clear(); wanted.clear(); shut.clear(); asked.clear(); moved.clear(); sized.clear(); tall.clear(); standingIds = new Set(); order = []; shown = []; last = null;
       targets = []; hover = null; tints = { card: [], ask: [] }; hand = null; bySheet = 0;
       watcher?.disconnect(); watcher = null;
       dom.closeExcept(new Set()); dom.clearTicks(); dom.tint?.({ card: [], ask: [], "card-done": [], "card-on": [] });

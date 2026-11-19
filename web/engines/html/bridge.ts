@@ -373,6 +373,7 @@ const intents = {
   reply: (id: string, text: string) => send({ t: "layer", intent: "reply", id, text }),
   show: (id: string) => send({ t: "layer", intent: "show", id }),
   later: (id: string) => send({ t: "layer", intent: "later", id }),
+  again: (id: string) => send({ t: "layer", intent: "again", id }),
   grade: (id: string, got: boolean) => send({ t: "layer", intent: "grade", id, got }),
   keep: (id: string, text: string, back: string) => send({ t: "layer", intent: "keep", id, text, back }),
   discard: (id: string) => send({ t: "layer", intent: "discard", id }),

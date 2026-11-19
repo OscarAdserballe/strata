@@ -248,7 +248,7 @@ function liveAdapter(host: AdapterHost): SourceAdapter {
   return {
     kind: "html",
     drawLayers: (items, on) => host.layersLive(items, on),
-    forgetLayers: () => host.layersLive([], { edit() {}, leave() {}, remove() {}, reply() {}, show() {}, later() {}, grade() {}, keep() {}, discard() {}, ask() {}, capture() {} }, true),
+    forgetLayers: () => host.layersLive([], { edit() {}, leave() {}, remove() {}, reply() {}, show() {}, later() {}, again() {}, grade() {}, keep() {}, discard() {}, ask() {}, capture() {} }, true),
     blockOf: () => null,
     reveal: (a) => host.revealLive(a.quote, a.slug),
   };

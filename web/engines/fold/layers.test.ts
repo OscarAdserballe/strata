@@ -25,6 +25,26 @@ test("a live page's sheet is drawn at its scale", () => {
   assert.equal(dockOf(place({ column: { left: 0, right: 2000 }, width: 2000, unit: 2 })).w, 920);
 });
 
+test("a sheet lies beside its passage, level with it, when the plane has room right of the column", () => {
+  const at = dockOf(place({ width: 1200 }));
+  assert.deepEqual(at, { x: 628, y: 100, w: 460 });
+});
+
+test("a sheet beside the column narrows to the room there, and goes under the passage when too little is left", () => {
+  assert.equal(dockOf(place({ width: 936 })).w, 300);
+  assert.equal(dockOf(place({ width: 880 })).y, 188, "220px right of the column is too little");
+});
+
+test("a card's sheet beside the column is level with its passage and tied from the end of its words", () => {
+  const p = place({ passage: { top: 100, bottom: 160, left: 40, right: 600 }, hang: { x: 300, y: 160 }, width: 1200 });
+  const at = dockOf(p);
+  assert.equal(at.y, 100);
+  const th = threadOf(p, at);
+  assert.equal(th.caret, "");
+  assert.deepEqual(th.from, [300, 160]);
+  assert.deepEqual(th.to, [628, 112]);
+});
+
 test("the bracket is on the side nearer the sheet, and the thread ends at the sheet's corner", () => {
   const p = place();
   const left = threadOf(p, { x: 80, y: 188, w: 460 });
@@ -32,7 +52,7 @@ test("the bracket is on the side nearer the sheet, and the thread ends at the sh
   assert.deepEqual(left.to, [94, 188]);
   const right = threadOf(p, { x: 700, y: 300, w: 300 });
   assert.match(right.bracket, /^M609 /);
-  assert.deepEqual(right.to, [986, 300]);
+  assert.deepEqual(right.to, [700, 312], "beside the column, the thread ends at the sheet's near edge");
 });
 
 test("a sheet over its own passage is tied from beside it, not from the passage's end", () => {

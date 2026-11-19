@@ -196,6 +196,8 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
       if (v.card && v.card.id === id) v.cardActs.reveal();
     },
     later: (id: string) => { const v = room.live(); if (v.card && v.card.id === id) v.cardActs?.move(1); },
+    // its earlier grade stays in its history; the next one is a new review
+    again: (id: string) => { const d = room.live().pair.deck; answered.clear(d, id); turned.drop(d, id); paintLayer(); },
     grade: (id: string, got: boolean) => {
       const v = room.live(), i = v.cards.findIndex((c) => c.id === id);
       if (i < 0) return;

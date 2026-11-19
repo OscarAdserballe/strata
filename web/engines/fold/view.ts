@@ -41,6 +41,8 @@ export interface FoldIntents {
   show(id: string): void;
   later(id: string): void;
   grade(id: string, got: boolean): void;
+  /** a graded card, back to its question: grading it again is a new review */
+  again(id: string): void;
   /** a card written from a selection: kept with what its two faces hold, or let go */
   keep(id: string, front: string, back: string): void;
   discard(id: string): void;
@@ -163,7 +165,12 @@ function replyRow(doc: Document, id: string, on: FoldIntents): HTMLElement {
 function cardItem(doc: Document, it: FoldCard, on: FoldIntents): HTMLElement {
   if (it.state === "done" && !it.held) {
     const line = el(doc, "div", "fi line card");
-    line.append(el(doc, "span", "fi-ck", "✓"), el(doc, "span", "fi-lq", it.q), el(doc, "span", "fi-r", it.got === null ? "seen" : it.got ? "got it" : "not yet"));
+    const again = el(doc, "button", "fi-again", "↺");
+    again.type = "button";
+    again.title = "ask this card again";
+    again.setAttribute("aria-label", "ask this card again");
+    again.onclick = () => on.again(it.id);
+    line.append(el(doc, "span", "fi-ck", "✓"), el(doc, "span", "fi-lq", it.q), el(doc, "span", "fi-r", it.got === null ? "seen" : it.got ? "got it" : "not yet"), again);
     return line;
   }
   const box = el(doc, "div", "fi card" + (it.held ? " hand" : ""));
@@ -253,16 +260,19 @@ export function drawFold(host: HTMLElement, m: FoldModel, on: FoldIntents): void
   if (!inner) {
     inner = el(doc, "div", "fold-in");
     const hd = el(doc, "div", "fold-hd");
-    const shut = el(doc, "button", "fold-shut", "×");
+    const shut = el(doc, "button", "fold-shut", "–");
     shut.type = "button";
-    shut.title = "close to its tick";
-    shut.setAttribute("aria-label", "close");
+    shut.title = "shrink back to its words";
+    shut.setAttribute("aria-label", "shrink");
     const grip = el(doc, "i", "fold-grip");
     grip.setAttribute("aria-hidden", "true");
     hd.title = "drag to move · double-click to put back";
     hd.append(grip, el(doc, "span", "fold-where"), el(doc, "span", "fold-grow"), el(doc, "span", "fold-count"), shut);
     inner.append(hd);
-    host.append(inner);
+    const size = el(doc, "i", "fold-size");
+    size.title = "drag to resize";
+    size.setAttribute("aria-hidden", "true");
+    host.append(inner, size);
   }
   host.classList.add("fold");
   (inner.querySelector(".fold-where") as HTMLElement).textContent = m.where;
@@ -344,6 +354,11 @@ export const FOLD_CSS = `
 .fold-count.asks{color:var(--ink-soft,#58514c);}
 .fold-shut{position:absolute;right:6px;top:4px;width:19px;height:19px;display:inline-flex;align-items:center;justify-content:center;background:none;border:0;border-radius:4px;padding:0;cursor:pointer;color:inherit;font:400 14px/1 var(--sans,system-ui,sans-serif);letter-spacing:0;text-transform:none;}
 .fold-shut:hover{color:var(--ink,#2a241f);background:var(--fold-sunk,oklch(0.955 0.009 85));}
+.fold-size{position:absolute;right:1px;bottom:1px;width:13px;height:13px;cursor:nwse-resize;touch-action:none;z-index:3;opacity:.45;background:linear-gradient(135deg,transparent 0 55%,var(--ink-faint,#857f7a) 55% 62%,transparent 62% 74%,var(--ink-faint,#857f7a) 74% 81%,transparent 81%);border-bottom-right-radius:7px;}
+.fold:hover .fold-size,.fold.sizing .fold-size{opacity:.9;}
+.fold.sizing .fold-in{transition:none;}
+.fi-again{background:none;border:0;border-radius:4px;padding:0 4px;margin-left:2px;cursor:pointer;color:var(--accent,#41678a);font:500 13px/1 var(--sans,system-ui,sans-serif);}
+.fi-again:hover,.fi-again:focus-visible{background:var(--fold-sunk,oklch(0.955 0.009 85));outline:none;}
 .fold-threads{position:absolute;left:0;top:0;width:1px;height:1px;overflow:visible;pointer-events:none;z-index:39;}
 .fold .fi{border:0;box-shadow:none;background:transparent;border-radius:0;padding:0;}
 .fold .fi + .fi{border-top:1px solid var(--line,#e2ded7);padding-top:9px;}

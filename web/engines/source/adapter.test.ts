@@ -39,7 +39,7 @@ test("a live page draws its own layers: they cross the sandbox whole, with what 
   const html = sourceAdapters({ ...host(), layersLive: (items, on) => { sent.push(items.length); on.edit("mk-1"); } })("html");
   let edited = "";
   html.drawLayers([{ id: "mk-1", kind: "note", quote: "q", text: "t", editing: false, replies: [], anchor: { start: 0, end: 1, quote: "q" } }],
-    { edit: (id) => { edited = id; }, leave() {}, remove() {}, reply() {}, show() {}, later() {}, grade() {}, keep() {}, discard() {}, ask() {}, capture() {} });
+    { edit: (id) => { edited = id; }, leave() {}, remove() {}, reply() {}, show() {}, later() {}, again() {}, grade() {}, keep() {}, discard() {}, ask() {}, capture() {} });
   assert.deepEqual(sent, [1]);
   assert.equal(edited, "mk-1");
 });
