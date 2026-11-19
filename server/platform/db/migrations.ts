@@ -295,6 +295,11 @@ const MIGRATIONS: [name: string, run: () => void][] = [
   }],
   // A starred project sorts first on Today and Projects; null = not starred.
   ["project-star", () => addColumn("boards", "starred_at", "INTEGER")],
+  // A Dispatch version says the ask it answers and how Claude read it, shown above the page.
+  ["dispatch-ask", () => {
+    addColumn("dashboard_versions", "ask", "TEXT");
+    addColumn("dashboard_versions", "heard", "TEXT");
+  }],
 ];
 
 // A comment thread is now a note with replies: the reader's first words are the note, everything after a reply.

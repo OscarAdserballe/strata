@@ -3,7 +3,7 @@ import { store as roomStore, useQuery, type Fetcher, type Store } from "../store
 import { fetched } from "../api.ts";
 
 export interface DispatchLink { kind: string; ref: string; title?: string; url?: string }
-export interface DispatchVersion { n: number; resourceId: string; at: number; landed: string; notes: number }
+export interface DispatchVersion { n: number; resourceId: string; at: number; landed: string; notes: number; ask?: string | null; heard?: string | null }
 export interface DispatchPress { kind: string; stage: string; version: number | null; at: number; sessionUrl: string | null }
 export interface DispatchThread {
   id: string; title: string; stage: string; links: DispatchLink[]; updatedAt: number;

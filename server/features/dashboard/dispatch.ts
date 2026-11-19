@@ -98,7 +98,7 @@ export function open(id: string): Thread {
 
 
 /** Checks a post's shape and does the awaiting a page needs; the returned function writes, inside the commit. */
-export async function preparePost(id: string, raw: { page?: unknown; replies?: unknown; lands?: unknown }): Promise<() => string> {
+export async function preparePost(id: string, raw: { page?: unknown; replies?: unknown; lands?: unknown; ask?: unknown; heard?: unknown }): Promise<() => string> {
   const t = q.task.get(id) ?? fail(`No thread ${id}. dashboard_board lists them.`);
   if (raw.page === undefined && raw.replies === undefined) fail("Post a page, replies, or both.");
   const page = raw.page === undefined ? undefined : typeof raw.page === "string" && raw.page.trim() ? raw.page : fail("page is the HTML of the next version.");
@@ -106,6 +106,9 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
   if (page !== undefined && stageOf(t) !== "implementing") fail(`This thread is in ${stageOf(t)}, with the reader. Post a page only while it is implementing; replies can go any time.`);
   if (raw.lands !== undefined && raw.page === undefined) fail("lands goes with a page.");
   if (raw.lands !== undefined && !(LANDS as readonly unknown[]).includes(raw.lands)) fail(`lands is one of ${LANDS.join(", ")}.`);
+  if ((raw.ask !== undefined || raw.heard !== undefined) && raw.page === undefined) fail("ask and heard go with a page.");
+  const ask = field(raw.ask, "ask"), heard = field(raw.heard, "heard");
+  if ((ask === null) !== (heard === null)) fail("ask and heard go together: the ask as it stands, and how you read it.");
   const replies = checkReplies(id, raw.replies);
   let prepared: PreparedSource | null = null;
   if (page !== undefined) {
@@ -128,12 +131,21 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
       const lands = (raw.lands as Lands | undefined) ?? landsIn(q.lastPress.get(id));
       const n = q.lastN.get(id)!.n + 1;
       const rid = writeSource(dispatchBoard(), prepared);
-      q.insVersion.run(id, n, rid, lands, at);
+      q.insVersion.run(id, n, rid, lands, at, ask, heard);
       moveTo(cur, lands, at);
       said.push(`v${n} posted; the thread is in ${lands === "finish" ? "Finish" : lands === "decide" ? "Decide" : "Review"}`);
     }
     return said.join("; ") + ".";
   };
+}
+
+export const ASK_MAX = 600;
+function field(raw: unknown, name: string): string | null {
+  if (raw === undefined) return null;
+  const s = typeof raw === "string" ? raw.replace(/\s+/g, " ").trim() : fail(`${name} is a line or two of text.`);
+  if (!s) fail(`${name} is empty.`);
+  if (s.length > ASK_MAX) fail(`${name} is at most ${ASK_MAX} characters.`);
+  return s;
 }
 
 function checkReplies(id: string, raw: unknown): [string, string][] {
@@ -169,7 +181,7 @@ export const dispatchBoardId = (): string | null => a.boardByHandle.get(HANDLE)?
 
 // ---------- the pane ----------
 
-export interface VersionView { n: number; resourceId: string; at: number; landed: string; notes: number }
+export interface VersionView { n: number; resourceId: string; at: number; landed: string; notes: number; ask: string | null; heard: string | null }
 export interface PressView { kind: string; stage: string; version: number | null; at: number; sessionUrl: string | null }
 export interface DispatchThread { id: string; title: string; stage: string; links: Link[]; updatedAt: number; versions: VersionView[]; press: PressView | null; lands: string | null }
 
@@ -179,7 +191,7 @@ export function pane(inbox: number): { rev: number; board: string | null; inbox:
   const vs = new Map<string, VersionView[]>();
   for (const v of q.versions.all()) {
     const list = vs.get(v.task_id) ?? [];
-    list.push({ n: v.n, resourceId: v.resource_id, at: v.at, landed: v.landed, notes: counts.get(v.resource_id) ?? 0 });
+    list.push({ n: v.n, resourceId: v.resource_id, at: v.at, landed: v.landed, notes: counts.get(v.resource_id) ?? 0, ask: v.ask, heard: v.heard });
     vs.set(v.task_id, list);
   }
   const last = new Map<string, PressRow>();
