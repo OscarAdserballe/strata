@@ -67,6 +67,8 @@ export interface LayerDrawer {
 /** The key of the sheet the threads are drawn on, under every other sheet. */
 export const THREADS = "~threads";
 const SHEET_W = 460, INSET = 40, GAP = 8, BRACKET = 13, PUSH = 180, CARET = 7;
+// the margin a sheet lies in beside its column, when the plane has one this wide
+const MARGIN_W = 320, MARGIN_MIN = 180, MARGIN_GAP = 18;
 
 const said = (it: LayerItem) => it.kind === "note" && !!it.text.trim();
 // a click on a said note's words opens it to read, like a card's; a bare highlight's opens it to write, in the reader
@@ -81,9 +83,16 @@ const peekOf = (it: LayerItem): { kind: string; text: string } =>
 const colourOf = (items: readonly LayerItem[]) =>
   items.some((it) => it.kind === "card" || it.kind === "draft") ? "var(--accent,#41678a)" : items.every((it) => it.kind === "ask") ? "var(--ink-soft,#58514c)" : "var(--warn,#bd7138)";
 
-/** Where an unmoved sheet lies: under its words, starting where their last line does, or else inside its passage's
- *  column just under the passage; never off the plane. */
+/** The free space right of a passage's column, where its sheet lies level with its words; null when too narrow. */
+export function marginOf(p: Place): { x: number; w: number } | null {
+  const u = p.unit, x = p.column.right + MARGIN_GAP * u, room = p.width - x - 12 * u;
+  return room >= MARGIN_MIN * u ? { x, w: Math.min(MARGIN_W * u, room) } : null;
+}
+
+/** Where an unmoved sheet lies: in the margin level with its words, else under them; never off the plane. */
 export function dockOf(p: Place): { x: number; y: number; w: number } {
+  const m = marginOf(p);
+  if (m) return { x: m.x, y: p.hang || p.dock === undefined ? p.passage.top : p.dock, w: m.w };
   const u = p.unit, col = p.column.right - p.column.left;
   const w = Math.max(Math.min(SHEET_W * u, col - 16 * u, p.width - 8 * u), Math.min(220 * u, p.width - 8 * u));
   let x = p.column.left + Math.max(0, Math.min(INSET * u, col - w));
@@ -96,6 +105,15 @@ export function dockOf(p: Place): { x: number; y: number; w: number } {
  *  under its words points at them with a caret instead, and is tied to them by a thread only once moved away. */
 export function threadOf(p: Place, at: { x: number; y: number; w: number }): { bracket: string; thread: string; from: [number, number]; to: [number, number]; caret: string } {
   const u = p.unit;
+  if (at.x >= p.column.right + 4 * u) {
+    const bx = p.column.right + BRACKET * u, top = p.passage.top + 2 * u, bot = Math.max(top + 6 * u, p.passage.bottom - 2 * u);
+    const tx = at.x, ty = at.y + 13 * u, fy = Math.min(bot, Math.max(top, ty)), dx = tx - bx;
+    return {
+      bracket: `M${bx - 4 * u} ${top} H${bx} V${bot} H${bx - 4 * u}`,
+      thread: `M${bx} ${fy} C${bx + dx * 0.5} ${fy} ${tx - dx * 0.5} ${ty} ${tx} ${ty}`,
+      from: [bx, fy], to: [tx, ty], caret: "",
+    };
+  }
   if (p.hang) {
     const h = p.hang, cx = Math.max(at.x + 16 * u, Math.min(h.x + 12 * u, at.x + at.w - 16 * u)), below = at.y - h.y;
     if (below >= 0 && below <= (GAP + 2 + CARET) * u * 2 && Math.abs(cx - (h.x + 12 * u)) < 2 * u)
@@ -133,6 +151,50 @@ export function onWords(rects: ArrayLike<{ left: number; right: number; top: num
 
 const SVG = "http://www.w3.org/2000/svg";
 
+/** What a shrunk sheet's tab says: a card's question, a note's first words, a conversation's first question. */
+export function tabOf(items: readonly (FoldNote | FoldCard | FoldDraft | FoldAsk | LayerItem)[]): string {
+  const cards = items.filter((it) => it.kind === "card");
+  if (cards.length > 1) return `${cards.length} cards`;
+  const it = items[0];
+  const s = !it ? "" : it.kind === "card" ? it.q : it.kind === "note" ? it.text || it.quote : it.kind === "ask" ? it.turns.find((t) => t.who === "you")?.text ?? it.quote : it.quote;
+  const one = s.replace(/\s+/g, " ").trim();
+  return one.length > 34 ? one.slice(0, 33).trimEnd() + "…" : one;
+}
+
+const MEMORY = "strata.sheets", MEMORY_MAX = 600;
+interface SheetMemo { c?: 1; m?: 1; w?: number; h?: number }
+// a passage key ("b12") means nothing in another source, so only sheets keyed by an item's own words outlive it
+export function sheetMemory(store: Pick<Storage, "getItem" | "setItem"> | null = safeStorage()) {
+  let all: Record<string, SheetMemo> = {};
+  try { all = JSON.parse(store?.getItem(MEMORY) || "{}") as Record<string, SheetMemo>; } catch { all = {}; }
+  const lasting = (key: string) => key.startsWith("w:");
+  const save = () => {
+    const keys = Object.keys(all).filter(lasting);
+    const keep = keys.slice(Math.max(0, keys.length - MEMORY_MAX));
+    try { store?.setItem(MEMORY, JSON.stringify(Object.fromEntries(keep.map((k) => [k, all[k]])))); } catch { /* full or private: this visit remembers */ }
+  };
+  const put = (key: string, patch: Partial<SheetMemo>) => {
+    const next: SheetMemo = { ...all[key], ...patch };
+    for (const k of Object.keys(next) as (keyof SheetMemo)[]) if (next[k] === undefined) delete next[k];
+    delete all[key];
+    if (Object.keys(next).length) all[key] = next;
+    if (lasting(key)) save();
+  };
+  return {
+    closed: (key: string) => !!all[key]?.c,
+    isMini: (key: string) => !!all[key]?.m,
+    sizeOf: (key: string) => { const m = all[key]; return m?.w && m.h ? { w: m.w, h: m.h } : null; },
+    close: (key: string, on: boolean) => { if (!!all[key]?.c !== on) put(key, { c: on ? 1 : undefined }); },
+    mini: (key: string, on: boolean) => { if (!!all[key]?.m !== on) put(key, { m: on ? 1 : undefined }); },
+    size: (key: string, s: { w: number; h: number } | null) => put(key, { w: s ? Math.round(s.w) : undefined, h: s ? Math.round(s.h) : undefined }),
+    forget: () => { for (const k of Object.keys(all)) if (!lasting(k)) delete all[k]; },
+  };
+}
+function safeStorage(): Storage | null {
+  // a live page's sandbox has no storage of its own, and reading it there throws
+  try { return typeof localStorage === "undefined" ? null : localStorage; } catch { return null; }
+}
+
 export function layerDrawer(dom: LayerDom): LayerDrawer {
   // pinned: items the reader opened (by their words or their passage's tick) or asked; wanted: items to open once their
   // passage can show
@@ -149,8 +211,9 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
   const heard = new WeakSet<object>();
   // where the reader dropped a sheet, kept while this source is open; and which sheet is on top
   const moved = new Map<string, { x: number; y: number }>();
+  const kept = sheetMemory();
   let order: string[] = [];
-  let shown: { key: string; place: Place; dock: number; at: { x: number; y: number; w: number }; colour: string; host: HTMLElement }[] = [];
+  let shown: { key: string; place: Place; dock: number; at: { x: number; y: number; w: number }; colour: string; host: HTMLElement; margin: boolean }[] = [];
   let last: { items: readonly LayerItem[]; on: LayerIntents } | null = null;
   // each sheet's height, as its observer last reported it: read after layout, never forced
   const tall = new Map<string, number>();
@@ -180,7 +243,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
       const h = tall.get(s.key) ?? 0, gap = 6 * s.place.unit;
       let y = s.dock;
       for (const p of laid) if (s.at.x < p.x + p.w && p.x < s.at.x + s.at.w && y < p.bottom + gap && y + h > p.top) y = p.bottom + gap;
-      if (y - s.dock > PUSH * s.place.unit) y = s.dock;
+      if (!s.margin && y - s.dock > PUSH * s.place.unit) y = s.dock;
       if (y !== s.at.y) { s.at = { ...s.at, y }; s.host.style.top = y + "px"; any = true; }
       laid.push({ x: s.at.x, w: s.at.w, top: y, bottom: y + h });
     }
@@ -248,6 +311,35 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
     host.addEventListener("pointerdown", () => raise(key), true);
   }
 
+  function sizer(key: string, root: HTMLElement): void {
+    const h = root.querySelector<HTMLElement>(":scope > .fold-size");
+    if (!h || h.dataset.grip) return;
+    h.dataset.grip = "1";
+    h.addEventListener("pointerdown", (e) => {
+      if (e.button !== 0) return;
+      const s = shown.find((x) => x.key === key), inner = root.querySelector<HTMLElement>(":scope > .fold-in");
+      if (!s || !inner) return;
+      e.preventDefault(); e.stopPropagation();
+      const u = s.place.unit, per = s.place.perClient;
+      const from = { cx: e.clientX, cy: e.clientY, w: s.at.w / u, h: inner.offsetHeight };
+      h.setPointerCapture(e.pointerId);
+      root.classList.add("sizing");
+      let to: { w: number; h: number } | null = null;
+      const move = (m: PointerEvent) => {
+        const w = Math.max(200, Math.min(from.w + (m.clientX - from.cx) * per / u, (s.place.width - s.at.x) / u - 4));
+        const ht = Math.max(72, from.h + (m.clientY - from.cy) * per / u);
+        to = { w, h: ht };
+        s.at = { ...s.at, w: w * u };
+        s.host.style.width = s.at.w + "px";
+        root.style.setProperty("--fold-h", ht + "px"); root.style.setProperty("--fold-max", ht + "px");
+        threads();
+      };
+      const up = () => { if (to) kept.size(key, to); root.classList.remove("sizing"); h.removeEventListener("pointermove", move); h.removeEventListener("pointerup", up); h.removeEventListener("pointercancel", up); };
+      h.addEventListener("pointermove", move); h.addEventListener("pointerup", up); h.addEventListener("pointercancel", up);
+    });
+    h.addEventListener("dblclick", () => { kept.size(key, null); root.style.removeProperty("--fold-h"); redraw(); });
+  }
+
   function draw(items: readonly LayerItem[], on: LayerIntents): void {
     last = { items, on };
     listen();
@@ -278,6 +370,14 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
       x.items.push(...y.items);
       groups.delete(y.spot.key);
     }
+    // said notes and conversations open by themselves only where a margin keeps them off the page
+    const places = new Map<string, Place | null>();
+    const byDefault = (key: string, g: { spot: Spot; items: LayerItem[] }, it: LayerItem) => {
+      if (g.spot.hidden || kept.closed(key) || shut.has(it.id) || !(said(it) || (it.kind === "ask" && it.turns.length > 0))) return false;
+      if (!places.has(key)) places.set(key, dom.place(g.spot));
+      const p = places.get(key);
+      return !!p && !!marginOf(p);
+    };
     targets = [];
     for (const [key, g] of groups) {
       if (g.spot.words && g.spot.tint && !g.spot.hidden && g.items.some(handled)) targets.push({ key, range: g.spot.tint, ids: g.items.filter(handled).map((it) => it.id) });
@@ -289,17 +389,16 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
         if (it.kind === "ask" && it.writing !== null && !shut.has(it.id) && !g.spot.hidden) pinned.add(it.id);
         const writing = (it.kind === "note" && it.editing) || it.kind === "draft" || (asking_(it) && !shut.has(it.id));
         if (!g.spot.hidden && wanted.has(it.id)) { opened(it); wanted.delete(it.id); }
-        if (!g.spot.hidden && (turned || writing || pinned.has(it.id))) { open.add(key); shows.add(it.id); }
+        if (!g.spot.hidden && (turned || writing || pinned.has(it.id) || byDefault(key, g, it))) { open.add(key); shows.add(it.id); }
       }
     }
     for (const [key, g] of groups) if (open.has(key) && g.spot.words && g.spot.tint && g.items.some((it) => it.kind === "card")) wash["card-on"]!.push(g.spot.tint);
     // read every place before anything is drawn, so drawing one sheet never makes the next read wait on layout
-    const places = new Map<string, Place | null>();
-    for (const [key, g] of groups) if (open.has(key) && !g.spot.hidden) places.set(key, dom.place(g.spot));
+    for (const [key, g] of groups) if (open.has(key) && !g.spot.hidden && !places.has(key)) places.set(key, dom.place(g.spot));
     dom.clearTicks();
     const now: typeof shown = [];
     for (const [key, g] of groups) {
-      const place = places.get(key) ?? null;
+      const place = open.has(key) ? places.get(key) ?? null : null;
       const sheet = place ? dom.sheet(key) : null;
       if (!place || !sheet) {
         // words are their own handle: nothing is added beside them
@@ -307,6 +406,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
         const first = g.items[0];
         dom.tick(g.spot, g.items.map(markOf), peekOf(first), () => {
           // everything on the passage opens; a card still to answer shuts again once it is graded
+          kept.close(key, false);
           for (const it of g.items) { shut.delete(it.id); if (g.spot.hidden) wanted.add(it.id); else opened(it); }
           if (!g.spot.hidden) raise(key);
           draw(items, on);
@@ -326,13 +426,16 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
         where: "",
         count: cards.length > 1 ? `${next >= 0 ? next + 1 : cards.length} of ${cards.length}` : n > 1 ? `${n} notes` : talks > 1 ? `${talks} conversations` : "",
         items: vis.map(({ anchor: _a, ...it }) => it as FoldNote | FoldCard | FoldDraft | FoldAsk),
+        tab: tabOf(vis),
       }, {
         ...on,
+        mini: (to) => { kept.mini(key, to); raise(key); redraw(); },
         // an item's buttons outlive this draw: they redraw whatever was drawn last
         later: (id) => { bySheet = Date.now(); shut.add(id); pinned.delete(id); on.later(id); redraw(); },
         grade: (id, got) => { bySheet = Date.now(); on.grade(id, got); },
         show: (id) => { bySheet = Date.now(); on.show(id); },
         shut: () => {
+          kept.close(key, true);
           for (const it of g.items) pinned.delete(it.id);
           for (const it of g.items) if (it.kind === "card" || it.kind === "ask") shut.add(it.id);
           const mine = g.items.find((it) => it.kind === "note" && it.editing) as FoldNote | undefined;
@@ -346,16 +449,23 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
         },
       });
       grip(key, sheet.host, sheet.root);
+      sizer(key, sheet.root);
+      const size = kept.sizeOf(key), small = kept.isMini(key), margin = !!marginOf(place);
       const at = { ...dockOf(place), ...(moved.get(key) ?? {}) };
+      if (size) at.w = Math.min(size.w * place.unit, place.width - 8 * place.unit);
+      // a tab with no margin to lie in sits on the column's right edge, level with its words
+      if (small && !margin && !moved.has(key)) { at.x = Math.max(0, Math.min(place.column.right - 150 * place.unit, place.width - 150 * place.unit)); at.y = place.passage.top; }
+      sheet.root.classList.toggle("mini", small);
       // a sheet dropped near an edge stays reachable when the window narrows
       at.x = Math.max(0, Math.min(at.x, place.width - at.w));
-      sheet.host.style.left = at.x + "px"; sheet.host.style.top = at.y + "px"; sheet.host.style.width = at.w + "px";
+      sheet.host.style.left = at.x + "px"; sheet.host.style.top = at.y + "px"; sheet.host.style.width = small ? "auto" : at.w + "px"; sheet.host.style.maxWidth = small ? at.w + "px" : "";
       // a sheet is never taller than most of the window, at whatever scale it is drawn
       const win = sheet.root.ownerDocument.defaultView;
-      if (win) sheet.root.style.setProperty("--fold-max", Math.round(win.innerHeight * 0.72 * place.perClient / place.unit) + "px");
+      if (size) { sheet.root.style.setProperty("--fold-h", size.h + "px"); sheet.root.style.setProperty("--fold-max", size.h + "px"); }
+      else { sheet.root.style.removeProperty("--fold-h"); if (win) sheet.root.style.setProperty("--fold-max", Math.round(win.innerHeight * 0.72 * place.perClient / place.unit) + "px"); }
       watch(key, sheet.host);
       if (!was.has(key) || !order.includes(key)) order = [...order.filter((k) => k !== key), key];
-      now.push({ key, place, dock: at.y, at, colour: colourOf(vis), host: sheet.host });
+      now.push({ key, place, dock: at.y, at, colour: colourOf(vis), host: sheet.host, margin });
     }
     shown = now;
     settle();
@@ -396,6 +506,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
       if (hits.length) {
         const ids = new Set(hits.flatMap((h) => h.ids));
         for (const it of last.items) if (ids.has(it.id)) { shut.delete(it.id); opened(it); }
+        for (const h of hits) { kept.close(h.key, false); kept.mini(h.key, false); }
         raise(hits[0].key);
         draw(last.items, last.on);
         return;
@@ -432,7 +543,7 @@ export function layerDrawer(dom: LayerDom): LayerDrawer {
     redraw,
     openFor: (ids) => { for (const id of ids) { wanted.add(id); shut.delete(id); } redraw(); },
     forget: () => {
-      pinned.clear(); wanted.clear(); shut.clear(); asked.clear(); moved.clear(); tall.clear(); order = []; shown = []; last = null;
+      pinned.clear(); wanted.clear(); shut.clear(); asked.clear(); moved.clear(); tall.clear(); kept.forget(); order = []; shown = []; last = null;
       targets = []; hover = null; tints = { card: [], ask: [] }; hand = null; bySheet = 0;
       watcher?.disconnect(); watcher = null;
       dom.closeExcept(new Set()); dom.clearTicks(); dom.tint?.({ card: [], ask: [], "card-done": [], "card-on": [] });

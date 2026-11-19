@@ -37,6 +37,8 @@ export interface FoldHost {
   show(id: string): void;
   later(id: string): void;
   grade(id: string, got: boolean): void;
+  /** a card answered here, turned back to its question */
+  again(id: string): void;
   /** the card being written under a selection of this source, if one is */
   draft(): FoldPlace | null;
   keep(front: string, back: string): void;
@@ -94,6 +96,7 @@ export function paintFolds(h: FoldHost): void {
     show: (id) => h.show(id),
     later: (id) => h.later(id),
     grade: (id, got) => h.grade(id, got),
+    again: (id) => h.again(id),
     keep: (_id, front, back) => h.keep(front, back),
     discard: (id) => { if (asking.now()?.id === id) asking.set(null); else h.discard(); },
     ask: (id, text) => h.ask(id, text),
