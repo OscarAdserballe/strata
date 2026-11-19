@@ -412,7 +412,9 @@ CREATE TABLE IF NOT EXISTS dashboard_routine (
 CREATE TABLE IF NOT EXISTS dashboard_versions (
   task_id TEXT NOT NULL, n INTEGER NOT NULL, resource_id TEXT NOT NULL,
   landed TEXT NOT NULL,                   -- decide | review | finish (done in older rows): where posting it put the thread
-  at INTEGER NOT NULL, PRIMARY KEY (task_id, n)
+  at INTEGER NOT NULL,
+  ask TEXT, heard TEXT,                   -- Claude's summary of the ask so far, and how Claude read it; null in older rows
+  PRIMARY KEY (task_id, n)
 );
 -- Sending a thread, and Send on its page (Go and Send back in older rows). The newest press on a thread decides where its next page lands.
 CREATE TABLE IF NOT EXISTS dashboard_presses (

@@ -160,3 +160,17 @@ test("a press needs a page on you, and a resent post writes one version", async 
   assert.equal((await thread(id)).versions.length, 1);
   assert.match((await call("dashboard_open", { id: "t_nothere" })).text, /No thread t_nothere/);
 });
+
+test("a page carries the ask and how Claude read it, kept per version; both or neither, and only with a page", async () => {
+  const id = await newThread("See the prompt behind a thread");
+  await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  assert.match((await post(id, { page: page("v1", "Two fields."), ask: "Show what I sent." })).text, /ask and heard go together/);
+  assert.match((await post(id, { replies: {}, ask: "a", heard: "b" })).text, /ask and heard go with a page/);
+  assert.match((await post(id, { page: page("v1", "Two fields."), ask: " ", heard: "b" })).text, /ask is empty/);
+  assert.match((await post(id, { page: page("v1", "Two fields."), ask: "x".repeat(601), heard: "b" })).text, /at most 600/);
+  await post(id, { page: page("v1", "Two fields."), ask: "Let me see\n what I  sent.", heard: "Two fields above each page." });
+  await send(`/api/dashboard/tasks/${id}/press`, "POST", { kind: "send" });
+  await post(id, { page: page("v2", "No ask.") });
+  assert.deepEqual((await thread(id)).versions.map((v: any) => [v.n, v.ask, v.heard]),
+    [[1, "Let me see what I sent.", "Two fields above each page."], [2, null, null]], "each version keeps its own; a page without them shows the page alone");
+});

@@ -29,11 +29,16 @@ try {
   const fresh = await thread(`Smoke ${run}: a page posted while Decide is open`);
   await api(`/api/dashboard/tasks/${fresh}/send`, "POST", {});
   await page.goto(`${base}/dispatch?view=decide`, { waitUntil: "networkidle" });
-  await tool("dashboard_post", { key: key(), id: fresh, page: "<!doctype html><html><body><h1>Posted while you looked</h1></body></html>" });
+  await tool("dashboard_post", { key: key(), id: fresh, page: "<!doctype html><html><body><h1>Posted while you looked</h1></body></html>",
+    ask: "See what I sent once a thread is in Dispatch.", heard: "Two fields above every page: the ask, and how Claude read it." });
   await page.locator(".ws-list").getByText(`Smoke ${run}: a page posted while Decide is open`).click({ timeout: 40000 });
   const frame = await (await page.waitForSelector(".ws-sheet iframe.html-frame", { timeout: 15000 })).contentFrame();
   await frame.waitForSelector("text=Posted while you looked", { timeout: 15000 });
   console.log("✓ a page posted while Decide is open draws without a reload");
+  assert.equal(await page.locator(".ws-asked p").first().textContent(), "See what I sent once a thread is in Dispatch.");
+  assert.equal(await page.locator(".ws-asked .heard p").textContent(), "Two fields above every page: the ask, and how Claude read it.");
+  if (process.env.DISPATCH_SHOT) await page.screenshot({ path: process.env.DISPATCH_SHOT });
+  console.log("✓ the ask and how Claude read it sit above the page");
 
   // a thread arriving while a page is on the sheet doesn't take the sheet, even one never clicked
   await page.reload({ waitUntil: "networkidle" });

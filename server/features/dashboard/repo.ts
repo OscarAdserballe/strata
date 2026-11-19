@@ -8,7 +8,7 @@ export interface TaskRow {
 }
 export interface UpdateRow { id: string; task_id: string; at: number; text: string; from_json: string | null; links: string }
 export interface InboxRow { id: string; kind: string; item: string; at: number; handled_at: number | null; outcome: string | null; result_id: string | null }
-export interface VersionRow { task_id: string; n: number; resource_id: string; landed: string; at: number }
+export interface VersionRow { task_id: string; n: number; resource_id: string; landed: string; at: number; ask: string | null; heard: string | null }
 export interface PressRow { id: string; task_id: string; kind: string; stage: string; version: number | null; at: number; session_url: string | null }
 export interface NoteRow { id: string; resource_id: string; quote: string; note: string; box: string | null; created_at: number }
 export interface ReplyRow { id: string; mark_id: string; author: string; text: string; created_at: number }
@@ -37,7 +37,7 @@ export const dashboardRepo = {
   versions: stmt<VersionRow>("SELECT v.* FROM dashboard_versions v JOIN resources r ON r.id = v.resource_id ORDER BY v.task_id, v.n"),
   versionsOf: stmt<VersionRow>("SELECT v.* FROM dashboard_versions v JOIN resources r ON r.id = v.resource_id WHERE v.task_id = ? ORDER BY v.n"),
   lastN: stmt<{ n: number }>("SELECT COALESCE(MAX(n), 0) AS n FROM dashboard_versions WHERE task_id = ?"),
-  insVersion: stmt("INSERT INTO dashboard_versions (task_id, n, resource_id, landed, at) VALUES (?,?,?,?,?)"),
+  insVersion: stmt("INSERT INTO dashboard_versions (task_id, n, resource_id, landed, at, ask, heard) VALUES (?,?,?,?,?,?,?)"),
   presses: stmt<PressRow>("SELECT * FROM dashboard_presses ORDER BY task_id, at, rowid"),
   pressesOf: stmt<PressRow>("SELECT * FROM dashboard_presses WHERE task_id = ? ORDER BY at, rowid"),
   lastPress: stmt<PressRow>("SELECT * FROM dashboard_presses WHERE task_id = ? ORDER BY at DESC, rowid DESC LIMIT 1"),

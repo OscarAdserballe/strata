@@ -191,6 +191,13 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .ws-caption .tr-area{padding:2px}
 .ws-caption .tr-area button{padding:3px 10px;font-size:12px;letter-spacing:0;text-transform:none;font-weight:500}
 .ws-caption{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:34px;padding:0 4px 10px;font:italic 14.5px var(--serif);color:var(--d-mute)}
+.ws-asked{flex-shrink:0;display:grid;grid-template-columns:1fr 1fr;margin:0 0 12px;background:#fff;border-radius:10px;box-shadow:var(--d-lift),0 0 0 1px var(--d-line)}
+.ws-asked>div{padding:10px 14px 12px;min-width:0}
+.ws-asked>div+div{border-left:1px solid var(--d-line);background:#fdf7f1;border-radius:0 10px 10px 0}
+.ws-asked .lab{display:block;margin-bottom:3px;font:600 11px/1.4 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--d-faint)}
+.ws-asked .heard .lab{color:var(--d-wait)}
+.ws-asked p{margin:0;font-size:13.5px;line-height:1.45;color:var(--d-ink-2)}
+@media (max-width:720px){.ws-asked{grid-template-columns:1fr}.ws-asked>div+div{border-left:0;border-top:1px solid var(--d-line);border-radius:0 0 10px 10px}}
 .ws-sheet{flex:1;min-height:0;position:relative;display:flex;margin-bottom:24px;background:#fff;border-radius:10px;box-shadow:var(--d-sheet);overflow:hidden}
 .ws-sheet .livepage{border-radius:inherit}
 .ws-sheet .htmlsrc-body{border-radius:inherit;overflow:hidden}

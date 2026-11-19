@@ -86,6 +86,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
       </aside>
       <div className="ws-room">
         <div className="ws-caption"><span>{t && v ? caption(t, v) : ""}</span>{t && v ? <NotesSwitch /> : null}</div>
+        {v?.ask && v.heard ? <Asked v={v} /> : null}
         <div className="ws-sheet" style={fit ? { flex: `0 1 ${fit}px` } : undefined}>
           {t && v && pane?.board ? <LivePage key={v.resourceId} board={pane.board} resource={v.resourceId}
             onHeight={(h) => setTall((was) => (was?.rid === v.resourceId && was.h === h ? was : { rid: v.resourceId, h }))} /> : null}
@@ -94,6 +95,14 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
       </div>
     </div>
   );
+}
+
+// The ask this version answers and how Claude read it, the same size side by side, so a misreading shows.
+function Asked({ v }: { v: DispatchVersion }) {
+  return <div className="ws-asked" aria-label="The ask">
+    <div><span className="lab">Your ask</span><p>{v.ask}</p></div>
+    <div className="heard"><span className="lab">Claude heard · v{v.n}</span><p>{v.heard}</p></div>
+  </div>;
 }
 
 // Strata's own notes layer: its count and its switch, set above the sheet.

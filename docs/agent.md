@@ -42,7 +42,7 @@ revokes them.
 | `dashboard_read` | The dashboard as Markdown: every thread by stage (to-do, thinking, decide, implementing, review) with notes and links, then the inbox |
 | `dashboard_board` | Dispatch: every open thread as JSON `[{ id, title, stage }]`, implementing first |
 | `dashboard_open` | Dispatch: one thread `{ id, title, text, stage, page, notes: [{ id, on, text }] }`, the newest version's page and the notes on it |
-| `dashboard_post` | Dispatch: `{ page?, replies? }`, the next version and replies under the reader's notes |
+| `dashboard_post` | Dispatch: `{ page?, replies?, ask?, heard? }`, the next version, the ask it answers and how Claude read it, and replies under the reader's notes |
 
 Every answer is Markdown, cut to about 6k tokens (up to 24k with `max_tokens`), and ends with the exact
 call for the next part. Ids carry a prefix (`src_`, `sec_`, `deck_`, `card_`, `q_`, `hl_`, `grp_`, `ms_`,
