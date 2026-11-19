@@ -1,5 +1,4 @@
 // The MCP tools. tools/list is built from this list, so a tool exists only by being here.
-import { readFileSync } from "node:fs";
 import type { IncomingMessage } from "node:http";
 import { q } from "../repo.ts";
 import { imports } from "../imports/pump.ts";
@@ -16,6 +15,7 @@ import { agentRepo as a } from "./repo.ts";
 import { budgetOf } from "./render.ts";
 import { AgentError, boardList, boardOf, changes, CHANGE_KINDS, importContext, openLink, outline, render, search, SEARCH_KINDS, text, type Filter } from "./kinds.ts";
 import { checkOps, OP_SCHEMAS, OPS, opLine, runOps } from "./ops.ts";
+import { GUIDE_PAGES } from "./guide.ts";
 import { publicOrigin, uploadUrl, type Caller, type Scope } from "./tokens.ts";
 import { addItems, checkItem, DashError, LINK_KINDS, STAGES as DASH_STAGES } from "../dashboard/dashboard.ts";
 import { renderDashboard } from "../dashboard/render.ts";
@@ -37,14 +37,8 @@ const MAX = { type: "integer", minimum: 500, maximum: 24000, description: "Size 
 const STUDY = { type: "boolean", description: "Default false: the source arrives without flashcards, and the reader can make them later with a button on the page. Pass true only when the reader wants cards from it now (a book takes minutes)." };
 const KEY = { type: "string", pattern: "^[A-Za-z0-9-]{8,80}$", description: "A fresh id for this write, 8–80 letters, digits or dashes. Resending the same key returns the first answer instead of writing twice." };
 
-const GUIDE = (() => {
-  const raw = readFileSync(new URL("./guide.md", import.meta.url), "utf8")
-    .replace("{{MAX_MB}}", String(Math.floor(MAX_UPLOAD_BYTES / 1024 / 1024)))
-    .replace("{{OPS}}", Object.keys(OPS).map(opLine).join("\n"));
-  const topics = new Map<string, string>();
-  for (const part of raw.split(/^## /m).slice(1)) topics.set(part.slice(0, part.indexOf("\n")).trim(), `## ${part.trim()}`);
-  return topics;
-})();
+const OPS_LINES = Object.keys(OPS).map(opLine).join("\n");
+const GUIDE = new Map([...GUIDE_PAGES].map(([t, text]) => [t, text.replace("{{OPS}}", OPS_LINES)]));
 export const GUIDE_TOPICS = [...GUIDE.keys()];
 
 const ACCEPTED = /\.(pdf|md|markdown|txt|html?)$/i;
@@ -120,7 +114,7 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "get_guide", title: "Guide", scope: "read",
-    description: `How to use this server. Topics: ${GUIDE_TOPICS.join(", ")}. Read "uploads" before request_upload.`,
+    description: `How to use this server. Topics: ${GUIDE_TOPICS.join(", ")}. Read "uploads" before request_upload. "primer" and "flashcards" end in a receipt: set_primer and add_deck each need theirs as guide.`,
     inputSchema: schema({ topic: { type: "string", enum: GUIDE_TOPICS } }),
     read: (x) => x.topic ? (GUIDE.get(String(x.topic)) ?? fail(`Topics: ${GUIDE_TOPICS.join(", ")}.`)) : [...GUIDE.values()].join("\n\n"),
   },
@@ -204,7 +198,7 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "apply", title: "Apply changes", scope: "write",
-    description: `Adds or arranges things on a board, all together or not at all. Each op is one of the shapes in ops. Agents never delete for good (delete_deck sets a deck aside; the reader can put it back), never keep cards and never answer questions.`,
+    description: `Adds or arranges things on a board, all together or not at all. Each op is one of the shapes in ops. Agents never delete for good (delete_deck sets a deck aside; the reader can put it back), never keep cards and never answer questions. set_primer and add_deck need guide: the receipt at the end of get_guide({ topic: "primer" }) or get_guide({ topic: "flashcards" }).`,
     inputSchema: schema({
       board: BOARD, key: KEY,
       ops: { type: "array", minItems: 1, maxItems: 50, items: { anyOf: OP_SCHEMAS } },

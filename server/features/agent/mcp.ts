@@ -12,7 +12,7 @@ import { callerOf, type Caller } from "./tokens.ts";
 import { TOOL_BY_NAME, TOOLS, type Env } from "./tools.ts";
 
 const PROTOCOLS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
-const INSTRUCTIONS = "Strata is the user's reading room: boards of sources, flashcards and notes. Call whoami first to find the board, then get_context on it. Kept cards (<board>/kept) are what the user chose to hold onto; treat them as the core of what they know. Read get_guide before apply or request_upload.";
+const INSTRUCTIONS = "Strata is the user's reading room: boards of sources, flashcards and notes. Call whoami first to find the board, then get_context on it. Kept cards (<board>/kept) are what the user chose to hold onto; treat them as the core of what they know. Read get_guide before apply or request_upload; set_primer and add_deck need the receipt from get_guide('primer') or get_guide('flashcards') as guide.";
 const MAX_MESSAGE = 1024 * 1024;
 
 type Id = string | number | null;

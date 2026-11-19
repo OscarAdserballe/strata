@@ -216,9 +216,14 @@ test("journey: an agent replaces a section's cards with its own, then sets the d
   const term = { front: "What is DV01?", back: "The price change for one basis point.", at: "DV01-neutral hedge protects only", node: "n1", introduces: "DV01" };
   const dipCard = { front: "Where in a long context does recall dip?", back: "In the middle.", at: "A DV01-neutral hedge protects only against small", node: "n1", asks: ["n1#1"] };
   const shape = { front: "What does the U-shape mean?", back: "Start and end are recalled best.", at: "Convexity is the failure mode", node: "n1.1", asks: ["n1.1#1"], uses: ["DV01"] };
-  const add = (key: string, body: object) => call("apply", { board: "thesis", key, ops: [{ op: "add_deck", section: src, ...body }] });
+  const guide = /^receipt: (flashcards-[0-9a-f]{4})$/m.exec(await ok("get_guide", { topic: "flashcards" }))![1];
+  const add = (key: string, body: object) => call("apply", { board: "thesis", key, ops: [{ op: "add_deck", section: src, guide, ...body }] });
+  const unread = await add("deck-add-000r", { guide: undefined, tree, cards: [dipCard, shape, term] });
+  assert.ok(unread.isError && unread.text.includes(`Read this first, then send guide: ${guide}`) && unread.text.includes("## flashcards"), unread.text);
+  const stale = await add("deck-add-000s", { guide: `${guide.slice(0, -1)}${guide.endsWith("0") ? "1" : "0"}`, tree, cards: [dipCard, shape, term] });
+  assert.ok(stale.isError && stale.text.includes(`then send guide: ${guide}`), stale.text);
   const bare = await add("deck-add-000a", { cards: [dipCard, shape, term] });
-  assert.ok(bare.isError && /has no concept tree yet, so send one with the deck as tree/.test(bare.text), bare.text);
+  assert.ok(bare.isError && /has no concept tree yet, so send one with the deck as tree/.test(bare.text), `the refused decks wrote no tree: ${bare.text}`);
   const rootless = await add("deck-add-000b", { tree: { ...tree, nodes: [{ ...tree.nodes[0], kind: "concept" }] }, cards: [dipCard, shape, term] });
   assert.ok(rootless.isError && /does not fit its tree:\ntree: it has exactly one top-level node, of kind synthesis/.test(rootless.text), rootless.text);
   const thin = await add("deck-add-000c", { tree, cards: [dipCard, { ...shape, node: "n9", asks: ["n1#1"] }] });
@@ -228,7 +233,7 @@ test("journey: an agent replaces a section's cards with its own, then sets the d
   assert.ok(adrift.isError && /tree node n1: the quote .* is not in the source verbatim/.test(adrift.text), adrift.text);
   const unplaced = await add("deck-add-0000", { tree, cards: [{ ...dipCard, at: "a hedge protects against everything" }, shape, term] });
   assert.ok(unplaced.isError && /did not compile:\ncards\[0\]: the quote .* is not in the source verbatim/.test(unplaced.text), unplaced.text);
-  const made = await ok("apply", { board: "thesis", key: "deck-add-0001", ops: [{ op: "add_deck", section: src, tree, cards: [dipCard, shape, term] }] });
+  const made = await ok("apply", { board: "thesis", key: "deck-add-0001", ops: [{ op: "add_deck", section: src, guide, tree, cards: [dipCard, shape, term] }] });
   const deck = /(deck_[a-z0-9-]+)/.exec(made)?.[1];
   assert.ok(deck, made);
   const slug = deck.replace(/^deck_/, "");
@@ -242,7 +247,7 @@ test("journey: an agent replaces a section's cards with its own, then sets the d
   const dip = cards[1].id;
   await server.api(`/api/decks/${slug}/keeps`, { method: "POST", body: JSON.stringify({ add: [dip] }) });
 
-  await ok("apply", { board: "thesis", key: "deck-add-0002", ops: [{ op: "add_deck", section: src, cards: [
+  await ok("apply", { board: "thesis", key: "deck-add-0002", ops: [{ op: "add_deck", section: src, guide, cards: [
     { ...dipCard, back: "In the middle, worst near the centre." },
     { front: "Why does position matter at all?", back: "Attention favours the ends.", at: "small, parallel shifts. Convexity is", node: "n1.1", asks: ["n1.1#1"] },
     term,
@@ -270,7 +275,7 @@ test("journey: an agent replaces a section's cards with its own, then sets the d
   const stranger = await call("apply", { board: "thesis", key: "card-edit-0003", ops: [{ op: "edit_cards", cards: [{ id: "card_nope/flashcard/x", at: "Convexity is the failure mode" }] }] });
   assert.ok(stranger.isError && /is not a card on thesis/.test(stranger.text), stranger.text);
 
-  const wrong = await call("apply", { board: "thesis", key: "deck-add-0003", ops: [{ op: "add_deck", section: "src_nope", cards: [{ front: "a", back: "b", at: "Convexity is the failure mode", node: "n1" }] }] });
+  const wrong = await call("apply", { board: "thesis", key: "deck-add-0003", ops: [{ op: "add_deck", section: "src_nope", guide, cards: [{ front: "a", back: "b", at: "Convexity is the failure mode", node: "n1" }] }] });
   assert.ok(wrong.isError && /not a section or source/.test(wrong.text), wrong.text);
 
   assert.match(await ok("apply", { board: "thesis", key: "deck-del-0001", ops: [{ op: "delete_deck", id: deck }] }), /set aside 3 cards/);
@@ -326,7 +331,7 @@ test("journey: the reader's chats with the model, cleared turns included", async
   assert.match(found, /1 match\n- \d{4}-\d\d-\d\d · you: What is re-ranking for\? · board chat · thesis\/chat/);
 });
 
-test("apply's schema names every op's fields, so no guide read is needed first", async () => {
+test("apply's schema names every op's fields, and a deck or a primer asks for its guide's receipt", async () => {
   const tools = (await rpc("tools/list")).body.result.tools as { name: string; inputSchema: { properties: { ops: { items: { anyOf: { properties: Record<string, unknown>; required: string[] }[] } } } } }[];
   const shapes = tools.find((t) => t.name === "apply")!.inputSchema.properties.ops.items.anyOf;
   const of = (op: string) => shapes.find((s) => (s.properties.op as { enum: string[] }).enum[0] === op)!;
@@ -335,6 +340,9 @@ test("apply's schema names every op's fields, so no guide read is needed first",
   assert.deepEqual(Object.keys(of("place").properties), ["op", "id", "group", "milestone", "pinned"]);
   assert.deepEqual(of("place").required, ["op", "id"]);
   assert.deepEqual(of("add_question").required, ["op", "front"]);
+  assert.ok(of("add_deck").required.includes("guide") && of("set_primer").required.includes("guide"), "a deck or a primer needs its guide's receipt");
+  const topics = (tools.find((t) => t.name === "get_guide")!.inputSchema as unknown as { properties: { topic: { enum: string[] } } }).properties.topic.enum;
+  assert.ok(topics.includes("primer") && topics.includes("flashcards"), topics.join(", "));
   assert.match(await ok("get_guide", { topic: "apply" }), /- `place` \(id, group\?, milestone\?, pinned\?\): Puts a source/);
   const routine = await ok("get_guide", { topic: "routine" });
   assert.match(routine, /Readers scan before they read/, "the routine guide carries the attention principles");

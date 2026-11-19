@@ -35,14 +35,21 @@ test("the reader asks for a primer, the routine draws it, and each page opens th
   assert.match(who.text, /## Primers asked for/);
   assert.ok(who.text.includes(`src_${rid} "hedging"`), who.text);
   assert.match((await tool(token, "get_context", { id: `src_${rid}` })).text, /primer: none yet · asked for/);
-  assert.doesNotMatch((await tool(token, "get_guide", { topic: "primer" })).text, /<!doctype html>/i, "a brief, not a template");
+  const brief = (await tool(token, "get_guide", { topic: "primer" })).text;
+  assert.doesNotMatch(brief, /<!doctype html>/i, "a brief, not a template");
+  const guide = /^receipt: (primer-[0-9a-f]{4})$/m.exec(brief)![1];
 
   const pid = await addMarkdown(server, board, "Primer · hedging.html", PAGE);
-  const wrong = await tool(token, "apply", { board, key: "primer-link-bad1", ops: [{ op: "set_primer", source: `src_${pid}`, primer: `src_${rid}`, plan: PLAN }] });
+  const unread = await tool(token, "apply", { board, key: "primer-link-nogd", ops: [{ op: "set_primer", source: `src_${rid}`, primer: `src_${pid}`, plan: PLAN }] });
+  assert.ok(unread.isError && unread.text.includes(`Read this first, then send guide: ${guide}`) && unread.text.includes("## primer"), unread.text);
+  const stale = await tool(token, "apply", { board, key: "primer-link-old1", ops: [{ op: "set_primer", source: `src_${rid}`, primer: `src_${pid}`, plan: PLAN, guide: `${guide.slice(0, -1)}${guide.endsWith("0") ? "1" : "0"}` }] });
+  assert.ok(stale.isError && stale.text.includes(`then send guide: ${guide}`), stale.text);
+  assert.equal((await meta(board, rid)).primer?.id, null, "a refused link wrote nothing");
+  const wrong = await tool(token, "apply", { board, key: "primer-link-bad1", ops: [{ op: "set_primer", source: `src_${pid}`, primer: `src_${rid}`, plan: PLAN, guide }] });
   assert.ok(wrong.isError && /not an HTML page/.test(wrong.text), wrong.text);
-  const planless = await tool(token, "apply", { board, key: "primer-link-nopl", ops: [{ op: "set_primer", source: `src_${rid}`, primer: `src_${pid}` }] });
+  const planless = await tool(token, "apply", { board, key: "primer-link-nopl", ops: [{ op: "set_primer", source: `src_${rid}`, primer: `src_${pid}`, guide }] });
   assert.ok(planless.isError && /plan is required/.test(planless.text), "the page comes with the plan it was drawn from");
-  const linked = await tool(token, "apply", { board, key: "primer-link-0001", ops: [{ op: "set_primer", source: `src_${rid}`, primer: `src_${pid}`, plan: PLAN }] });
+  const linked = await tool(token, "apply", { board, key: "primer-link-0001", ops: [{ op: "set_primer", source: `src_${rid}`, primer: `src_${pid}`, plan: PLAN, guide }] });
   assert.equal(linked.isError, false, linked.text);
 
   assert.deepEqual((await meta(board, rid)).primer, { id: pid, askedAt: null, plan: PLAN }, "linking clears the ask and keeps the plan");
