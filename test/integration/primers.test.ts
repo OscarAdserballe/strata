@@ -38,11 +38,16 @@ test("the reader asks for a primer, the routine draws it, and each page opens th
   assert.doesNotMatch((await tool(token, "get_guide", { topic: "primer" })).text, /<!doctype html>/i, "a brief, not a template");
 
   const pid = await addMarkdown(server, board, "Primer · hedging.html", PAGE);
-  const wrong = await tool(token, "apply", { board, key: "primer-link-bad1", ops: [{ op: "set_primer", source: `src_${pid}`, primer: `src_${rid}`, plan: PLAN }] });
+  const unread = await tool(token, "apply", { board, key: "primer-link-unrd", ops: [{ op: "set_primer", source: `src_${rid}`, primer: `src_${pid}`, plan: PLAN }] });
+  assert.ok(unread.isError && /set_primer needs the receipt from get_guide/.test(unread.text) && unread.text.includes("## primer"), "a primer from an agent that skipped the guide is refused, and the refusal is the guide");
+  const guide = /Receipt: (primer-[0-9a-f]{8})\./.exec((await tool(token, "get_guide", { topic: "primer" })).text)?.[1];
+  assert.ok(guide, "the primer guide ends with its receipt");
+  assert.ok(unread.text.includes(`guide: "${guide}"`));
+  const wrong = await tool(token, "apply", { board, key: "primer-link-bad1", ops: [{ op: "set_primer", guide, source: `src_${pid}`, primer: `src_${rid}`, plan: PLAN }] });
   assert.ok(wrong.isError && /not an HTML page/.test(wrong.text), wrong.text);
-  const planless = await tool(token, "apply", { board, key: "primer-link-nopl", ops: [{ op: "set_primer", source: `src_${rid}`, primer: `src_${pid}` }] });
+  const planless = await tool(token, "apply", { board, key: "primer-link-nopl", ops: [{ op: "set_primer", guide, source: `src_${rid}`, primer: `src_${pid}` }] });
   assert.ok(planless.isError && /plan is required/.test(planless.text), "the page comes with the plan it was drawn from");
-  const linked = await tool(token, "apply", { board, key: "primer-link-0001", ops: [{ op: "set_primer", source: `src_${rid}`, primer: `src_${pid}`, plan: PLAN }] });
+  const linked = await tool(token, "apply", { board, key: "primer-link-0001", ops: [{ op: "set_primer", guide, source: `src_${rid}`, primer: `src_${pid}`, plan: PLAN }] });
   assert.equal(linked.isError, false, linked.text);
 
   assert.deepEqual((await meta(board, rid)).primer, { id: pid, askedAt: null, plan: PLAN }, "linking clears the ask and keeps the plan");
