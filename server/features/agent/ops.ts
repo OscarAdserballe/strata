@@ -11,6 +11,7 @@ import { KINDS, flattenTree, normalizeTree, orderByLadder, treeToAscii, type Con
 import { agentRepo as a } from "./repo.ts";
 import { AgentError, type Board } from "./kinds.ts";
 import type { PrimerPlan } from "../../../shared/types/index.ts";
+import { needReceipt, type GuidedTopic } from "./guide.ts";
 
 const fail = (msg: string): never => { throw new AgentError(msg); };
 const str = (v: unknown, field: string, max: number, required = true): string | undefined => {
@@ -25,6 +26,8 @@ const bool = (v: unknown, field: string): boolean | undefined =>
 type Op = Record<string, unknown> & { op: string };
 const dayOf = (v: unknown): string => v === null || v === undefined || v === "" ? "" : typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : fail("A date is YYYY-MM-DD.");
 
+const guided = (topic: GuidedTopic, sent: unknown): void => { const why = needReceipt(topic, sent); if (why) fail(why); };
+const receipt = (topic: GuidedTopic) => ({ type: "string", description: `The receipt that ends get_guide({ topic: "${topic}" }). Read that guide first; the write is refused without it.` });
 const text = (max: number, about: string) => ({ type: "string", maxLength: max, description: about });
 const flag = (about: string) => ({ type: "boolean", description: about });
 const orNull = (about: string) => ({ type: ["string", "null"], description: about });
@@ -185,6 +188,7 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
   },
   add_deck: {
     fields: {
+      guide: receipt("flashcards"),
       section: { type: "string", description: "The sec_ id the deck is for, or a src_ id when the source has one section." },
       "tree?": TREE,
       cards: { type: "array", minItems: 1, maxItems: CARDS_MAX, description: "The whole deck, in order.",
@@ -198,8 +202,9 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
             tags: list("Short topical tags."),
           } } },
     },
-    does: "Gives a section a deck of your cards, replacing the cards it has, in the shape Strata's own generation makes: a concept tree, a definition card for each glossary term, and a card for every question the tree asks. Each card names its tree node and sits at a verbatim quote of the words it asks about (at). A card whose front is unchanged keeps its reviews and keep. A deck that doesn't fit its tree, or a quote that doesn't compile, is an error naming why, and nothing is written.",
+    does: "Gives a section a deck of your cards, replacing the cards it has, in the shape Strata's own generation makes: a concept tree, a definition card for each glossary term, and a card for every question the tree asks. Each card names its tree node and sits at a verbatim quote of the words it asks about (at). Read get_guide({ topic: \"flashcards\" }) first: the deck needs its receipt as guide. A card whose front is unchanged keeps its reviews and keep. A deck that doesn't fit its tree, or a quote that doesn't compile, is an error naming why, and nothing is written.",
     check: (o) => {
+      guided("flashcards", o.guide);
       str(o.section, "section", 200);
       if (o.tree !== undefined) checkTree(o.tree);
       if (!Array.isArray(o.cards) || !o.cards.length || o.cards.length > CARDS_MAX) fail(`cards is a list of 1 to ${CARDS_MAX} cards.`);
@@ -222,7 +227,7 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
       };
       const unfit: string[] = [], errors: string[] = [];
       const had = t?.json ? normalizeTree(JSON.parse(t.json), t.title || sec.label) : null;
-      if (o.tree === undefined && !had?.nodes.length) fail(`${idOf("section", sid)} has no concept tree yet, so send one with the deck as tree (get_guide({ topic: "apply" }) shows its shape)`);
+      if (o.tree === undefined && !had?.nodes.length) fail(`${idOf("section", sid)} has no concept tree yet, so send one with the deck as tree (get_guide({ topic: "flashcards" }) shows its shape)`);
       const tree = o.tree === undefined ? had! : placedTree(o.tree, t?.title || sec.label, (at, where) => place(at, where, unfit));
       if (tree.nodes.length !== 1 || tree.nodes[0].kind !== "synthesis") unfit.push("tree: it has exactly one top-level node, of kind synthesis, whose label answers the tree's question");
       const nodes = new Set(flattenTree(tree).map((n) => n.id));
@@ -336,11 +341,11 @@ export const OPS: Record<string, { fields: Record<string, object>; does: string;
     },
   },
   set_primer: {
-    fields: { source: { type: "string", description: "The src_ id of the source the primer is for." },
+    fields: { guide: receipt("primer"), source: { type: "string", description: "The src_ id of the source the primer is for." },
       primer: { type: "string", description: "The src_ id of the HTML page you uploaded as its primer." },
       plan: PLAN },
-    does: "Makes an HTML source the primer of another: the page the reader opens before page 1, with the plan you drew it from. Write the plan first, then the page from it; upload the page with origin.ref primer/<src_ id> so a redraw replaces it in place. See get_guide({ topic: \"primer\" }).",
-    check: (o) => { str(o.source, "source", 200); str(o.primer, "primer", 200); checkPlan(o.plan); },
+    does: "Makes an HTML source the primer of another: the page the reader opens before page 1, with the plan you drew it from. Write the plan first, then the page from it; upload the page with origin.ref primer/<src_ id> so a redraw replaces it in place. Read get_guide({ topic: \"primer\" }) first: the link needs its receipt as guide.",
+    check: (o) => { guided("primer", o.guide); str(o.source, "source", 200); str(o.primer, "primer", 200); checkPlan(o.plan); },
     run(b, o) {
       const rid = String(o.source).replace(/^src_/, ""), pid = String(o.primer).replace(/^src_/, "");
       if (a.resourceBoard.get(rid)?.board_id !== b.id) fail(`${String(o.source)} is not a source on ${b.ref}.`);

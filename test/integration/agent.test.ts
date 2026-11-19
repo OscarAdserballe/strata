@@ -216,7 +216,14 @@ test("journey: an agent replaces a section's cards with its own, then sets the d
   const term = { front: "What is DV01?", back: "The price change for one basis point.", at: "DV01-neutral hedge protects only", node: "n1", introduces: "DV01" };
   const dipCard = { front: "Where in a long context does recall dip?", back: "In the middle.", at: "A DV01-neutral hedge protects only against small", node: "n1", asks: ["n1#1"] };
   const shape = { front: "What does the U-shape mean?", back: "Start and end are recalled best.", at: "Convexity is the failure mode", node: "n1.1", asks: ["n1.1#1"], uses: ["DV01"] };
-  const add = (key: string, body: object) => call("apply", { board: "thesis", key, ops: [{ op: "add_deck", section: src, ...body }] });
+  const read = await ok("get_guide", { topic: "flashcards" });
+  const guide = /Receipt: (flashcards-[0-9a-f]{8})\./.exec(read)?.[1];
+  assert.ok(guide && /The tree/.test(read), read);
+  const unread = await call("apply", { board: "thesis", key: "deck-add-000r", ops: [{ op: "add_deck", section: src, cards: [{ front: "a", back: "b", at: "Convexity is the failure mode", node: "n1" }] }] });
+  assert.ok(unread.isError && /add_deck needs the receipt from get_guide/.test(unread.text) && unread.text.includes("## flashcards") && unread.text.includes(`guide: "${guide}"`), "a deck from an agent that skipped the guide is refused, and the refusal is the guide");
+  const stale = await call("apply", { board: "thesis", key: "deck-add-000s", ops: [{ op: "add_deck", guide: "flashcards-00000000", section: src, cards: [{ front: "a", back: "b", at: "Convexity is the failure mode", node: "n1" }] }] });
+  assert.ok(stale.isError && /not the current receipt for the flashcards guide/.test(stale.text), stale.text);
+  const add = (key: string, body: object) => call("apply", { board: "thesis", key, ops: [{ op: "add_deck", guide, section: src, ...body }] });
   const bare = await add("deck-add-000a", { cards: [dipCard, shape, term] });
   assert.ok(bare.isError && /has no concept tree yet, so send one with the deck as tree/.test(bare.text), bare.text);
   const rootless = await add("deck-add-000b", { tree: { ...tree, nodes: [{ ...tree.nodes[0], kind: "concept" }] }, cards: [dipCard, shape, term] });
@@ -228,7 +235,7 @@ test("journey: an agent replaces a section's cards with its own, then sets the d
   assert.ok(adrift.isError && /tree node n1: the quote .* is not in the source verbatim/.test(adrift.text), adrift.text);
   const unplaced = await add("deck-add-0000", { tree, cards: [{ ...dipCard, at: "a hedge protects against everything" }, shape, term] });
   assert.ok(unplaced.isError && /did not compile:\ncards\[0\]: the quote .* is not in the source verbatim/.test(unplaced.text), unplaced.text);
-  const made = await ok("apply", { board: "thesis", key: "deck-add-0001", ops: [{ op: "add_deck", section: src, tree, cards: [dipCard, shape, term] }] });
+  const made = await ok("apply", { board: "thesis", key: "deck-add-0001", ops: [{ op: "add_deck", guide, section: src, tree, cards: [dipCard, shape, term] }] });
   const deck = /(deck_[a-z0-9-]+)/.exec(made)?.[1];
   assert.ok(deck, made);
   const slug = deck.replace(/^deck_/, "");
@@ -242,7 +249,7 @@ test("journey: an agent replaces a section's cards with its own, then sets the d
   const dip = cards[1].id;
   await server.api(`/api/decks/${slug}/keeps`, { method: "POST", body: JSON.stringify({ add: [dip] }) });
 
-  await ok("apply", { board: "thesis", key: "deck-add-0002", ops: [{ op: "add_deck", section: src, cards: [
+  await ok("apply", { board: "thesis", key: "deck-add-0002", ops: [{ op: "add_deck", guide, section: src, cards: [
     { ...dipCard, back: "In the middle, worst near the centre." },
     { front: "Why does position matter at all?", back: "Attention favours the ends.", at: "small, parallel shifts. Convexity is", node: "n1.1", asks: ["n1.1#1"] },
     term,
@@ -270,7 +277,7 @@ test("journey: an agent replaces a section's cards with its own, then sets the d
   const stranger = await call("apply", { board: "thesis", key: "card-edit-0003", ops: [{ op: "edit_cards", cards: [{ id: "card_nope/flashcard/x", at: "Convexity is the failure mode" }] }] });
   assert.ok(stranger.isError && /is not a card on thesis/.test(stranger.text), stranger.text);
 
-  const wrong = await call("apply", { board: "thesis", key: "deck-add-0003", ops: [{ op: "add_deck", section: "src_nope", cards: [{ front: "a", back: "b", at: "Convexity is the failure mode", node: "n1" }] }] });
+  const wrong = await call("apply", { board: "thesis", key: "deck-add-0003", ops: [{ op: "add_deck", guide, section: "src_nope", cards: [{ front: "a", back: "b", at: "Convexity is the failure mode", node: "n1" }] }] });
   assert.ok(wrong.isError && /not a section or source/.test(wrong.text), wrong.text);
 
   assert.match(await ok("apply", { board: "thesis", key: "deck-del-0001", ops: [{ op: "delete_deck", id: deck }] }), /set aside 3 cards/);

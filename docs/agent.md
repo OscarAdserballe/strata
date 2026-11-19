@@ -54,6 +54,8 @@ Agents add and arrange; they never delete for good (`delete_deck` tombstones a d
 
 A deck an agent adds is the deck distil would have made: `add_deck` takes the section's concept tree (one synthesis root, claims with questions, a glossary) with the cards, and each card names its tree node, the questions it answers and the term it introduces. The op checks the shape and nothing about size (one synthesis root, every question answered once, every term defined once), orders definition cards first with `orderByLadder`, and stores the tree as `ready`, so the concept map, drill order and Review's claim are the same for both. A section that already has a tree takes cards without one.
 
+`add_deck` and `set_primer` each need a **guide receipt** (`guide`): a hash of the `flashcards` or `primer` topic of `guide.md`, printed at its end (`server/features/agent/guide.ts`). Without the current one the op is refused with the guide in the error, so an agent can't write a deck or a primer it never read the rules for, and an edit to the guide makes every agent read it again.
+
 A card, a tree node and a glossary term are each placed by a verbatim quote of the words they are about and nothing else. `shared/reading/compile-quote.ts` is the one compile step: distil (with the model repairing what fails), `add_deck`, `edit_cards` and the reader all ask it whether a quote occurs exactly once in the card's passage, and an agent's batch with a quote that doesn't compile writes nothing and names why.
 Every write tool takes a `key`: the batch commits in one `ctx.commit` together with a receipt under that
 key, so a resent call replays the first answer. `apply`'s operations are in `server/features/agent/ops.ts`;
