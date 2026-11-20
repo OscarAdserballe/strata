@@ -174,3 +174,33 @@ test("a page carries the ask and how Claude read it, kept per version; both or n
   assert.deepEqual((await thread(id)).versions.map((v: any) => [v.n, v.ask, v.heard]),
     [[1, "Let me see what I sent.", "Two fields above each page."], [2, null, null]], "each version keeps its own; a page without them shows the page alone");
 });
+
+test("a thread goes to Dispatch from Thinking too, and back to to-do from a card with its pages kept", async () => {
+  const id = await newThread("Write the onboarding note");
+  assert.equal((await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "thinking" })).status, 200);
+  const sent = await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  assert.equal(sent.status, 200, JSON.stringify(sent.body));
+  assert.equal(sent.body.press.stage, "thinking");
+  await post(id, { page: page("v1", "A short note.") });
+  assert.equal((await thread(id)).stage, "decide");
+  const back = await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "todo" });
+  assert.equal(back.status, 200, JSON.stringify(back.body));
+  assert.equal(await thread(id), undefined, "a thread back in to-do leaves the pane");
+  assert.equal((await send(`/api/dashboard/tasks/${id}/send`, "POST", {})).status, 200, "and can be sent again");
+  await post(id, { page: page("v2", "Shorter.") });
+  assert.deepEqual((await thread(id)).versions.map((v: any) => v.n), [1, 2], "its earlier pages are still there");
+});
+
+test("splits on a post file each idea as a to-do thread split off this one, in the same write", async () => {
+  const id = await newThread("A Later button on Dispatch");
+  await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  assert.match((await post(id, { splits: [{ body: "no title" }] })).text, /splits\[0\]\.title is required/);
+  assert.match((await post(id, { splits: Array.from({ length: 6 }, (_, i) => ({ title: `x${i}` })) })).text, /at most 5/);
+  const r = await post(id, { page: page("v1", "Two buttons."), splits: [{ title: "Link sessions that overlap", body: "From your note on v1." }] });
+  assert.equal(r.isError, false, r.text);
+  const made = /split off into To-do \((t_[A-Za-z0-9]+)\)/.exec(r.text)?.[1];
+  assert.ok(made, r.text);
+  const t = (await server.api("/api/dashboard")).body.tasks.find((x: any) => x.id === made);
+  assert.deepEqual([t.stage, t.title, t.body, t.createdFrom.source], ["todo", "Link sessions that overlap", "From your note on v1.", "Split from A Later button on Dispatch"]);
+  assert.match((await post(id, { splits: [{ title: "While it is with the reader" }] })).text, /1 split off/, "splits, like replies, can go any time");
+});

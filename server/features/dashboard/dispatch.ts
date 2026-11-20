@@ -5,7 +5,7 @@ import { insertBoard } from "../boards/create.ts";
 import { agentRepo as a } from "../agent/repo.ts";
 import { htmlSource, prepareSource, writeSource, type PreparedSource } from "../sources/ingest.ts";
 import { bytesOf } from "../sources/blobs.ts";
-import { DashError, stageOf } from "./dashboard.ts";
+import { checkSplits, DashError, splitTask, stageOf } from "./dashboard.ts";
 import { dashboardRepo as q, type PressRow, type TaskRow, type VersionRow } from "./repo.ts";
 import type { Link } from "./dashboard.ts";
 
@@ -14,7 +14,7 @@ export const HANDLE = "dispatch";
 export const PRESS_LABEL: Record<string, string> = { send: "Send", go: "Go", back: "Send back" };
 /** What a press reads as, to the agent and in the wake: Send on a Finish page reopens it. */
 export const pressLabel = (kind: string, stage: string): string => (kind === "send" && stage === "finish" ? "Reopen" : PRESS_LABEL[kind] ?? kind);
-const SENDABLE = ["todo"];
+const SENDABLE = ["todo", "thinking"];
 const ON_YOU = ["decide", "review", "finish"];
 export const LANDS = ["decide", "review", "finish"] as const;
 export type Lands = (typeof LANDS)[number];
@@ -33,10 +33,10 @@ function moveTo(t: TaskRow, stage: string, at: number): void {
 
 const thread = (id: string): TaskRow => q.task.get(id) ?? fail(`No thread ${id}.`);
 
-/** To-do → Implementing: Claude prepares the first page. */
+/** To-do or Thinking → Implementing: Claude prepares the next page. */
 export function sendThread(id: string, sessionUrl: string | null): PressRow {
   const t = thread(id), stage = stageOf(t);
-  if (!SENDABLE.includes(stage)) fail(`Only a thread in to-do is sent; this one is in ${stage}.`);
+  if (!SENDABLE.includes(stage)) fail(`Only a thread in to-do or thinking is sent; this one is in ${stage}.`);
   return press(t, "send", stage, null, sessionUrl);
 }
 
@@ -57,7 +57,7 @@ function press(t: TaskRow, kind: string, stage: string, version: number | null, 
 }
 
 /** Checked before anything awaits, so a press that can't happen never wakes the routine. */
-export function checkSend(id: string): void { const s = stageOf(thread(id)); if (!SENDABLE.includes(s)) fail(`Only a thread in to-do is sent; this one is in ${s}.`); }
+export function checkSend(id: string): void { const s = stageOf(thread(id)); if (!SENDABLE.includes(s)) fail(`Only a thread in to-do or thinking is sent; this one is in ${s}.`); }
 export function checkPress(id: string, kind: unknown): string {
   if (kind !== "send" && kind !== "go" && kind !== "back") fail("kind is send.");
   const s = stageOf(thread(id));
@@ -98,9 +98,9 @@ export function open(id: string): Thread {
 
 
 /** Checks a post's shape and does the awaiting a page needs; the returned function writes, inside the commit. */
-export async function preparePost(id: string, raw: { page?: unknown; replies?: unknown; lands?: unknown; ask?: unknown; heard?: unknown }): Promise<() => string> {
+export async function preparePost(id: string, raw: { page?: unknown; replies?: unknown; lands?: unknown; ask?: unknown; heard?: unknown; splits?: unknown }): Promise<() => string> {
   const t = q.task.get(id) ?? fail(`No thread ${id}. dashboard_board lists them.`);
-  if (raw.page === undefined && raw.replies === undefined) fail("Post a page, replies, or both.");
+  if (raw.page === undefined && raw.replies === undefined && raw.splits === undefined) fail("Post a page, replies or splits.");
   const page = raw.page === undefined ? undefined : typeof raw.page === "string" && raw.page.trim() ? raw.page : fail("page is the HTML of the next version.");
   if (page !== undefined && Buffer.byteLength(page) > MAX_UPLOAD_BYTES) fail("page is too big.");
   if (page !== undefined && stageOf(t) !== "implementing") fail(`This thread is in ${stageOf(t)}, with the reader. Post a page only while it is implementing; replies can go any time.`);
@@ -110,6 +110,7 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
   const ask = field(raw.ask, "ask"), heard = field(raw.heard, "heard");
   if ((ask === null) !== (heard === null)) fail("ask and heard go together: the ask as it stands, and how you read it.");
   const replies = checkReplies(id, raw.replies);
+  const splits = checkSplits(raw.splits);
   let prepared: PreparedSource | null = null;
   if (page !== undefined) {
     const filename = fileFor(t);
@@ -125,6 +126,11 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
       q.insAgentReply.run(genId("mr-"), m.board_id, mid, m.resource_id, text, at, at);
     }
     if (replies.length) said.push(`${replies.length} ${replies.length === 1 ? "reply" : "replies"} under the reader's notes`);
+    if (splits.length) {
+      const parent = q.task.get(id)!;
+      const ids = splits.map((x) => splitTask(parent, x));
+      said.push(`${ids.length} split off into To-do (${ids.join(", ")})`);
+    }
     if (prepared) {
       const cur = q.task.get(id)!;
       if (stageOf(cur) !== "implementing") fail(`This thread moved to ${stageOf(cur)} while the page was being prepared.`);

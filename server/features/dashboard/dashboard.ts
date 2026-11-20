@@ -85,11 +85,11 @@ export function addItems(items: Item[]): string[] {
   return items.map((it) => { const id = genId("in_"); q.insInbox.run(id, it.kind, JSON.stringify(it), t); return id; });
 }
 
-function insertTask(f: { id?: string; title: string; body: string; links: Link[]; from?: From | null; area?: string; stage?: string }): string {
+function insertTask(f: { id?: string; title: string; body: string; links: Link[]; from?: From | null; area?: string; stage?: string; parent?: string }): string {
   const id = f.id ?? genId("t_");
   const t = now();
   const stage = f.stage ?? "todo";
-  q.insTask.run(id, f.title, f.body, stateOf(stage), null, null, JSON.stringify(f.links), null, f.from ? JSON.stringify(f.from) : null, t, t, f.area ?? guessArea(f.from?.source), stage);
+  q.insTask.run(id, f.title, f.body, stateOf(stage), null, f.parent ?? null, JSON.stringify(f.links), null, f.from ? JSON.stringify(f.from) : null, t, t, f.area ?? guessArea(f.from?.source), stage);
   return id;
 }
 const checkOpenStage = (v: unknown, fallback: string): string => {
@@ -98,7 +98,25 @@ const checkOpenStage = (v: unknown, fallback: string): string => {
   return stage;
 };
 
-const EDITABLE = ["title", "context", "body", "area"] as const;
+export interface Split { title: string; body: string }
+export const MAX_SPLITS = 5;
+/** Checks a post's splits: ideas the reader raised that belong in a thread of their own. */
+export function checkSplits(raw: unknown): Split[] {
+  if (raw === undefined) return [];
+  if (!Array.isArray(raw) || raw.length > MAX_SPLITS) return fail(`splits is a list of at most ${MAX_SPLITS} { title, body? }.`);
+  return raw.map((x, i) => {
+    if (typeof x !== "object" || x === null || Array.isArray(x)) fail(`splits[${i}] is { title, body? }.`);
+    const o = x as Record<string, unknown>;
+    return { title: str(o.title, `splits[${i}].title`, MAX.title, true)!, body: str(o.body, `splits[${i}].body`, MAX.body) ?? "" };
+  });
+}
+
+/** A new thread in to-do, split off another: it names that thread as its parent and its source. */
+export function splitTask(parent: TaskRow, s: Split): string {
+  return insertTask({ title: s.title, body: s.body, links: [], from: { source: `Split from ${parent.title}`.slice(0, MAX.source) }, area: parent.area ?? "personal", stage: "todo", parent: parent.id });
+}
+
+const EDITABLE =["title", "context", "body", "area"] as const;
 
 /** Changes an open inbox item's fields before it is kept; each field is optional, so edits never undo each other. */
 export function editItem(id: string, b: Record<string, unknown>): Record<string, unknown> {

@@ -268,7 +268,7 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "dashboard_post", title: "Dispatch: say something back", scope: "write",
-    description: "page: the next version, a whole self-contained HTML page; posting it hands the thread back to the reader. lands: where it goes, your call from the notes: decide (a proposal to answer), review (the whole thing built, ready to merge) or finish (merged, or not doing it, or filed elsewhere; the page says what to check). Without lands it goes back where it was pressed. replies: { noteId: \"text\" }, said under each of the reader's notes; they can go any time. ask and heard go with every page, shown side by side above it: ask is the reader's ask as it stands now, in your words, including what their notes changed since the last version; heard is how you read it, what this page does about it. A page is only taken while the thread is implementing.",
+    description: "page: the next version, a whole self-contained HTML page; posting it hands the thread back to the reader. lands: where it goes, your call from the notes: decide (a proposal to answer), review (the whole thing built, ready to merge) or finish (merged, or not doing it, or filed elsewhere; the page says what to check). Without lands it goes back where it was pressed. replies: { noteId: \"text\" }, said under each of the reader's notes; they can go any time. ask and heard go with every page, shown side by side above it: ask is the reader's ask as it stands now, in your words, including what their notes changed since the last version; heard is how you read it, what this page does about it. splits: ideas in the notes that deserve their own thread, filed in To-do linked to this one, so this thread keeps its focus. A page is only taken while the thread is implementing.",
     inputSchema: schema({
       key: KEY, id: { type: "string", description: "The thread's id." },
       page: { type: "string", description: "The next version's HTML." },
@@ -276,10 +276,12 @@ export const TOOLS: Tool[] = [
       replies: { type: "object", additionalProperties: { type: "string" }, description: "{ noteId: \"text\" }, ids from dashboard_open's notes." },
       ask: { type: "string", maxLength: 600, description: "The reader's ask as it stands now, synthesised from the thread and their notes: a line or two." },
       heard: { type: "string", maxLength: 600, description: "How you read it: what this version does about the ask, a line or two." },
+      splits: { type: "array", maxItems: 5, description: "Ideas from the reader's notes that are a thread of their own, not this one: each becomes a new thread in To-do that names this one as where it came from. They can go any time.",
+        items: { type: "object", additionalProperties: false, properties: { title: { type: "string", maxLength: 300, description: "The new thread's title." }, body: { type: "string", description: "What the reader said about it, and why it is separate." } }, required: ["title"] } },
     }, ["key", "id"]),
     write: (x) => dashAsync(async () => {
-      const run = await preparePost(String(x.id ?? ""), { page: x.page, replies: x.replies, lands: x.lands, ask: x.ask, heard: x.heard });
-      return () => { const said = dash(run); logEvent(db, APP, "dispatch_post", { page: x.page !== undefined, lands: x.lands ?? null, replies: x.replies ? Object.keys(x.replies as object).length : 0 }, null); return said; };
+      const run = await preparePost(String(x.id ?? ""), { page: x.page, replies: x.replies, lands: x.lands, ask: x.ask, heard: x.heard, splits: x.splits });
+      return () => { const said = dash(run); logEvent(db, APP, "dispatch_post", { page: x.page !== undefined, lands: x.lands ?? null, replies: x.replies ? Object.keys(x.replies as object).length : 0, splits: Array.isArray(x.splits) ? x.splits.length : 0 }, null); return said; };
     }),
   },
 ];
