@@ -60,6 +60,17 @@ test("the three tools: board lists implementing first; open gives no page yet; p
   assert.deepEqual(Object.keys(first).sort(), ["id", "notes", "page", "stage", "text", "title"]);
   assert.deepEqual([first.stage, first.page, first.notes, first.text], ["implementing", null, [], "Prompt for Some process steps lack screenshots."]);
 
+  for (const [bad, why] of [
+    ["<!doctype html><html><body><div id=\"root\"></div></body></html>", /shows nothing/],
+    ["<!doctype html><html><body><p>Hi</p><script>const x = <b>1</b>;</script></body></html>", /script 1, line 1: Unexpected token '<'/],
+    ["<!doctype html><html><body><p>Hi</p><script>let a = 1", /never closed/],
+    ["<!doctype html><html><body><p>Hi</p><script type=\"text/babel\">x</script></body></html>", /compile it/],
+    ["<!doctype html><html><body><p>Hi</p><script src=\"app.js\"></script></body></html>", /https CDN/],
+  ] as const) {
+    const refused = await post(a, { page: bad });
+    assert.ok(refused.isError && /wasn't posted/.test(refused.text) && why.test(refused.text), refused.text);
+  }
+  assert.equal((await thread(a)).versions.length, 0, "a refused page writes nothing");
   const r = await post(a, { page: page("Steps never get a screenshot", "I would make the agent name a recording frame for every step.") });
   assert.equal(r.isError, false, r.text);
   assert.match(r.text, /v1 posted; the thread is in Decide\./);
