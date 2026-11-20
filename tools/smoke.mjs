@@ -320,6 +320,7 @@ try {
     const keepsWarm = await keepsAsked;
     await station.click();
     check("a pointer over the keeps' station fetches their chunk before the click, and the keeps draw from it", !keepsEarly && keepsWarm && await drawn(doors, ".bench"));
+    check("the keeps have no chat dock", await doors.locator(".askwrap").count() === 0);
     await c.close();
   }
   {

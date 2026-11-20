@@ -18,7 +18,6 @@ import type { default as CardHistoryT } from "../../capabilities/card/CardHistor
 import type { default as CardDeletedT } from "../../capabilities/card/CardDeleted.tsx";
 import type { deckOf as DeckOf, saveAuthored as SaveAuthored } from "../../capabilities/card/saveCard.ts";
 import type { default as FeedbackNoteT } from "../../capabilities/feedback/FeedbackNote.tsx";
-import type { default as AskT, Compose } from "../../capabilities/ask/Ask.tsx";
 import type { useProvideHere as UseProvideHere } from "../../shell/here.ts";
 import type { useEntity as UseEntity } from "../../data/store.ts";
 import type { holdKeeps as HoldKeeps, keeps as Keeps, keepsKey as KeepsKey, KeptSet } from "../../data/entities/keeps.ts";
@@ -31,7 +30,7 @@ export interface KeepsHost {
   nest: typeof Nest; Line: typeof LineT; liftSynthesis: typeof LiftSynthesis;
   CardForm: typeof CardFormT; EditButton: typeof EditButtonT; Preview: typeof PreviewT;
   CardHistory: typeof CardHistoryT; CardDeleted: typeof CardDeletedT; deckOf: typeof DeckOf; saveAuthored: typeof SaveAuthored;
-  FeedbackNote: typeof FeedbackNoteT; Ask: typeof AskT; useProvideHere: typeof UseProvideHere;
+  FeedbackNote: typeof FeedbackNoteT; useProvideHere: typeof UseProvideHere;
   useEntity: typeof UseEntity; holdKeeps: typeof HoldKeeps; keeps: typeof Keeps; keepsKey: typeof KeepsKey;
 }
 let React: typeof ReactNS, Fragment: typeof ReactNS.Fragment;
@@ -41,11 +40,11 @@ let cardPrompt: typeof CardPrompt, facesOf: typeof FacesOf, ago: typeof Ago;
 let nest: typeof Nest, Line: typeof LineT, liftSynthesis: typeof LiftSynthesis;
 let CardForm: typeof CardFormT, EditButton: typeof EditButtonT, Preview: typeof PreviewT;
 let CardHistory: typeof CardHistoryT, CardDeleted: typeof CardDeletedT, deckOf: typeof DeckOf, saveAuthored: typeof SaveAuthored;
-let FeedbackNote: typeof FeedbackNoteT, Ask: typeof AskT, useProvideHere: typeof UseProvideHere;
+let FeedbackNote: typeof FeedbackNoteT, useProvideHere: typeof UseProvideHere;
 let useEntity: typeof UseEntity, holdKeeps: typeof HoldKeeps, keeps: typeof Keeps, keepsKey: typeof KeepsKey;
 export function bind(host: KeepsHost) {
   ({ React, registerKeys, StrataAPI, StrataWhy, cardPrompt, facesOf, ago, nest, Line, liftSynthesis, CardForm, EditButton, Preview,
-    CardHistory, CardDeleted, deckOf, saveAuthored, FeedbackNote, Ask, useProvideHere, useEntity, holdKeeps, keeps, keepsKey } = host);
+    CardHistory, CardDeleted, deckOf, saveAuthored, FeedbackNote, useProvideHere, useEntity, holdKeeps, keeps, keepsKey } = host);
   // the host's React, so hooks share one instance
   ({ Fragment, useState, useEffect, useRef } = React);
 }
@@ -62,7 +61,6 @@ export interface KeepsCommon {
   onEditSave: (card: KeepCard, patch: CardFaces) => Promise<KeepCard | null | undefined>;
   onDeleteCard?: ((card: KeepCard) => unknown) | null;
   onRestoreCard: (card: KeepCard) => unknown;
-  onCompose: Compose;
   onClose: () => void;
 }
 
@@ -73,10 +71,10 @@ const Reading = ({ what, line }: { what: string; line: string }) => (
   </div>
 );
 
-function KeepsAsk({ boardId, onCompose }: { boardId: string | null; onCompose: Compose }) {
+// the keeps have no chat of their own: they only say where you are
+function KeepsHere({ boardId }: { boardId: string | null }) {
   useProvideHere(() => ({ surface: "keeps", board: boardId || null }));
-  return <Ask lazy thread={boardId ? `board:${boardId}` : "library"} name={boardId ? "this board’s thread" : "the library’s thread"}
-    placeholder="ask about these cards…" onCompose={onCompose} feedback={{ board: boardId || null }} />;
+  return null;
 }
 
 interface EditingRowProps {
@@ -239,7 +237,7 @@ export interface DeckKeepsProps extends KeepsCommon {
 }
 interface DeckRow { key: string; keep: () => void; edit: (() => void) | null }
 
-function DeckKeeps({ slug, title, minted, pairs, boardId, onBoardState, onDeckChanged, editing, setEditing, onEditSave, onDeleteCard, onRestoreCard, onCompose, composing, onClose }: DeckKeepsProps) {
+function DeckKeeps({ slug, title, minted, pairs, boardId, onBoardState, onDeckChanged, editing, setEditing, onEditSave, onDeleteCard, onRestoreCard, composing, onClose }: DeckKeepsProps) {
   const [cards, setCards] = useState<KeepCard[] | null>(null);
   const [tree, setTree] = useState<ReviewTreeResponse | null>(null);
   const keptIds = useEntity<KeptSet, string[]>(keepsKey(slug), (v) => (v && v.ids) || NO_IDS);
@@ -565,7 +563,7 @@ function DeckKeeps({ slug, title, minted, pairs, boardId, onBoardState, onDeckCh
           {!cards.length ? <div className="kp-quiet">nothing in this deck to keep</div> : null}
         </div>
       </div>
-      <KeepsAsk boardId={boardId} onCompose={onCompose} />
+      <KeepsHere boardId={boardId} />
       <div className="sh-foot"><kbd>↓</kbd><kbd>↑</kbd> through the deck · <kbd>↵</kbd> read · <kbd>s</kbd> keep · <kbd>e</kbd> rewrite · <kbd>esc</kbd> done — only kept cards return for review</div>
     </div>
   );
@@ -577,7 +575,7 @@ export interface BoardKeepsProps extends KeepsCommon {
   onOpenDeck: (slug: string, label: string) => void;
 }
 
-export function BoardKeeps({ boardId, title, onOpenDeck, onBoardState, onDeckChanged, editing, setEditing, onEditSave, onDeleteCard, onRestoreCard, onCompose, onClose }: BoardKeepsProps) {
+export function BoardKeeps({ boardId, title, onOpenDeck, onBoardState, onDeckChanged, editing, setEditing, onEditSave, onDeleteCard, onRestoreCard, onClose }: BoardKeepsProps) {
   const [groups, setGroups] = useState<CollectionGroup[] | null>(null);
   const [reading, setReading] = useState<Spot | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -647,7 +645,7 @@ export function BoardKeeps({ boardId, title, onOpenDeck, onBoardState, onDeckCha
           {!groups.length ? <div className="kp-quiet">no decks on this board yet — a source has to be read into cards first</div> : null}
         </div>
       </div>
-      <KeepsAsk boardId={boardId} onCompose={onCompose} />
+      <KeepsHere boardId={boardId} />
       <div className="sh-foot"><kbd>esc</kbd> back to the room · click a row to curate that deck</div>
     </div>
   );
@@ -657,7 +655,7 @@ export interface LibraryKeepsProps extends KeepsCommon {
   onOpenBoard: (boardId: string, title: string) => void;
 }
 
-export function LibraryKeeps({ onOpenBoard, onBoardState, onDeckChanged, editing, setEditing, onEditSave, onDeleteCard, onRestoreCard, onCompose, onClose }: LibraryKeepsProps) {
+export function LibraryKeeps({ onOpenBoard, onBoardState, onDeckChanged, editing, setEditing, onEditSave, onDeleteCard, onRestoreCard, onClose }: LibraryKeepsProps) {
   const [lib, setLib] = useState<{ boards: LibraryBoard[]; unfiled: CollectionGroup[] } | null>(null);
   const [reading, setReading] = useState<Spot | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -744,7 +742,7 @@ export function LibraryKeeps({ onOpenBoard, onBoardState, onDeckChanged, editing
           {!lib.boards.length ? <div className="kp-quiet">no boards hold a deck yet — nothing to curate</div> : null}
         </div>
       </div>
-      <KeepsAsk boardId={null} onCompose={onCompose} />
+      <KeepsHere boardId={null} />
       <div className="sh-foot"><kbd>esc</kbd> back to the boards · click a board to open its bench</div>
     </div>
   );
