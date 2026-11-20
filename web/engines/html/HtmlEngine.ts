@@ -111,9 +111,8 @@ export class HtmlEngine {
         const on = this.layerOn;
         if (!on) break;
         if (m.intent === "edit" || m.intent === "remove" || m.intent === "show" || m.intent === "later" || m.intent === "discard") on[m.intent](m.id);
-        else if (m.intent === "keep") on.keep(m.id, String(m.text ?? ""), String(m.back ?? ""));
+        else if (m.intent === "keep" || m.intent === "format") on[m.intent](m.id, String(m.text ?? ""), String(m.back ?? ""));
         else if (m.intent === "grade") on.grade(m.id, !!m.got);
-        else if (m.intent === "capture") on.capture(m.id, Number(m.text));
         else if (m.intent === "again") on.again?.(m.id);
         else on[m.intent](m.id, String(m.text ?? ""));
         break;

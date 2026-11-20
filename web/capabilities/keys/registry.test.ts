@@ -43,13 +43,12 @@ const HANDLERS: [string, readonly KeyGroup[], string, RegExp?][] = [
   ["keeps", KEEPS, "web/surfaces/keeps/KeepsSurface.tsx", /const onKey = /],
 ];
 
-test("every key a screen binds is in its ? sheet (c was missing once)", () => {
+test("every key a screen binds is in its ? sheet", () => {
   for (const [screen, sheet, file, from] of HANDLERS) {
     const docs = documented(sheet);
     const missing = [...bound(file, from)].filter((k) => !docs.has(k));
     assert.deepEqual(missing, [], `${screen}: bound in ${file} but not in sheets.ts`);
   }
-  assert.ok(documented(ROOM).has("c"), "c makes a card of the last answer");
 });
 
 test("every screen registers its key layout with the registry, and nothing else listens for them", () => {

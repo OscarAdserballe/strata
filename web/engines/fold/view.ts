@@ -14,8 +14,16 @@ export interface FoldCard {
   a?: string;
   state: "asking" | "revealed" | "done"; got: boolean | null; mcq: boolean;
 }
-/** A card being written from a selection, by you: it is saved only when kept. */
-export interface FoldDraft { kind: "draft"; id: string; quote: string }
+/** A card being written from a selection, by you: Format tidies its faces, and it is saved only when kept after that. */
+export interface FoldDraft {
+  kind: "draft"; id: string; quote: string;
+  /** writing: your own words; formatting: sent to be tidied; formatted: the tidied faces, ready to keep */
+  phase?: "writing" | "formatting" | "formatted";
+  /** the faces to draw it with, once they were sent: as sent, or as tidied */
+  front?: string; back?: string;
+  /** why the last Format failed; the faces are still yours */
+  error?: string;
+}
 /** A conversation at words: your questions and the model's answers, the one being written last. */
 export interface FoldAsk {
   kind: "ask"; id: string; quote: string; turns: { who: "you" | "claude"; text: string }[];
@@ -45,13 +53,12 @@ export interface FoldIntents {
   show(id: string): void;
   later(id: string): void;
   grade(id: string, got: boolean): void;
-  /** a card written from a selection: kept with what its two faces hold, or let go */
+  /** a card written from a selection: tidied with what its two faces hold, kept once tidied, or let go */
+  format(id: string, front: string, back: string): void;
   keep(id: string, front: string, back: string): void;
   discard(id: string): void;
   /** a question at an ask's words, the first or a follow-up */
   ask(id: string, text: string): void;
-  /** an answer in an ask, made into a card (its question on the front) */
-  capture(id: string, turn: number): void;
   /** a card answered here, asked again */
   again?(id: string): void;
   /** the sheet shrunk to its tab, or opened from it */
@@ -90,10 +97,9 @@ function mdInto(host: HTMLElement, text: string): HTMLElement {
 
 function askTurns(doc: Document, it: FoldAsk, on: FoldIntents): HTMLElement {
   const box = el(doc, "div", "fi-turns");
-  const turn = (who: "you" | "claude", text: string, cls = "", at = -1, slot = "") => {
+  const turn = (who: "you" | "claude", text: string, cls = "", slot = "") => {
     const t = el(doc, "div", "fi-turn " + who + cls);
     const head = el(doc, "span", "fi-who", who === "you" ? "you" : "Claude");
-    if (at >= 0) { const mk = el(doc, "button", "fi-mk", "make a card"); mk.type = "button"; mk.onclick = () => on.capture(it.id, at); head.append(mk); }
     let say: HTMLElement;
     if (who === "you") say = el(doc, "p", "fi-say", text);
     else if (it.rich && slot) { say = el(doc, "div", "fi-say"); say.dataset.say = slot; }
@@ -101,8 +107,8 @@ function askTurns(doc: Document, it: FoldAsk, on: FoldIntents): HTMLElement {
     t.append(head, say);
     box.append(t);
   };
-  it.turns.forEach((t, i) => turn(t.who, t.text, "", t.who === "claude" ? i : -1, `${it.id}:${i}`));
-  if (it.writing !== null) turn("claude", it.writing || "…", " writing", -1, it.writing ? `${it.id}:w` : "");
+  it.turns.forEach((t, i) => turn(t.who, t.text, "", `${it.id}:${i}`));
+  if (it.writing !== null) turn("claude", it.writing || "…", " writing", it.writing ? `${it.id}:w` : "");
   if (it.error) box.append(el(doc, "p", "fi-err", it.error));
   return box;
 }
@@ -209,29 +215,39 @@ function againButton(doc: Document, id: string, on: FoldIntents): HTMLButtonElem
   return b;
 }
 
-function draftItem(doc: Document, it: FoldDraft, on: FoldIntents): HTMLElement {
-  const box = el(doc, "div", "fi card draft");
+export function draftItem(doc: Document, it: FoldDraft, on: FoldIntents): HTMLElement {
+  const phase = it.phase ?? "writing", tidied = phase === "formatted", busy = phase === "formatting";
+  const box = el(doc, "div", "fi card draft" + (tidied ? " tidied" : ""));
   const lab = el(doc, "div", "fi-lab");
   lab.append(el(doc, "b", "", "NEW CARD"), el(doc, "i", "", `“${short(it.quote.replace(/\s+/g, " ").trim(), 60)}”`));
-  const face = (cls: string, hint: string) => { const t = el(doc, "textarea", "fi-edit " + cls); t.rows = 2; t.placeholder = hint; return t; };
-  const front = face("fi-front", "the question this passage answers");
-  const back = face("fi-back", "its answer");
+  const face = (cls: string, hint: string, value = "") => {
+    const t = el(doc, "textarea", "fi-edit " + cls); t.rows = 2; t.placeholder = hint; t.value = value; t.disabled = busy; return t;
+  };
+  const front = face("fi-front", "the question this passage answers", it.front);
+  const back = face("fi-back", "its answer", it.back);
   const bar = el(doc, "div", "fi-acts");
-  const keep = el(doc, "button", "fi-pri fi-keep", "Keep");
+  const pri = el(doc, "button", "fi-pri " + (tidied ? "fi-keep" : "fi-format"), tidied ? "Keep" : busy ? "Formatting…" : "Format");
   const drop = el(doc, "button", "fi-lnk fi-drop", "discard");
-  keep.type = drop.type = "button";
-  const go = () => { if (front.value.trim()) on.keep(it.id, front.value.trim(), back.value.trim()); else front.focus(); };
-  keep.onclick = go;
+  pri.type = drop.type = "button";
+  pri.disabled = busy;
+  const go = () => {
+    if (busy) return;
+    const f = front.value.trim(), b = back.value.trim();
+    if (!f) front.focus();
+    else if (tidied) on.keep(it.id, f, b);
+    else on.format(it.id, f, b);
+  };
+  pri.onclick = go;
   drop.onclick = () => on.discard(it.id);
-  const keys = (e: KeyboardEvent) => {
+  box.addEventListener("keydown", (e: KeyboardEvent) => {
     e.stopPropagation();
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); go(); }
-    else if (e.key === "Escape" && !front.value.trim() && !back.value.trim()) { e.preventDefault(); on.discard(it.id); }
-  };
-  front.addEventListener("keydown", keys);
-  back.addEventListener("keydown", keys);
-  bar.append(keep, drop, el(doc, "em", "fi-hint", "⌘↵ keeps"));
-  box.append(lab, front, back, bar);
+    else if (e.key === "Escape" && !busy && !front.value.trim() && !back.value.trim()) { e.preventDefault(); on.discard(it.id); }
+  });
+  bar.append(pri, drop, el(doc, "em", "fi-hint", tidied ? "formatted · ⌘↵ keeps" : busy ? "" : "⌘↵ formats"));
+  box.append(lab, front, back);
+  if (it.error) box.append(el(doc, "p", "fi-err", it.error));
+  box.append(bar);
   queueMicrotask(() => { if (!box.contains(doc.activeElement)) front.focus({ preventScroll: true }); });
   return box;
 }
@@ -260,8 +276,8 @@ function askItem(doc: Document, it: FoldAsk, on: FoldIntents): HTMLElement {
   return box;
 }
 
-// a draft's faces are the reader's until kept: its values never redraw it
-const signature = (it: FoldItem) => (it.kind === "draft" ? it.id + it.quote : JSON.stringify(it));
+// a draft's faces are the reader's until kept: only a step of its Format redraws it
+const signature = (it: FoldItem) => (it.kind === "draft" ? JSON.stringify([it.id, it.quote, it.phase, it.error]) : JSON.stringify(it));
 
 /** Draws a fold into its host; items whose values didn't change are left alone, and an editor being typed in is never rebuilt. */
 export function drawFold(host: HTMLElement, m: FoldModel, on: FoldIntents): void {
@@ -425,6 +441,9 @@ export const FOLD_CSS = `
 .fi.draft .fi-edit{font:15px/1.4 var(--serif,Georgia,serif);font-style:normal;margin-top:6px;min-height:40px;}
 .fi.draft .fi-edit:focus{border-color:var(--accent,#41678a);}
 .fi.draft .fi-back{font-size:13.5px;color:var(--ink-soft,#58514c);}
+.fi.draft.tidied .fi-edit{background:oklch(0.955 0.02 245);border-color:oklch(0.86 0.04 245);}
+.fi.draft .fi-edit:disabled{color:var(--ink-faint,#857f7a);}
+.fi-pri:disabled{opacity:.6;cursor:default;}
 .fi-hint{margin-left:auto;font:500 9.3px var(--mono,ui-monospace,monospace);font-style:normal;color:var(--ink-faint,#857f7a);}
 .fi.card .fi-face .q,.fi.card .fq{font:16.8px/1.4 var(--serif,Georgia,serif);color:var(--ink,#2a241f);}
 .fi.card .fi-a{margin-top:8px;background:oklch(0.965 0.006 85);border-radius:4px;padding:8px 10px;font:13.5px/1.5 var(--serif,Georgia,serif);color:var(--ink-soft,#58514c);}
@@ -463,8 +482,6 @@ export const FOLD_CSS = `
 .fi .fi-say.md p:last-child{margin-bottom:0;}
 .fi-say.md ul,.fi-say.md ol{margin:0 0 6px;padding-left:18px;}
 .fi-say.md code{font:11.5px var(--mono,ui-monospace,monospace);background:oklch(0.955 0.009 85);padding:0 3px;border-radius:2px;}
-.fi-mk{margin-left:8px;background:none;border:0;padding:0;cursor:pointer;font:500 9.3px var(--mono,ui-monospace,monospace);color:var(--ink-faint,#857f7a);opacity:0;transition:opacity .12s;}
-.fi-turn:hover .fi-mk,.fi-mk:focus-visible{opacity:1;}
 .fi-err{margin:7px 0 0;font:12px/1.45 var(--sans,system-ui,sans-serif);color:oklch(0.55 0.15 30);}
 .fold-anchor{position:relative;}
 .ftick{position:absolute;right:-32px;bottom:2px;display:flex;gap:3.4px;padding:3.4px 4.2px;border:1px solid transparent;border-radius:3.4px;background:transparent;cursor:pointer;line-height:0;}

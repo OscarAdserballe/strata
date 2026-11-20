@@ -11,7 +11,11 @@ export interface ComposerDraft {
   requestId?: string;
   /** written in the fold under these words, not in the column */
   fold?: FoldPlace;
+  /** the fold's draft as Format left it */
+  tidy?: FoldTidy;
 }
+/** A fold draft's Format: being tidied, tidied and ready to keep, or failed back to your words. */
+export interface FoldTidy { phase: "writing" | "formatting" | "formatted"; front: string; back: string; error?: string }
 export interface FoldPlace { resourceId: string; start: number; end: number; quote: string; page: number | null; rects: number[][]; box: string | null; block?: number | null }
 
 let draft: ComposerDraft | null = null;

@@ -27,7 +27,7 @@ import { turned } from "../../capabilities/fold/turned.ts";
 import { handSlot } from "../../capabilities/fold/hand.ts";
 import { says } from "../../capabilities/fold/says.ts";
 import { composerNow, setComposer, subscribeComposer } from "../../capabilities/card/composing.ts";
-import { openComposer, saveComposed } from "../../capabilities/card/doors.ts";
+import { formatFoldCard, saveComposed } from "../../capabilities/card/doors.ts";
 import { asking } from "../../capabilities/fold/asking.ts";
 import { loadThread, onTurn, sendTurn, storeKeyOf, turnOf } from "../../capabilities/ask/useThread.ts";
 import { here as hereNow } from "../../shell/here.ts";
@@ -242,16 +242,13 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
       void sendTurn(sourceThread(bid, s.id), text, hereNow(),
         { id, start: at.start, end: at.end, quote: at.quote, page: at.page, rects: at.rects, box: at.box ?? null });
     },
-    capture: (id: string, turn: number) => {
-      const turns = foldHost.asks().find((a) => a.id === id)?.turns ?? [];
-      const answer = turns[turn];
-      if (!answer || answer.who !== "claude") return;
-      const question = [...turns.slice(0, turn)].reverse().find((t) => t.who === "you")?.text ?? "";
-      openComposer(question, answer.text);
-    },
-    draft: () => { const f = composerNow()?.fold; return f && f.resourceId === room.live().src?.id ? f : null; },
+    draft: () => { const c = composerNow(), f = c?.fold; return f && f.resourceId === room.live().src?.id ? { ...f, tidy: c.tidy } : null; },
+    format: (front: string, back: string) => { void formatFoldCard(front, back); },
     // the save path toasts a refusal and keeps the draft, so what was written isn't lost
-    keep: (front: string, back: string) => { const c = composerNow(); if (c?.fold) saveComposed({ front, back, source: c.source }).catch(() => {}); },
+    keep: (front: string, back: string) => {
+      const c = composerNow();
+      if (c?.fold && c.tidy?.phase === "formatted") saveComposed({ front, back, source: c.source }).catch(() => {});
+    },
     discard: () => { if (composerNow()?.fold) setComposer(null); },
     drawn: () => slotsDrawn(),
   };

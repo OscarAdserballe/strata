@@ -14,14 +14,13 @@ export interface ComposerProps {
   answer?: string;
   anchor?: string | null;
   closing?: boolean;
-  review?: boolean;
   onSave: (card: ComposedCard) => unknown;
   onCancel: () => void;
 }
 
 const failed = (e: unknown, said: string) => (e as { message?: string } | null)?.message || said;
 
-export default function Composer({ front0, anchor, closing, review, onSave, onCancel }: ComposerProps) {
+export default function Composer({ front0, anchor, closing, onSave, onCancel }: ComposerProps) {
   const [front, setFront] = useState(front0 || "");
   const [back, setBack] = useState("");
   const [source, setSource] = useState("");
@@ -72,9 +71,9 @@ export default function Composer({ front0, anchor, closing, review, onSave, onCa
       <textarea disabled={!!busy} ref={frontRef} className="comp-ta front" value={front} onChange={(e) => setFront(e.target.value)} onKeyDown={esc} {...frontPics.handlers} />
       <FaceStrip refs={frontPics.refs} onRemove={frontPics.remove} />
       {frontPics.status ? <span className="att-status" role="status">{frontPics.status}</span> : null}
-      <div className="comp-lbl">the back — yours to write{review ? "" : "; the chat stays open below"}</div>
+      <div className="comp-lbl">the back — yours to write</div>
       <textarea disabled={!!busy} ref={backRef} className="comp-ta back" value={back} onChange={(e) => setBack(e.target.value)} onKeyDown={esc}
-        placeholder={closing ? "from the front alone, if you can…" : review ? "the answer you want to remember…" : "talk it out in the thread, then say it in your own words…"} {...backPics.handlers} />
+        placeholder={closing ? "from the front alone, if you can…" : "the answer you want to remember…"} {...backPics.handlers} />
       <FaceStrip refs={backPics.refs} onRemove={backPics.remove} />
       {backPics.status ? <span className="att-status" role="status">{backPics.status}</span> : null}
       <label className="comp-lbl" htmlFor="card-source-location">Source location (optional)</label>

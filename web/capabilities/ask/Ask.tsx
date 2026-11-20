@@ -25,7 +25,7 @@ const Turn = memo(function Turn({ role, text, idx, question, feedback, compose }
     <div className={"turn " + (role === "user" ? "me" : "it")}>
       {role === "user" ? <div className="said-me">{withImages(text, trimLines)}</div> : <div className="said">{mdBlocks(text)}</div>}
       {role !== "user" ? <>
-        {compose ? <button className="mint-c" title="make a card of this (c)"
+        {compose ? <button className="mint-c" title="make a card of this"
           onClick={() => compose(question, text)}>↰ New card</button> : null}
         <FeedbackNote payload={{ kind: "chat", ...feedback, messageIdx: idx, context: { question, reply: text, ...(feedback.context || {}) } }} />
       </> : null}

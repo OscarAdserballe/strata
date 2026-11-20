@@ -1,7 +1,7 @@
 import { ensureFoldStyle } from "../../engines/fold/view.ts";
 import type { LayerItem } from "../../engines/fold/layers.ts";
 import { anchorOf, quoteAnchor } from "../../../shared/reading/anchors.ts";
-import type { FoldPlace } from "../card/composing.ts";
+import type { FoldPlace, FoldTidy } from "../card/composing.ts";
 import type { SourceAdapter } from "../../engines/source/adapter.ts";
 import { switches } from "./switches.ts";
 import { asking } from "./asking.ts";
@@ -32,15 +32,16 @@ export interface FoldAskAt {
 export interface FoldHost {
   asks(): readonly FoldAskAt[];
   ask(id: string, text: string): void;
-  capture(id: string, turn: number): void;
   cards(): readonly FoldDeckCard[];
   show(id: string): void;
   later(id: string): void;
   grade(id: string, got: boolean): void;
   /** a card answered here, turned back to its question */
   again(id: string): void;
-  /** the card being written under a selection of this source, if one is */
-  draft(): FoldPlace | null;
+  /** the card being written under a selection of this source, if one is, and how far its Format got */
+  draft(): (FoldPlace & { tidy?: FoldTidy }) | null;
+  /** its faces tidied, handed back to the draft through `draft().tidy` */
+  format(front: string, back: string): void;
   keep(front: string, back: string): void;
   discard(): void;
   adapter(): SourceAdapter | null;
@@ -86,7 +87,7 @@ export function paintFolds(h: FoldHost): void {
         legacy: anchorOf({ source: quoteAnchor(x.quote) }) } });
   }
   const d = h.draft();
-  if (d) items.push({ kind: "draft", id: "draft", quote: d.quote,
+  if (d) items.push({ kind: "draft", id: "draft", quote: d.quote, phase: d.tidy?.phase ?? "writing", front: d.tidy?.front, back: d.tidy?.back, error: d.tidy?.error,
     anchor: { start: d.start, end: d.end, quote: d.quote, box: d.box, page: d.page, rects: d.rects, block: d.block ?? null, legacy: anchorOf({ source: quoteAnchor(d.quote) }) } });
   a.drawLayers(items, {
     edit: (id) => h.write(id),
@@ -97,10 +98,10 @@ export function paintFolds(h: FoldHost): void {
     later: (id) => h.later(id),
     grade: (id, got) => h.grade(id, got),
     again: (id) => h.again(id),
+    format: (_id, front, back) => h.format(front, back),
     keep: (_id, front, back) => h.keep(front, back),
     discard: (id) => { if (asking.now()?.id === id) asking.set(null); else h.discard(); },
     ask: (id, text) => h.ask(id, text),
-    capture: (id, turn) => h.capture(id, turn),
     drawn: () => h.drawn(),
   });
 }

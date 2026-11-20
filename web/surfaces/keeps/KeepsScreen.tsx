@@ -59,7 +59,7 @@ export default function KeepsScreen() {
         composing={!!composer} />;
   const form = composer && !review && !cram
     ? <div className="bench-compose"><Composer front0={composer.front} answer={composer.answer} anchor={composer.anchor}
-        closing={!!composer.mintId} review onSave={saveComposed} onCancel={() => setComposer(null)} /></div> : null;
+        closing={!!composer.mintId} onSave={saveComposed} onCancel={() => setComposer(null)} /></div> : null;
   return createPortal(lib
     ? <div className="bench-lib">{drawn}{form}</div>
     : <div className="bench-at" onDragOver={(e) => room.panesDrag.onDragOver(e)} onDragLeave={(e) => room.panesDrag.onDragLeave(e)}

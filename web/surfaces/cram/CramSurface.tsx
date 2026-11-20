@@ -360,7 +360,7 @@ function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, 
         {composer ? (
           <div className="rcard rcompose">
             <Composer front0={composer.front} answer={composer.answer} anchor={composer.anchor}
-              closing={!!composer.mintId} review onSave={onComposerSave} onCancel={onComposerCancel} />
+              closing={!!composer.mintId} onSave={onComposerSave} onCancel={onComposerCancel} />
           </div>
         ) : phase === "choose" ? chooser
         : phase === "end" ? (

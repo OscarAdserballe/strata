@@ -2011,7 +2011,7 @@ const noteReplies = {
 // a card written under a selection is saved by the same draft key however often the wire loses its answer
 const selectionCard = {
   name: "selection-card",
-  what: "pick words in a source, choose Card, write it in the fold under them and keep it; the create's answer is lost, so it is sent again; the board holds one card, anchored to those words",
+  what: "pick words in a source, choose Card, write it in the fold under them, format and keep it; the create's answer is lost, so it is sent again; the board holds one card, anchored to those words",
   checks: {
     one: "the server holds one card from the draft",
     anchored: "its source is the picked words, as a quote",
@@ -2038,6 +2038,7 @@ const selectionCard = {
     const front = `Race card from words, seed ${t.seed}: where is it asked?`;
     await draft.locator(".fi-front").fill(front);
     await draft.locator(".fi-back").fill("Under the words it was written from.");
+    await draft.locator(".fi-format").click();
     await draft.locator(".fi-keep").click();
     const gone = await draft.waitFor({ state: "detached", timeout: GRACE_MS }).then(() => true, () => false);
     await page.evaluate(() => window.__strataSettled?.());

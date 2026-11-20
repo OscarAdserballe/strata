@@ -352,7 +352,7 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
         {composer ? (
           <div className="rcard rcompose">
             <Composer front0={composer.front} answer={composer.answer} anchor={composer.anchor}
-              closing={!!composer.mintId} review onSave={onComposerSave} onCancel={onComposerCancel} />
+              closing={!!composer.mintId} onSave={onComposerSave} onCancel={onComposerCancel} />
           </div>
         ) : error ? <div className="rdone"><div className="rdone-line">couldn’t load the review — the wire may be down</div></div>
         : queue === null ? null

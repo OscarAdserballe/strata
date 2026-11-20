@@ -175,7 +175,6 @@ try {
   const asked = run && await page.locator(".selmenu").getByRole("button", { name: "Ask", exact: true }).click({ timeout: 3000 }).then(() => true, () => false);
   const line = page.locator(".fold .fi.asked .fi-q");
   check("Ask on picked words opens a fold under them", !!asked && await line.waitFor({ timeout: 5000 }).then(() => true, () => false));
-  const answers = () => page.locator(".fold .fi.asked .fi-turn.claude:not(.writing)");
   const turnsNow = () => page.$$eval(".fold .fi.asked .fi-turn", (ts) => ts.map((t) => t.querySelector(".fi-say").innerText));
   await line.fill("why does repetition discipline pricing?");
   await line.press("Enter");
@@ -195,15 +194,53 @@ try {
         return n.nodeType === 3 ? n.data : n.matches?.(".katex, code, pre") ? "" : [...n.childNodes].map(text).join("");
       }).join("")));
   }));
-  await answers().last().hover();
-  await answers().last().locator(".fi-mk").click();
-  await page.fill(".comp-ta.back", "patience is what makes the threat credible");
-  await page.getByRole("button", { name: "Format & Preview" }).click();
-  await page.getByRole("button", { name: "Confirm save" }).click();
-  await page.waitForSelector(".comp", { state: "detached", timeout: 10000 });
-  const kept = await turnsNow();
-  check("making a card keeps every turn of the thread", said.length === 4 && JSON.stringify(kept) === JSON.stringify(said),
-    `${said.length} turns before, ${kept.length} after`);
+  check("a follow-up is asked in the same fold", said.length === 4, `${said.length} turns`);
+  check("an answer in the fold has no make-a-card button", await page.locator(".fold .fi-mk").count() === 0);
+
+  // a card written under picked words is formatted first, then kept
+  await page.locator(".fold:has(.fi.asked) .fold-shut").click();
+  await page.locator(".fold .fi.asked").waitFor({ state: "detached", timeout: 5000 }).catch(() => {});
+  await page.route("**/api/cards/tidy", (route) => {
+    const { faces } = route.request().postDataJSON();
+    return route.fulfill({ json: { faces: { ...faces, back: faces.back.replaceAll("x²", "$x^2$") } } });
+  });
+  const other = await page.evaluate(() => {
+    const R = document.querySelector(".page").getBoundingClientRect();
+    const el = [...document.querySelectorAll(".tlayer [data-i]")].reverse().find((e) => {
+      const r = e.getBoundingClientRect();
+      const at = document.elementFromPoint(r.left + 4, r.top + r.height / 2);
+      return e.textContent.length >= 16 && r.width > 80 && r.top > R.top + 80 && r.bottom < R.bottom - 240 && (at === e || e.contains(at));
+    });
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x0: r.left + 2, x1: r.left + r.width * 0.8, y: r.top + r.height / 2 };
+  });
+  if (other) {
+    await page.mouse.move(other.x0, other.y); await page.mouse.down();
+    await page.mouse.move(other.x1, other.y, { steps: 8 }); await page.mouse.up();
+  }
+  const carded = other && await page.locator(".selmenu").getByRole("button", { name: "Card", exact: true }).click({ timeout: 3000 }).then(() => true, () => false);
+  const draft = page.locator(".fold .fi.draft");
+  const drafted = !!carded && await draft.waitFor({ timeout: 5000 }).then(() => true, () => false);
+  const cardFront = `Smoke margin card ${Date.now()}: what makes the threat credible?`;
+  let formatted = false, keptCard = false;
+  if (drafted) {
+    await draft.locator(".fi-front").fill(cardFront);
+    await draft.locator(".fi-back").fill("patience, squared: x²");
+    const keepBefore = await draft.locator(".fi-keep").count();
+    await draft.getByRole("button", { name: "Format", exact: true }).click();
+    await page.locator(".fold .fi.draft.tidied .fi-keep").waitFor({ timeout: 10000 }).catch(() => {});
+    formatted = keepBefore === 0 && await draft.locator(".fi-back").inputValue() === "patience, squared: $x^2$"
+      && await page.locator(".fold .fi.draft.tidied").count() === 1 && /edit again/i.test(await draft.innerText()) === false;
+    await draft.getByRole("button", { name: "Keep", exact: true }).click();
+    await draft.waitFor({ state: "detached", timeout: 10000 }).catch(() => {});
+    const st = await (await fetch(`${APP}/api/boards/${book.id}`)).json();
+    keptCard = (st.minted || []).some((m) => m.front === cardFront && m.back === "patience, squared: $x^2$");
+  }
+  await page.unroute("**/api/cards/tidy");
+  check("Card on picked words opens a draft in the fold", drafted);
+  check("the draft offers Keep only after Format, with the tidied faces shaded in place", formatted);
+  check("Keep saves the formatted card", keptCard);
   check("the reader has no dock: a source is asked under its words", await page.locator(".askwrap").count() === 0);
 
   // the dock is the board's: asked from the board's page
