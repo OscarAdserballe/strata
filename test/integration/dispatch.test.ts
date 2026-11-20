@@ -174,3 +174,32 @@ test("a page carries the ask and how Claude read it, kept per version; both or n
   assert.deepEqual((await thread(id)).versions.map((v: any) => [v.n, v.ask, v.heard]),
     [[1, "Let me see what I sent.", "Two fields above each page."], [2, null, null]], "each version keeps its own; a page without them shows the page alone");
 });
+
+test("Send to Dispatch from Thinking hands the thread to Claude, as from to-do", async () => {
+  const id = await newThread("Think first, then send");
+  assert.equal((await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "thinking" })).status, 200);
+  const sent = await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  assert.equal(sent.status, 200, JSON.stringify(sent.body));
+  assert.deepEqual([sent.body.press.kind, sent.body.press.stage], ["send", "thinking"]);
+  const t = await thread(id);
+  assert.deepEqual([t.stage, t.lands], ["implementing", "decide"]);
+});
+
+test("back to to-do or thinking takes a thread off Dispatch with its pages kept; a page posted after the move is refused", async () => {
+  const id = await newThread("Move it back");
+  await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  await post(id, { page: page("v1", "First take.") });
+  const back = await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "todo" });
+  assert.equal(back.status, 200, JSON.stringify(back.body));
+  assert.equal(back.body.pane.threads.find((x: any) => x.id === id), undefined, "off the pane at once");
+  assert.equal(back.body.board.tasks.find((x: any) => x.id === id).stage, "todo");
+
+  await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  assert.equal((await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "thinking" })).status, 200, "even while Claude has it");
+  const late = await post(id, { page: page("v2", "Too late.") });
+  assert.equal(late.isError, true);
+  assert.match(late.text, /in thinking, with the reader/);
+  await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  assert.match((await post(id, { page: page("v2", "Second take.") })).text, /v2 posted; the thread is in Decide/);
+  assert.deepEqual((await thread(id)).versions.map((v: any) => v.n), [1, 2], "v1 survives both moves");
+});

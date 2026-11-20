@@ -1968,6 +1968,65 @@ const dispatchNewThread = {
   },
 };
 
+const dispatchBack = {
+  name: "dispatch-back",
+  what: "in Dispatch you move a thread Claude is working on back to to-do while Claude posts its page, and move a thread in Decide back to thinking, on a lossy wire with the first move's answer lost; each ends where you put it, a page lands only if it beat the move, and every page is kept for the next Send",
+  checks: {
+    moved: "both threads end where they were moved, off the pane",
+    raced: "Claude's racing post either landed before the move (one version) or was refused after it (none), never both or half",
+    kept: "sent again, each thread's next page adds a version and keeps the ones before",
+  },
+  async run(t) {
+    const tag = `${t.seed}-${Date.now().toString(36)}`;
+    const { token } = await t.api("/api/agent/tokens", "POST", { name: `race back ${t.seed}`, write: true });
+    let n = 0;
+    const post = async (id, html) => {
+      const r = await fetch(`${t.base}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "tools/call", params: { name: "dashboard_post", arguments: { key: `race-back-${tag}-${n}`, id, page: html } } }) });
+      const body = await r.json();
+      return { ok: !!body.result && !body.result.isError, text: body.result?.content?.[0]?.text ?? JSON.stringify(body).slice(0, 200) };
+    };
+    const ids = [0, 1].map((i) => `t_bck${i}${t.seed}${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_]/g, ""));
+    const titles = [`Race back todo ${tag}`, `Race back thinking ${tag}`];
+    for (const [i, id] of ids.entries()) {
+      await t.api("/api/dashboard/tasks", "POST", { id, title: titles[i], body: "Under loss.", area: "work" });
+      await t.api(`/api/dashboard/tasks/${id}/send`, "POST", {});
+    }
+    await post(ids[1], `<!doctype html><html><body><h1>${titles[1]}</h1></body></html>`);
+    const moves = (e) => e.write && e.method === "PATCH" && /\/api\/dashboard\/tasks\/[^/]+$/.test(e.path);
+    const page = await t.open({ latency: true, lostAck: { match: moves, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    const moveOn = async (view, title, to, during) => {
+      await page.goto(`${t.base}/dispatch?view=${view}`);
+      const card = page.locator(".ws-card", { hasText: title }).first();
+      await card.waitFor();
+      await card.locator(".t").first().click();
+      const click = card.getByRole("button", { name: to, exact: true }).click();
+      const raced = during ? await Promise.all([click, during()]).then(([, r]) => r) : (await click, null);
+      await page.evaluate(() => window.__strataSettled?.());
+      return { listed: (await page.locator(".ws-list").textContent()) ?? "", raced };
+    };
+    const a = await moveOn("implementing", titles[0], "Back to to-do", () => post(ids[0], `<!doctype html><html><body><h1>${titles[0]}</h1></body></html>`));
+    const b = await moveOn("decide", titles[1], "Back to thinking");
+    const want = ["todo", "thinking"];
+    const stageOf = (id) => t.sql("SELECT stage FROM dashboard_tasks WHERE id = ?", id)[0]?.stage;
+    const until = performance.now() + GRACE_MS * 2;
+    while (!ids.every((id, i) => stageOf(id) === want[i]) && performance.now() < until) await sleep(250);
+    await t.net.idle(500);
+    const stages = ids.map(stageOf);
+    const versions = (id) => t.sql("SELECT n FROM dashboard_versions WHERE task_id = ? ORDER BY n", id).map((r) => r.n);
+    t.check("moved", stages.every((s, i) => s === want[i]) && [a, b].every((m, i) => !m.listed.includes(titles[i])), `${stages.join(", ")} · ${[a, b].map((m) => JSON.stringify(m.listed.slice(0, 80))).join(" · ")}`);
+    const v0 = versions(ids[0]);
+    t.check("raced", a.raced.ok ? v0.length === 1 : v0.length === 0 && /in todo, with the reader|moved to todo/.test(a.raced.text), `post ${a.raced.ok ? "landed" : `refused: ${a.raced.text}`} · versions [${v0.join(",")}]`);
+    const before = ids.map((id) => versions(id).length);
+    for (const [i, id] of ids.entries()) {
+      await t.api(`/api/dashboard/tasks/${id}/send`, "POST", {});
+      await post(id, `<!doctype html><html><body><h1>${titles[i]} next</h1></body></html>`);
+    }
+    const after = ids.map(versions);
+    t.check("kept", after.every((v, i) => v.length === before[i] + 1 && v.every((x, j) => x === j + 1)), after.map((v, i) => `${titles[i]}: [${v.join(",")}] after ${before[i]}`).join("; "));
+  },
+};
+
 // two replies under a note, the first one's answer lost: each lands once, in the order written
 const noteReplies = {
   name: "note-replies",
@@ -2167,4 +2226,4 @@ const padTwoTabs = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, dispatchBack, padTwoTabs];

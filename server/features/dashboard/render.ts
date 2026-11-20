@@ -8,6 +8,7 @@ const ended = (t: TaskView): boolean => t.stage === "done" || t.stage === "dropp
 
 function block(t: TaskView): string {
   const lines = [`### ${t.title} · ${t.id} · ${t.area}${t.clearedAt ? " · archived" : ""}`];
+  if (t.splitFrom) lines.push(`Split from: ${t.splitFrom.title} · ${t.splitFrom.id}`);
   if (t.links.length) lines.push(`Links: ${linkLine(t.links)}`);
   if (t.createdFrom) lines.push(`From: ${t.createdFrom.source}${t.createdFrom.quote ? ` — "${t.createdFrom.quote}"` : ""}`);
   if (t.body.trim()) lines.push("", t.body.trim());
@@ -17,7 +18,8 @@ function block(t: TaskView): string {
 
 function inboxLine(i: Record<string, unknown>): string {
   const from = (i.from as { source?: string } | undefined)?.source ?? "?";
-  return `- ${String(i.id)} · "${String(i.title ?? i.text ?? "")}" · from ${from}${i.context ? `\n  ${String(i.context).replace(/\n+/g, " ")}` : ""}`;
+  const split = (i.splitFrom as { id?: string } | null | undefined)?.id;
+  return `- ${String(i.id)} · "${String(i.title ?? i.text ?? "")}" · from ${from}${split ? ` · split from ${split}` : ""}${i.context ? `\n  ${String(i.context).replace(/\n+/g, " ")}` : ""}`;
 }
 
 export const HANDLED_DAYS = 7;

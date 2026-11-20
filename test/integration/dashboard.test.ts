@@ -242,3 +242,20 @@ test("dashboard_read lists what you dropped or finished in the last 7 days, by s
   assert.doesNotMatch(handled, /Dropped long ago/, "an item handled 8 days ago isn't listed");
   assert.doesNotMatch((await call("dashboard_read", { stages: ["todo"] })).text, /## Handled/, "a read narrowed to stages leaves it out");
 });
+
+test("an agent splits a thread: split_from names it, the kept task links back, and dashboard_read shows the split", async () => {
+  const parent = (await dash()).tasks.find((t) => t.stage === "todo");
+  const bad = await call("dashboard_add_items", { key: "collect-split-0001", items: [{ title: "Half of nothing", from: FROM, split_from: "t_nothere" }] });
+  assert.equal(bad.isError, true);
+  assert.match(bad.text, /items\[0\]\.split_from: no thread t_nothere/);
+  const added = await call("dashboard_add_items", { key: "collect-split-0002", items: [{ title: "The timer half", from: FROM, split_from: parent.id }] });
+  assert.equal(added.isError, false, added.text);
+  const item = (await dash()).inbox.find((i) => i.title === "The timer half");
+  assert.deepEqual(item.splitFrom, { id: parent.id, title: parent.title, stage: "todo", dispatched: false });
+  assert.match((await call("dashboard_read")).text, new RegExp(`"The timer half" · from .* · split from ${parent.id}`));
+  await send(`/api/dashboard/inbox/${item.id}/keep`, "POST", {}, "dash-keep-split-01");
+  const kept = (await dash()).tasks.find((t) => t.title === "The timer half");
+  assert.deepEqual(kept.splitFrom, item.splitFrom);
+  assert.match((await call("dashboard_read", { task: kept.id })).text, new RegExp(`Split from: ${parent.title.replace(/[.*+?^${}()|[\]\\"]/g, "\\$&")} · ${parent.id}`));
+  assert.equal((await dash()).tasks.find((t) => t.id === parent.id).splitFrom, null);
+});

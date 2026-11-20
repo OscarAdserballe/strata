@@ -18,13 +18,14 @@ export const useDispatch = (): DispatchPane | undefined => useQuery<DispatchPane
 
 export interface DashLink { kind: string; ref: string; title?: string; url?: string }
 export interface DashFrom { source: string; url?: string; quote?: string }
+export interface DashSplit { id: string; title: string; stage: string; dispatched: boolean }
 export interface DashTask {
   id: string; title: string; body: string; stage: string;
   links: DashLink[]; createdFrom: DashFrom | null; createdAt: number; updatedAt: number; clearedAt: number | null;
-  area: string; dispatched: boolean;
+  area: string; dispatched: boolean; splitFrom?: DashSplit | null;
   updates: { id: string; at: number; text: string; from: DashFrom | null; links: DashLink[] }[];
 }
-export interface DashItem { id: string; at: number; kind: string; title: string; context?: string; body?: string; area: string; from?: DashFrom; links?: DashLink[] }
+export interface DashItem { id: string; at: number; kind: string; title: string; context?: string; body?: string; area: string; from?: DashFrom; links?: DashLink[]; splitFrom?: DashSplit | null }
 export interface DashBoard { rev: number; tasks: DashTask[]; inbox: DashItem[]; archived: number; links: { label: string; url: string }[] }
 export interface RoutineView { connected: boolean; url: string | null; ranAt: number | null; sessionUrl: string | null; error: string | null }
 
@@ -91,6 +92,13 @@ export const dashOps = {
         { key: DISPATCH_KEY, apply: (v: DispatchPane | undefined) => v && { ...v, threads: v.threads.filter((t) => t.id !== id) } }],
       confirm: (res, meta) => takeState(res, meta, s) };
   },
+  /** Back off Dispatch to to-do or Thinking: off the pane at once; its pages stay, and the next Send adds to them. */
+  back(id: string, stage: "todo" | "thinking", now: () => number = Date.now, s: Store = roomStore): Op<DashAnswer> {
+    return { label: stage === "todo" ? "move that back to to-do" : "move that back to thinking", lanes: [lane(id), `dispatch:${id}`], method: "PATCH", path: `/api/dashboard/tasks/${id}`, body: { stage },
+      optimistic: [{ key: DASH_KEY, apply: onTasks(id, (t) => ({ ...t, stage, updatedAt: now() })) },
+        { key: DISPATCH_KEY, apply: (v: DispatchPane | undefined) => v && { ...v, threads: v.threads.filter((t) => t.id !== id) } }],
+      confirm: (res, meta) => takeState(res, meta, s) };
+  },
   /** The doc's title and notes as typed: only the newest unsent text goes. */
   text(id: string, field: "title" | "body", value: string, s: Store = roomStore): Op<DashAnswer> {
     return { label: "save those notes", lanes: [lane(id)], coalesce: `dash:${id}:${field}`, method: "PATCH", path: `/api/dashboard/tasks/${id}`, body: { [field]: value },
@@ -136,6 +144,7 @@ export const dash = {
   text: (id: string, field: "title" | "body", value: string) => mutate(dashOps.text(id, field, value)),
   send: (id: string) => mutate(dashOps.send(id)),
   end: (id: string, stage: "dropped" | "done" = "dropped") => mutate(dashOps.end(id, stage)),
+  back: (id: string, stage: "todo" | "thinking") => mutate(dashOps.back(id, stage)),
   routine: (body: Record<string, unknown>) => mutate(dashOps.routine(body)),
   runRoutine: () => mutate(dashOps.runRoutine()),
   press: (id: string) => mutate(dashOps.press(id)),

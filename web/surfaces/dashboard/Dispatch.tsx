@@ -36,10 +36,15 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   const [tall, setTall] = useState<{ rid: string; h: number } | null>(null);
   const fit = v && tall?.rid === v.resourceId ? Math.max(tall.h, 240) : null;
 
-  function press(th: DispatchThread, kind: "send" | "drop" | "archive"): void {
+  function press(th: DispatchThread, kind: "send" | "drop" | "archive" | "todo" | "thinking"): void {
     const rest = here.filter((x) => x.id !== th.id);
     setSel(rest[0] ? { thread: rest[0].id, n: null } : null);
     setReopening(null);
+    if (kind === "todo" || kind === "thinking") {
+      toast(kind === "todo" ? "Moved to to-do" : "Moved to thinking");
+      dash.back(th.id, kind).catch((e) => toast(StrataWhy(e, "not moved"), 4200));
+      return;
+    }
     if (kind === "drop") { toast("Dropped"); dash.end(th.id).catch((e) => toast(StrataWhy(e, "not dropped"), 4200)); return; }
     if (kind === "archive") { toast("Archived"); dash.end(th.id, "done").catch((e) => toast(StrataWhy(e, "not archived"), 4200)); return; }
     dash.press(th.id).catch((e) => toast(StrataWhy(e, "Send didn't reach Claude"), 4200));
@@ -54,7 +59,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   return (
     <div className="ws dispatch">
       <aside className="ws-list" aria-label="Threads">
-        {stage === "implementing" ? <Implementing threads={here} on={t?.id ?? null} onPick={(x) => setSel({ thread: x.id, n: null })} />
+        {stage === "implementing" ? <Implementing threads={here} on={t?.id ?? null} onPick={(x) => setSel({ thread: x.id, n: null })} onBack={(x, to) => press(x, to)} />
           : here.map((x) => x.id === t?.id
             ? <section key={x.id} className="ws-card open" aria-label={x.title}>
                 <span className="t">{x.title}</span>
@@ -75,6 +80,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
                   <button className="btn dark" onClick={() => press(x, "archive")}>Archive</button>
                   <button className="faint" onClick={() => setReopening(x.id)}>Reopen</button>
                 </div>}
+                <Back onBack={(to) => press(x, to)} />
               </section>
             : <button key={x.id} className="ws-card" onClick={() => setSel({ thread: x.id, n: null })}>
                 <span className="t">{x.title}</span>
@@ -112,14 +118,23 @@ function NotesSwitch() {
     onClick={() => switches.flip("notes")}>{sw.count.notes ? <><i /><b>{sw.count.notes}</b> {sw.count.notes === 1 ? "note" : "notes"}</> : "No notes yet"}</button>;
 }
 
+// Off Dispatch without losing the pages: the next Send from to-do or Thinking adds the next version.
+function Back({ onBack }: { onBack(to: "todo" | "thinking"): void }) {
+  return <div className="back">
+    <button className="faint" onClick={() => onBack("todo")}>Back to to-do</button>
+    <button className="faint" onClick={() => onBack("thinking")}>Back to thinking</button>
+  </div>;
+}
+
 // Where the page lands is Claude's call, so the card says only what was pressed and when.
-function Implementing({ threads, on, onPick }: { threads: DispatchThread[]; on: string | null; onPick(t: DispatchThread): void }) {
+function Implementing({ threads, on, onPick, onBack }: { threads: DispatchThread[]; on: string | null; onPick(t: DispatchThread): void; onBack(t: DispatchThread, to: "todo" | "thinking"): void }) {
   const pressed = (t: DispatchThread): string => !t.press ? "" : !t.press.version ? "Sent" : t.press.stage === "finish" ? "Reopened" : `Sent v${t.press.version}`;
   return <>{threads.map((t) => (
     <div key={t.id} className={"ws-card impl" + (t.id === on ? " on" : "")}>
       <button className="t" onClick={() => onPick(t)}>{t.title}</button>
       <span className="m">{t.press ? `${pressed(t)} · ${age(t.press.at)}` : ""}{t.versions.length ? "" : " · first page coming"}</span>
       {t.press?.sessionUrl ? <a className="session" href={t.press.sessionUrl} target="_blank" rel="noopener">Open the session ↗</a> : null}
+      {t.id === on ? <Back onBack={(to) => onBack(t, to)} /> : null}
     </div>
   ))}</>;
 }

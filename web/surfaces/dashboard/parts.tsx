@@ -1,7 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Markdown from "markdown-to-jsx";
-import type { DashFrom } from "../../data/entities/dashboard.ts";
+import type { DashFrom, DashSplit } from "../../data/entities/dashboard.ts";
 import { imagesInMarkdown } from "../../engines/prose/images.tsx";
+import { go, type Nav } from "./nav.ts";
 
 export const hm = (at: number): string => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 export function age(at: number): string {
@@ -24,6 +25,19 @@ export function Src({ from }: { from: DashFrom | null | undefined }) {
   const s = from?.source || "You";
   const inner = <><i />{s}</>;
   return from?.url ? <a className={`src ${kindOf(s)}`} href={from.url} target="_blank" rel="noopener">{inner}</a> : <span className={`src ${kindOf(s)}`}>{inner}</span>;
+}
+
+const placeOf = (p: DashSplit): Partial<Nav> | null => p.stage === "todo" ? { view: "triage", sub: "todo" }
+  : p.stage === "thinking" ? { mode: "focus", view: "thinking" }
+  : p.stage === "review" && !p.dispatched ? { mode: "focus", view: "review" }
+  : p.stage === "review" ? { mode: "dispatch", view: "built" }
+  : p.stage === "decide" || p.stage === "implementing" || p.stage === "finish" ? { mode: "dispatch", view: p.stage } : null;
+/** The thread this one was split off, linked to where it now is; an archived one is only named. */
+export function SplitFrom({ from }: { from: DashSplit | null | undefined }) {
+  if (!from) return null;
+  const to = placeOf(from);
+  return to ? <button className="split-from" title={`Open where “${from.title}” is now`} onClick={() => go(to)}>Split from {from.title}</button>
+    : <span className="split-from">Split from {from.title} · archived</span>;
 }
 
 /** A thread's notes as Markdown, links opening elsewhere and the room's images drawn. */

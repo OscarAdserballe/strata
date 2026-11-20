@@ -67,3 +67,16 @@ test("a thread made in Dispatch shows at once with its context, and Send to Disp
   sent[1].reply({ status: 200, body: { press: {} }, rev: 5, epoch: "e" });
   await send;
 });
+
+test("back to to-do takes the card off the pane at once and puts it in to-do on the board", () => {
+  const s = new Store();
+  s.apply(DISPATCH_KEY, 1, PANE, "wire", { epoch: "e", stamp: 1 });
+  const task = { id: "t_d", title: "t_d", body: "", stage: "decide", links: [], createdFrom: null, createdAt: 1, updatedAt: 1, clearedAt: null, area: "work", dispatched: true, updates: [] };
+  s.apply(DASH_KEY, 1, { rev: 1, tasks: [task], inbox: [], archived: 0, links: [] } satisfies DashBoard, "wire", { epoch: "e", stamp: 1 });
+  const op = dispatchOps.back("t_d", "todo", () => 9, s);
+  assert.deepEqual([op.method, op.path, op.body], ["PATCH", "/api/dashboard/tasks/t_d", { stage: "todo" }]);
+  assert.ok(op.lanes.includes("dispatch:t_d"), "queued behind a press on the same thread");
+  for (const o of op.optimistic!) s.apply(o.key, null, o.apply, "optimistic", { op: "x" });
+  assert.deepEqual(s.get<DispatchPane>(DISPATCH_KEY)!.threads.map((t) => t.id), ["t_r"]);
+  assert.deepEqual(s.get<DashBoard>(DASH_KEY)!.tasks.map((t) => [t.stage, t.updatedAt]), [["todo", 9]]);
+});

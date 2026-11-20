@@ -55,6 +55,7 @@ const DASH_ITEM = {
     links: { type: "array", maxItems: 20, items: DASH_LINK, description: "What it is about and already exists: the Linear issue, PR, Slack thread, Notion page." },
     from: DASH_FROM,
     area: { type: "string", enum: ["work", "personal"], description: "Which list it lands in. Default: work for Slack, Linear, GitHub and meeting sources, personal otherwise." },
+    split_from: { type: "string", description: "A thread's id: this task is split off that thread, and links back to it once kept." },
   },
 };
 
@@ -229,7 +230,7 @@ export const TOOLS: Tool[] = [
   // The dashboard is its own app that borrows this MCP server, so it gets its own tools instead of apply ops.
   {
     name: "dashboard_add_items", title: "Add to the dashboard inbox", scope: "write",
-    description: "Puts tasks in the dashboard's inbox; the reader keeps each in to-do, or drops it. A task is a title, a line or two of context, where it came from (from, with the words it came from as quote) and links to what already exists: Linear issues, GitHub PRs, Slack threads, Notion pages. The reader writes the notes themselves in Thinking, so don't draft a plan or a spec. Read dashboard_read first and don't add what is already there. All or nothing.",
+    description: "Puts tasks in the dashboard's inbox; the reader keeps each in to-do, or drops it. A task is a title, a line or two of context, where it came from (from, with the words it came from as quote) and links to what already exists: Linear issues, GitHub PRs, Slack threads, Notion pages. The reader writes the notes themselves in Thinking, so don't draft a plan or a spec. Read dashboard_read first and don't add what is already there. To split a thread, give the new task split_from: its id; dashboard_read shows a split as \"Split from:\" on the thread, or \"split from\" on an inbox item, so one already made isn't added again. All or nothing.",
     inputSchema: schema({ key: KEY, items: { type: "array", minItems: 1, maxItems: 50, items: DASH_ITEM } }, ["key", "items"]),
     write: async (x) => {
       if (!Array.isArray(x.items) || !x.items.length || x.items.length > 50) fail("items is a list of 1 to 50 items.");

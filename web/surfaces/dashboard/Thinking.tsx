@@ -3,7 +3,7 @@ import { StrataWhy } from "../../data/api.ts";
 import { dash, useDashBoard, type DashTask } from "../../data/entities/dashboard.ts";
 import { toast } from "../../shell/layers.ts";
 import Writer from "../../capabilities/write/Writer.tsx";
-import { Grow, Src, useTyped } from "./parts.tsx";
+import { Grow, SplitFrom, Src, useTyped } from "./parts.tsx";
 import { move, saveText } from "./moves.ts";
 
 /** Thinking: one thread's notes open on the sheet, to-do waiting on the left. */
@@ -47,7 +47,7 @@ export function Doc({ t, where = "thinking" }: { t: DashTask; where?: "thinking"
   };
   return (
     <article className="doc">
-      <div className="doc-crumb"><Src from={t.createdFrom} /><span className="grow" />
+      <div className="doc-crumb"><Src from={t.createdFrom} /><SplitFrom from={t.splitFrom} /><span className="grow" />
         {t.links.map((l, i) => l.url ? <a key={i} href={l.url} target="_blank" rel="noopener">{l.ref}</a> : <span key={i}>{l.ref}</span>)}</div>
       <Grow className="dtitle" value={title} aria-label="Title" placeholder="Untitled" {...titleHeld} onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.closest("article")?.querySelector(".dbody") as HTMLElement | null)?.focus(); } }} />

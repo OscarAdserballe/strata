@@ -46,6 +46,7 @@ export const dashboardRepo = {
   dashRev: stmt<{ rev: number }>(`SELECT COALESCE(MAX(r), 0) AS rev FROM (SELECT MAX(updated_at) AS r FROM dashboard_tasks
     UNION ALL SELECT MAX(COALESCE(handled_at, at)) FROM dashboard_inbox)`),
   dispatched: stmt<{ task_id: string }>("SELECT DISTINCT task_id FROM dashboard_presses"),
+  wasPressed: stmt<{ n: number }>("SELECT EXISTS(SELECT 1 FROM dashboard_presses WHERE task_id = ?) AS n"),
   // The reader's notes are marks with words in them, on the version's source.
   noteCounts: stmt<{ resource_id: string; n: number }>(`SELECT m.resource_id, COUNT(*) AS n FROM dashboard_versions v
     JOIN marks m ON m.resource_id = v.resource_id WHERE m.note IS NOT NULL AND trim(m.note) <> '' GROUP BY m.resource_id`),

@@ -4,7 +4,7 @@ import { dash, useDashBoard, useRoutine, type DashItem, type DashTask } from "..
 import { toast } from "../../shell/layers.ts";
 import { go, type Mode, type Sub } from "./nav.ts";
 import Writer from "../../capabilities/write/Writer.tsx";
-import { Grow, Src, age, hm, newThreadId, useArea, useTyped } from "./parts.tsx";
+import { Grow, SplitFrom, Src, age, hm, newThreadId, useArea, useTyped } from "./parts.tsx";
 import { move, saveText } from "./moves.ts";
 
 const OLD = 14 * 864e5;
@@ -75,6 +75,7 @@ function InboxList({ items, mode }: { items: DashItem[]; mode: Mode }) {
       ? <article key={p.id} className="tr-card in" aria-current="true">
           <h3>{p.title}</h3>
           {p.context ? <p className="tr-ctx">{p.context}</p> : null}
+          <SplitFrom from={p.splitFrom} />
           {p.from?.quote ? <blockquote>“{p.from.quote}”</blockquote> : null}
           <div className="tr-meta"><Src from={p.from} /><span>{age(p.at)}</span></div>
           <div className="acts-row">
@@ -114,6 +115,7 @@ function Thread({ t, open, onOpen, mode }: { t: DashTask; open: boolean; onOpen(
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.closest("article")?.querySelector(".dbody") as HTMLElement | null)?.focus(); } if (e.key === "Escape") leave(); }} />
         <span className="tr-src">{meta}</span>
       </div>
+      <SplitFrom from={t.splitFrom} />
       <label className="cap" htmlFor={`body-${t.id}`}>Prompt · yours to trim</label>
       <Writer id={`body-${t.id}`} className="dbody" label="Prompt" value={body} placeholder="What should be done, in a few lines you could hand to Claude." {...bodyHeld} onChange={setBody}
         onKeyDown={(e) => { if (e.key === "Escape") leave(); }} />
