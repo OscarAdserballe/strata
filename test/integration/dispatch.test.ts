@@ -174,3 +174,18 @@ test("a page carries the ask and how Claude read it, kept per version; both or n
   assert.deepEqual((await thread(id)).versions.map((v: any) => [v.n, v.ask, v.heard]),
     [[1, "Let me see what I sent.", "Two fields above each page."], [2, null, null]], "each version keeps its own; a page without them shows the page alone");
 });
+
+test("a thread moves off Dispatch to to-do or thinking with its pages kept, and Thinking sends it back", async () => {
+  const id = await newThread("Come back to this later");
+  await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  await post(id, { page: page("v1", "A proposal.") });
+  const back = await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "todo" });
+  assert.equal(back.status, 200, JSON.stringify(back.body));
+  assert.equal(back.body.pane.threads.some((x: any) => x.id === id), false, "it leaves the pane");
+  assert.equal((await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "thinking" })).status, 200);
+  const sent = await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  assert.equal(sent.status, 200, JSON.stringify(sent.body));
+  assert.equal(sent.body.press.stage, "thinking", "Send to Dispatch works from Thinking");
+  assert.match((await post(id, { page: page("v2", "Picked up again.") })).text, /v2 posted; the thread is in Decide\./, "the earlier page is still v1");
+  assert.deepEqual((await thread(id)).versions.map((v: any) => v.n), [1, 2]);
+});

@@ -1968,6 +1968,56 @@ const dispatchNewThread = {
   },
 };
 
+const dispatchBack = {
+  name: "dispatch-back",
+  what: "on a lossy wire you take one Decide thread back to to-do and another to Thinking, the first move's answer lost, then Send the second to Dispatch from Thinking; each move lands once, the pages are kept, and the send is pressed once",
+  checks: {
+    moved: "the first thread is in to-do and off the pane, its page kept",
+    sent: "the second went to Thinking and then to Claude, pressed once from thinking",
+  },
+  async run(t) {
+    const tag = `${t.seed}-${Date.now().toString(36)}`;
+    const { token } = await t.api("/api/agent/tokens", "POST", { name: `race back ${t.seed}`, write: true });
+    const ids = [0, 1].map((i) => `t_bk${i}${t.seed}${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_]/g, ""));
+    const titles = [`Race back todo ${tag}`, `Race back think ${tag}`];
+    for (const [i, id] of ids.entries()) {
+      await t.api("/api/dashboard/tasks", "POST", { id, title: titles[i], body: "Under loss.", area: "work" });
+      await t.api(`/api/dashboard/tasks/${id}/send`, "POST", {});
+      const r = await fetch(`${t.base}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: i + 1, method: "tools/call", params: { name: "dashboard_post", arguments: { key: `race-back-${tag}-${i}`, id, page: `<!doctype html><html><body><h1>${titles[i]}</h1></body></html>`, lands: "decide" } } }) });
+      const body = await r.json();
+      if (!body.result || body.result.isError) throw new Error(`dashboard_post: ${JSON.stringify(body).slice(0, 200)}`);
+    }
+    const moves = (e) => e.write && /\/api\/dashboard\/tasks\/[^/]+(\/send)?$/.test(e.path);
+    const page = await t.open({ latency: true, lostAck: { match: moves, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    await page.goto(`${t.base}/dispatch?view=decide`);
+    for (const [i, title] of titles.entries()) {
+      const card = page.locator(".ws-card", { hasText: title }).first();
+      await card.waitFor();
+      if (!(await card.evaluate((el) => el.classList.contains("open")))) await card.click();
+      await page.locator(".ws-card.open", { hasText: title }).getByRole("button", { name: i === 0 ? "To-do" : "Thinking", exact: true }).click();
+    }
+    await page.goto(`${t.base}/dashboard?view=thinking`);
+    const doc = page.locator(".ws-card", { hasText: titles[1] }).first();
+    await doc.waitFor();
+    await doc.click();
+    await page.locator(".doc-foot").getByRole("button", { name: "Send to Dispatch", exact: true }).click();
+    const rowOf = (id) => t.sql("SELECT stage FROM dashboard_tasks WHERE id = ?", id)[0]?.stage;
+    const until = performance.now() + GRACE_MS * 2;
+    for (;;) {
+      if ((rowOf(ids[0]) === "todo" && rowOf(ids[1]) === "implementing") || performance.now() > until) break;
+      await sleep(250);
+    }
+    await t.net.idle(500);
+    const pane = await t.api("/api/dashboard/dispatch");
+    const kept = t.sql("SELECT COUNT(*) n FROM dashboard_versions WHERE task_id = ?", ids[0])[0].n;
+    t.check("moved", rowOf(ids[0]) === "todo" && kept === 1 && !pane.threads.some((x) => x.id === ids[0]), `stage ${rowOf(ids[0])}, ${kept} version(s)`);
+    const presses = t.sql("SELECT kind, stage FROM dashboard_presses WHERE task_id = ? AND version IS NULL ORDER BY at", ids[1]);
+    t.check("sent", rowOf(ids[1]) === "implementing" && presses.length === 2 && presses[1].stage === "thinking",
+      `stage ${rowOf(ids[1])}, presses ${presses.map((p) => `${p.kind}@${p.stage}`).join(",")}`);
+  },
+};
+
 // two replies under a note, the first one's answer lost: each lands once, in the order written
 const noteReplies = {
   name: "note-replies",
@@ -2167,4 +2217,4 @@ const padTwoTabs = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, dispatchBack, padTwoTabs];

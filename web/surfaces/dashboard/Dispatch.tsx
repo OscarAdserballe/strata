@@ -36,11 +36,12 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   const [tall, setTall] = useState<{ rid: string; h: number } | null>(null);
   const fit = v && tall?.rid === v.resourceId ? Math.max(tall.h, 240) : null;
 
-  function press(th: DispatchThread, kind: "send" | "drop" | "archive"): void {
+  function press(th: DispatchThread, kind: "send" | "drop" | "archive" | "todo" | "thinking"): void {
     const rest = here.filter((x) => x.id !== th.id);
     setSel(rest[0] ? { thread: rest[0].id, n: null } : null);
     setReopening(null);
     if (kind === "drop") { toast("Dropped"); dash.end(th.id).catch((e) => toast(StrataWhy(e, "not dropped"), 4200)); return; }
+    if (kind === "todo" || kind === "thinking") { toast(kind === "todo" ? "Back in to-do" : "Back in thinking"); dash.back(th.id, kind).catch((e) => toast(StrataWhy(e, "not moved"), 4200)); return; }
     if (kind === "archive") { toast("Archived"); dash.end(th.id, "done").catch((e) => toast(StrataWhy(e, "not archived"), 4200)); return; }
     dash.press(th.id).catch((e) => toast(StrataWhy(e, "Send didn't reach Claude"), 4200));
   }
@@ -66,6 +67,8 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
                 </ol>
                 {stage !== "finish" ? <div className="acts">
                   <button className="btn dark" onClick={() => press(x, "send")}>Send</button>
+                  <button className="btn quiet" title="Off Dispatch, pages kept; send it again from there" onClick={() => press(x, "todo")}>To-do</button>
+                  <button className="btn quiet" title="Write it through yourself; send it again from Thinking" onClick={() => press(x, "thinking")}>Thinking</button>
                   <button className="btn quiet danger" onClick={() => press(x, "drop")}>Drop</button>
                 </div> : reopening === x.id ? <div className="acts reopen">
                   <p>Write what's wrong as a note on the page, then Send.</p>

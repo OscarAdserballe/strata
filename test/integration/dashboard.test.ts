@@ -58,6 +58,24 @@ test("an agent adds tasks with a line of context; you keep each in to-do, and th
   assert.equal(after.tasks.find((t) => t.title.startsWith("Reset")).createdFrom.quote, FROM.quote);
 });
 
+test("a split names its parent thread: kept, it shows split from that thread, and a split of a split points at the root", async () => {
+  const root = (await dash()).tasks.find((t) => t.title.startsWith("Fix the sticking"));
+  assert.match((await call("dashboard_add_items", { key: "split-bad-000001", items: [{ title: "x", from: FROM, parent: "t_nothere" }] })).text, /items\[0\]\.parent: no thread t_nothere/);
+  const r = await call("dashboard_add_items", { key: "split-run-000001", items: [{ title: "Order a spare latch", from: { source: "Dispatch · Fix the sticking gate" }, parent: root.id }] });
+  assert.equal(r.isError, false, r.text);
+  const item = (await dash()).inbox.find((i) => i.title === "Order a spare latch");
+  assert.deepEqual(item.parent, { id: root.id, title: root.title });
+  assert.match((await call("dashboard_read")).text, /"Order a spare latch" · from Dispatch · Fix the sticking gate · split from "Fix the sticking/);
+  await send(`/api/dashboard/inbox/${item.id}/keep`, "POST", {}, "dash-keep-split-01");
+  const kid = (await dash()).tasks.find((t) => t.title === "Order a spare latch");
+  assert.deepEqual(kid.parent, { id: root.id, title: root.title });
+  assert.match((await call("dashboard_read", { task: kid.id })).text, new RegExp(`Split from: Fix the sticking.* · ${root.id}`));
+  await call("dashboard_add_items", { key: "split-run-000002", items: [{ title: "Find a supplier", from: FROM, parent: kid.id }] });
+  assert.equal((await dash()).inbox.find((i) => i.title === "Find a supplier").parent.id, root.id, "parents are one level deep");
+  assert.equal((await dash()).tasks.find((t) => t.title.startsWith("Fix the sticking")).parent, null);
+  await send(`/api/dashboard/inbox/${(await dash()).inbox.find((i) => i.title === "Find a supplier").id}/drop`, "POST", {}, "dash-drop-split-01");
+});
+
 test("dashboard_add_items takes tasks only, refuses a bad item and writes none of the batch", async () => {
   const before = (await dash()).inbox.length;
   const bad = await call("dashboard_add_items", { key: "collect-bad-00001", items: [{ title: "Fine on its own", from: FROM }, { title: "No source" }] });

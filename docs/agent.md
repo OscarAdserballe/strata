@@ -72,6 +72,7 @@ hosts: no board owns it, so it has its own tools instead of `apply` ops. A threa
 hand through three stages, to-do → thinking → review, then done or dropped (`stage`); an older
 `backlog` is read as to-do. New work goes through the inbox: `dashboard_add_items` only fills it, with a
 title, a line of `context` and where it came from, and the reader keeps each item in to-do, or drops it.
+An item with `parent` (a thread id) is a split: kept, it records that thread as its `parent_id`, one level deep.
 The notes on a thread (`body`) are the reader's own, written in Thinking; no tool edits or moves a
 thread. Run now on the board wakes the reader's own scheduled routine through its API trigger
 (`server/features/dashboard/routine.ts`): the Fire URL and token are set on the board and never sent

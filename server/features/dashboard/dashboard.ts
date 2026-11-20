@@ -25,7 +25,7 @@ const MAX = { title: 300, body: 20000, context: 400, source: 300, quote: 2000, r
 
 export interface Link { kind: string; ref: string; title?: string; url?: string }
 export interface From { source: string; url?: string; quote?: string }
-export interface Item { kind: "task"; title: string; body: string; context?: string; area: string; links: Link[]; from: From }
+export interface Item { kind: "task"; title: string; body: string; context?: string; area: string; links: Link[]; from: From; parent?: string }
 
 const str = (v: unknown, field: string, max: number, required = false): string | undefined => {
   if (v === undefined || v === null || v === "") return required ? fail(`${field} is required.`) : undefined;
@@ -58,6 +58,14 @@ function checkFrom(raw: unknown, field: string): From {
   return { source: str(o.source, `${field}.source`, MAX.source, true)!, ...(url ? { url } : {}), ...(o.quote ? { quote: str(o.quote, `${field}.quote`, MAX.quote) } : {}) };
 }
 
+/** A split names the thread it came from; parents are one level deep, so a split of a split points at the root. */
+function checkParent(raw: unknown, field: string): string | undefined {
+  if (raw === undefined || raw === null || raw === "") return undefined;
+  if (typeof raw !== "string") return fail(`${field} is a thread id.`);
+  const p = q.task.get(raw.trim()) ?? fail(`${field}: no thread ${raw}. dashboard_board lists them.`);
+  return p.parent_id ?? p.id;
+}
+
 /** Checks one inbox item's shape; returns it normalized. */
 export function checkItem(raw: unknown, at: string): Item {
   const o = (raw ?? {}) as Record<string, unknown>;
@@ -68,7 +76,8 @@ export function checkItem(raw: unknown, at: string): Item {
   const context = str(o.context, `${at}.context`, MAX.context);
   const title = str(o.title, `${at}.title`, MAX.title, true)!;
   const body = str(o.body, `${at}.body`, MAX.body) ?? context ?? "";
-  return { kind: "task", title, body, ...(context ? { context } : {}), area: o.area ? String(o.area) : guessArea(from.source), links: checkLinks(o.links, `${at}.links`), from };
+  const parent = checkParent(o.parent, `${at}.parent`);
+  return { kind: "task", title, body, ...(context ? { context } : {}), area: o.area ? String(o.area) : guessArea(from.source), links: checkLinks(o.links, `${at}.links`), from, ...(parent ? { parent } : {}) };
 }
 
 /** An item an older routine left in the inbox as an update or fragment reads as a plain task, so it can still be kept. */
@@ -85,11 +94,11 @@ export function addItems(items: Item[]): string[] {
   return items.map((it) => { const id = genId("in_"); q.insInbox.run(id, it.kind, JSON.stringify(it), t); return id; });
 }
 
-function insertTask(f: { id?: string; title: string; body: string; links: Link[]; from?: From | null; area?: string; stage?: string }): string {
+function insertTask(f: { id?: string; title: string; body: string; links: Link[]; from?: From | null; area?: string; stage?: string; parent?: string }): string {
   const id = f.id ?? genId("t_");
   const t = now();
   const stage = f.stage ?? "todo";
-  q.insTask.run(id, f.title, f.body, stateOf(stage), null, null, JSON.stringify(f.links), null, f.from ? JSON.stringify(f.from) : null, t, t, f.area ?? guessArea(f.from?.source), stage);
+  q.insTask.run(id, f.title, f.body, stateOf(stage), null, f.parent ?? null, JSON.stringify(f.links), null, f.from ? JSON.stringify(f.from) : null, t, t, f.area ?? guessArea(f.from?.source), stage);
   return id;
 }
 const checkOpenStage = (v: unknown, fallback: string): string => {
@@ -118,7 +127,7 @@ export function keepItem(id: string, edits: Record<string, unknown> = {}): { out
   const { stage: to, ...fields } = edits;
   const stage = checkOpenStage(to, "todo");
   const it = checkItem({ ...stored(row), ...fields }, "item");
-  const result = insertTask({ title: it.title, body: it.body, links: it.links, from: it.from, area: it.area, stage });
+  const result = insertTask({ title: it.title, body: it.body, links: it.links, from: it.from, area: it.area, stage, parent: it.parent });
   q.handleInbox.run(now(), "kept", result, id);
   return { outcome: "kept", result };
 }
@@ -167,9 +176,11 @@ export function patchTask(id: string, b: Record<string, unknown>): TaskRow {
 export interface TaskView {
   id: string; title: string; body: string; stage: string;
   links: Link[]; createdFrom: From | null; createdAt: number; updatedAt: number; clearedAt: number | null; area: string;
-  dispatched: boolean;
+  dispatched: boolean; parent: Parent | null;
   updates: { id: string; at: number; text: string; from: From | null; links: Link[] }[];
 }
+export interface Parent { id: string; title: string }
+const parentOf = (id: string | null | undefined): Parent | null => { const p = id ? q.task.get(id) : undefined; return p ? { id: p.id, title: p.title } : null; };
 const updateView = (u: UpdateRow) => ({ id: u.id, at: u.at, text: u.text, from: parseJson<From | null>(u.from_json, null), links: parseJson<Link[]>(u.links, []) });
 /** The notepad: what you jot between runs, whatever screen you are on. */
 export function padOf(): { text: string; rev: number } {
@@ -187,11 +198,11 @@ export function writePad(text: unknown): { text: string; rev: number } {
 export function taskView(t: TaskRow, ups: UpdateRow[], dispatched = false): TaskView {
   return { id: t.id, title: t.title, body: t.body, stage: stageOf(t),
     links: parseJson<Link[]>(t.links, []), createdFrom: parseJson<From | null>(t.created_from, null),
-    createdAt: t.created_at, updatedAt: t.updated_at, clearedAt: t.cleared_at, area: t.area ?? "personal", dispatched, updates: ups.map(updateView) };
+    createdAt: t.created_at, updatedAt: t.updated_at, clearedAt: t.cleared_at, area: t.area ?? "personal", dispatched, parent: parentOf(t.parent_id), updates: ups.map(updateView) };
 }
 export function inboxView(r: InboxRow): Record<string, unknown> & { id: string; at: number; kind: string } {
   const it = parseJson<Record<string, unknown>>(r.item, {});
-  return { ...it, area: it.area ?? guessArea((it.from as From | undefined)?.source), id: r.id, at: r.at, kind: r.kind };
+  return { ...it, area: it.area ?? guessArea((it.from as From | undefined)?.source), parent: parentOf(typeof it.parent === "string" ? it.parent : null), id: r.id, at: r.at, kind: r.kind };
 }
 
 // Notes agents sent before are still read; nothing writes them now.

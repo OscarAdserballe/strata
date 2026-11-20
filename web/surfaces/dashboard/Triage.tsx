@@ -76,7 +76,7 @@ function InboxList({ items, mode }: { items: DashItem[]; mode: Mode }) {
           <h3>{p.title}</h3>
           {p.context ? <p className="tr-ctx">{p.context}</p> : null}
           {p.from?.quote ? <blockquote>“{p.from.quote}”</blockquote> : null}
-          <div className="tr-meta"><Src from={p.from} /><span>{age(p.at)}</span></div>
+          <div className="tr-meta"><Src from={p.from} />{p.parent ? <span className="split">split from {p.parent.title}</span> : null}<span>{age(p.at)}</span></div>
           <div className="acts-row">
             <button className="btn dark" onClick={() => keep(p.id, p.area)}>Keep in to-do</button>
             <button className="btn quiet" onClick={() => { const a = p.area === "personal" ? "work" : "personal"; next(p.id); toast(`Moved to ${a}`); dash.itemArea(p.id, a).catch((e) => said(e, "not moved")); }}>
@@ -99,7 +99,7 @@ function InboxList({ items, mode }: { items: DashItem[]; mode: Mode }) {
 function Thread({ t, open, onOpen, mode }: { t: DashTask; open: boolean; onOpen(id: string | null): void; mode: Mode }) {
   const [title, setTitle, flushTitle, titleHeld] = useTyped(t.title, (v) => saveText(t.id, "title", v));
   const [body, setBody, flushBody, bodyHeld] = useTyped(t.body, (v) => saveText(t.id, "body", v));
-  const meta = [t.links[0]?.ref, t.createdFrom?.source !== "You" ? t.createdFrom?.source : "You", age(t.createdAt)].filter(Boolean).join(" · ");
+  const meta = [t.parent ? `split from ${t.parent.title}` : null, t.links[0]?.ref, t.createdFrom?.source !== "You" ? t.createdFrom?.source : "You", age(t.createdAt)].filter(Boolean).join(" · ");
   if (!open) return (
     <div className="r">
       <button className="t" onClick={() => onOpen(t.id)} title={t.title}>{t.title}</button>

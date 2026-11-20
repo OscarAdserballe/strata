@@ -21,10 +21,10 @@ export interface DashFrom { source: string; url?: string; quote?: string }
 export interface DashTask {
   id: string; title: string; body: string; stage: string;
   links: DashLink[]; createdFrom: DashFrom | null; createdAt: number; updatedAt: number; clearedAt: number | null;
-  area: string; dispatched: boolean;
+  area: string; dispatched: boolean; parent?: { id: string; title: string } | null;
   updates: { id: string; at: number; text: string; from: DashFrom | null; links: DashLink[] }[];
 }
-export interface DashItem { id: string; at: number; kind: string; title: string; context?: string; body?: string; area: string; from?: DashFrom; links?: DashLink[] }
+export interface DashItem { id: string; at: number; kind: string; title: string; context?: string; body?: string; area: string; from?: DashFrom; links?: DashLink[]; parent?: { id: string; title: string } | null }
 export interface DashBoard { rev: number; tasks: DashTask[]; inbox: DashItem[]; archived: number; links: { label: string; url: string }[] }
 export interface RoutineView { connected: boolean; url: string | null; ranAt: number | null; sessionUrl: string | null; error: string | null }
 
@@ -84,6 +84,13 @@ export const dashOps = {
       optimistic: [{ key: DASH_KEY, apply: onTasks(id, local) }],
       confirm: (res, meta) => takeState(res, meta, s) };
   },
+  /** Taken back off Dispatch by hand, to to-do or thinking: out of the pane at once, its pages kept. */
+  back(id: string, stage: "todo" | "thinking", now = Date.now(), s: Store = roomStore): Op<DashAnswer> {
+    return { label: "move that thread", lanes: [lane(id)], method: "PATCH", path: `/api/dashboard/tasks/${id}`, body: { stage },
+      optimistic: [{ key: DASH_KEY, apply: onTasks(id, (t) => ({ ...t, stage, updatedAt: now })) },
+        { key: DISPATCH_KEY, apply: (v: DispatchPane | undefined) => v && { ...v, threads: v.threads.filter((t) => t.id !== id) } }],
+      confirm: (res, meta) => takeState(res, meta, s) };
+  },
   /** Dropped from Decide, Review or Thinking, or archived from Finish: off the board and out of Dispatch at once, into the archive. */
   end(id: string, stage: "dropped" | "done" = "dropped", s: Store = roomStore): Op<DashAnswer> {
     return { label: stage === "done" ? "archive that thread" : "drop that thread", lanes: [lane(id)], method: "PATCH", path: `/api/dashboard/tasks/${id}`, body: { stage, cleared: true },
@@ -136,6 +143,7 @@ export const dash = {
   text: (id: string, field: "title" | "body", value: string) => mutate(dashOps.text(id, field, value)),
   send: (id: string) => mutate(dashOps.send(id)),
   end: (id: string, stage: "dropped" | "done" = "dropped") => mutate(dashOps.end(id, stage)),
+  back: (id: string, stage: "todo" | "thinking") => mutate(dashOps.back(id, stage)),
   routine: (body: Record<string, unknown>) => mutate(dashOps.routine(body)),
   runRoutine: () => mutate(dashOps.runRoutine()),
   press: (id: string) => mutate(dashOps.press(id)),

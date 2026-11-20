@@ -47,7 +47,7 @@ export function Doc({ t, where = "thinking" }: { t: DashTask; where?: "thinking"
   };
   return (
     <article className="doc">
-      <div className="doc-crumb"><Src from={t.createdFrom} /><span className="grow" />
+      <div className="doc-crumb"><Src from={t.createdFrom} />{t.parent ? <span className="split">split from {t.parent.title}</span> : null}<span className="grow" />
         {t.links.map((l, i) => l.url ? <a key={i} href={l.url} target="_blank" rel="noopener">{l.ref}</a> : <span key={i}>{l.ref}</span>)}</div>
       <Grow className="dtitle" value={title} aria-label="Title" placeholder="Untitled" {...titleHeld} onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
         onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.closest("article")?.querySelector(".dbody") as HTMLElement | null)?.focus(); } }} />
