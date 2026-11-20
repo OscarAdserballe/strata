@@ -11,8 +11,6 @@ import CardHistory from "../../capabilities/card/CardHistory.tsx";
 import CardDeleted from "../../capabilities/card/CardDeleted.tsx";
 import { deckOf, saveAuthored } from "../../capabilities/card/saveCard.ts";
 import FeedbackNote from "../../capabilities/feedback/FeedbackNote.tsx";
-import Ask from "../../capabilities/ask/Ask.tsx";
-import { useProvideHere } from "../../shell/here.ts";
 import { useEntity } from "../../data/store.ts";
 import { holdKeeps, keeps, keepsKey } from "../../data/entities/keeps.ts";
 import { room } from "../../shell/room.ts";
@@ -28,7 +26,7 @@ export function loadKeeps(): Promise<KeepsChunk> {
   loading ??= import("./KeepsSurface.tsx").then(
     (m) => {
       m.bind({ React, registerKeys, StrataAPI, StrataWhy, cardPrompt, facesOf, ago, nest, Line, liftSynthesis, CardForm, EditButton, Preview,
-        CardHistory, CardDeleted, deckOf, saveAuthored, FeedbackNote, Ask, useProvideHere, useEntity, holdKeeps, keeps, keepsKey });
+        CardHistory, CardDeleted, deckOf, saveAuthored, FeedbackNote, useEntity, holdKeeps, keeps, keepsKey });
       loaded = m;
       return m;
     },

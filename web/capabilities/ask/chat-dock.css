@@ -15,4 +15,3 @@
 .askwrap.float .ask .line:focus-within{border-color:var(--accent);}
 .ask .ask-error .said.waiting{font-style:normal;color:var(--ink-soft);}
 .veil.launcher .lwrap,.veil.reviewv .rwrap{padding-bottom:calc(84px + env(safe-area-inset-bottom));scroll-padding-bottom:84px;}
-.bench{padding-bottom:calc(58px + env(safe-area-inset-bottom));}

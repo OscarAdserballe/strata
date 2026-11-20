@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { createPortal } from "react-dom";
 import LibraryHome from "./LibraryHome.tsx";
 import { room, useHeldId, useRoomHost } from "../../shell/room.ts";
-import { CRAM, REVIEW, openTab, screensNow, setLibrary, setLibraryQuery, setReviewing, useScreens, useScreensUp } from "../../shell/screens.ts";
+import { CRAM, KEEPS, REVIEW, openTab, screensNow, setLibrary, setLibraryQuery, setReviewing, useScreens, useScreensUp } from "../../shell/screens.ts";
 import { addSourceFrom } from "../../capabilities/sources/BoardPicker.tsx";
 import { readRoute, routeBoard } from "../../shell/routes.ts";
 import { signOut } from "../../shell/signOut.ts";
@@ -35,7 +35,7 @@ export default function LibraryScreen() {
   }, [drawn, reviewing]);
   useEffect(() => registerLadder(() => ({ veil: { open: () => screensNow().library && !!room.activeId(), close } })), []);
   return host && createPortal(
-    <LibraryHome covered={!!(up & (REVIEW | CRAM))} q={q} setQ={setLibraryQuery}
+    <LibraryHome covered={!!(up & (REVIEW | CRAM | KEEPS))} q={q} setQ={setLibraryQuery}
       onOpen={room.openBoard} onNew={() => room.newBoard(q)}
       onResume={(id: string, rid?: string) => { journey("continue"); void room.openBoard(id, rid, rid ? undefined : { resume: true }); }}
       onWarm={room.warmBoard} onCardsChanged={reviewStrip.refresh}

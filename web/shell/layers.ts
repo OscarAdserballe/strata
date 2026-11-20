@@ -11,7 +11,7 @@ export const LAYERS = [
   ["saving", 88],
   ["pad", 89],         // the notepad, over every screen; toasts still show over it
   ["toast", 90],
-  ["ask-dock", 95],    // the Ask a screen laid over the room mounts (library, review, cram, keeps)
+  ["ask-dock", 95],    // the Ask a screen laid over the room mounts (library, review, cram)
   ["capture", 100],
   ["sheet", 110],
   ["imports", 120],

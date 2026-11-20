@@ -8,7 +8,7 @@ import { StrataAPI } from "../../data/api.ts";
 import { useBoardList } from "../../data/entities/register.ts";
 import Composer from "../../capabilities/card/Composer.tsx";
 import { setComposer, useComposer } from "../../capabilities/card/composing.ts";
-import { compose as composeCard, saveCardEdit, saveComposed } from "../../capabilities/card/doors.ts";
+import { saveCardEdit, saveComposed } from "../../capabilities/card/doors.ts";
 import { registerLadder } from "../../capabilities/keys/registry.ts";
 
 const fromLibrary = () => { const f = screensNow().keeps; return !!(f.length && f[0].library); };
@@ -19,8 +19,6 @@ const editSave = (c: KeepCard, patch: CardFaces) => saveCardEdit(c, patch).then(
     deck: c.deck || null, card: c.id, faces: Object.keys(patch).join(","), bench: true });
   return merged;
 });
-const compose = (home: Record<string, unknown> | null, card: unknown = null) => (q: string, a: string) =>
-  composeCard(card, q, a, { asked: "asked over the keeps", ...home });
 
 export default function KeepsScreen() {
   const { keeps: frames, keepsEditing: editing, review, cram } = useScreens();
@@ -44,18 +42,16 @@ export default function KeepsScreen() {
   const deckPair = !top.board && bid === activeId && board ? (board.pairs || []).find((p: any) => p.deck && String(p.deck).split("/")[0] === slug) : null;
   const drawn = top.library
     ? <LibraryKeeps key="lib" {...common}
-        onOpenBoard={(id: string, t: string) => descendKeeps({ board: true, boardId: id, title: t })} onCompose={compose(null)} />
+        onOpenBoard={(id: string, t: string) => descendKeeps({ board: true, boardId: id, title: t })} />
     : top.board
     ? <BoardKeeps key={"bb:" + bid} {...common} boardId={bid!}
         title={title || (bid === activeId ? boardTitle : (boards.find((b) => b.id === bid) || { title: "" }).title || "")}
-        onOpenDeck={(s: string, label: string) => descendKeeps({ slug: s, title: label, boardId: bid ?? undefined })}
-        onCompose={compose({ board: bid, label: title || boardTitle })} />
+        onOpenDeck={(s: string, label: string) => descendKeeps({ slug: s, title: label, boardId: bid ?? undefined })} />
     : <DeckKeeps key={top.slug} {...common} slug={slug}
         title={title || (deckPair && deckPair.label) || top.slug}
         minted={bid === activeId ? ((board && board.minted) || []) : null}
         pairs={bid === activeId ? ((board && board.pairs) || []) : null}
         boardId={bid}
-        onCompose={compose({ board: bid, pair: deckPair ? deckPair.id : null, label: title || slug }, { course: slug })}
         composing={!!composer} />;
   const form = composer && !review && !cram
     ? <div className="bench-compose"><Composer front0={composer.front} answer={composer.answer} anchor={composer.anchor}

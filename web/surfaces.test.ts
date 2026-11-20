@@ -13,7 +13,8 @@ test("every screen has exactly one entry, keyed by its own route", () => {
 test("every screen lists only known capabilities", () => {
   for (const spec of Object.values(SURFACES)) {
     for (const field of Object.keys(spec)) assert.ok(fields.has(field), `${spec.route}: unknown capability ${field}`);
-    assert.ok((ASK_THREADS as readonly string[]).includes(spec.ask), `${spec.route}: unknown thread ${spec.ask}`);
+    if (spec.ask) assert.ok((ASK_THREADS as readonly string[]).includes(spec.ask), `${spec.route}: unknown thread ${spec.ask}`);
+    else assert.ok(!spec.askSelection && !spec.replyToCard, `${spec.route}: no Ask, so nothing to ask a selection or reply from`);
     for (const v of spec.card) assert.ok((CARD_VERBS as readonly string[]).includes(v), `${spec.route}: unknown card verb ${v}`);
     for (const v of spec.sources) assert.ok((SOURCE_VERBS as readonly string[]).includes(v), `${spec.route}: unknown source verb ${v}`);
     for (const v of spec.boardActions ?? []) assert.ok((BOARD_ACTIONS as readonly string[]).includes(v), `${spec.route}: unknown board action ${v}`);
@@ -32,14 +33,16 @@ test("the table declares sources and boards as planned: add a source wherever yo
   assert.deepEqual(where((s) => s.sources.includes("file")), ["library"]);
 });
 
-test("the table's fixed points hold: annotate in the reader only, plan and download on the board page only, grade off-schedule only in the cram", () => {
+test("the table's fixed points hold: annotate in the reader only, plan and download on the board page only, grade off-schedule only in the cram, no Ask in the keeps", () => {
   const on = (cap: "annotate" | "plan" | "download") => ROUTES.filter((r) => SURFACES[r][cap]);
   assert.deepEqual(on("annotate"), ["reader"]);
   assert.deepEqual(on("plan"), ["board"]);
   assert.deepEqual(on("download"), ["board"]);
   assert.deepEqual(ROUTES.filter((r) => SURFACES[r].card.includes("grade-local")), ["cram"]);
   assert.ok(!SURFACES.cram.card.includes("grade"), "the cram never feeds the schedule");
-  for (const r of ROUTES) assert.ok(SURFACES[r].feedback && SURFACES[r].suggest && SURFACES[r].replyToCard, `${r}: feedback, suggest and reply → card are everywhere`);
+  assert.deepEqual(ROUTES.filter((r) => !SURFACES[r].ask), ["keeps"]);
+  for (const r of ROUTES) assert.ok(SURFACES[r].feedback && SURFACES[r].suggest, `${r}: feedback and suggest are everywhere`);
+  for (const r of ROUTES) if (SURFACES[r].ask) assert.ok(SURFACES[r].replyToCard, `${r}: reply → card wherever there is an Ask`);
 });
 
 const SCREEN_FILES: Record<Route, string[]> = {
@@ -60,7 +63,9 @@ const THREAD_OPENED: Record<string, RegExp> = {
 
 test("every screen mounts the Ask on the thread the table names, and says what is on it", () => {
   for (const r of ROUTES) {
-    const spec = SURFACES[r], src = SCREEN_FILES[r].map((f) => readFileSync(f, "utf8")).join("\n");
+    const spec = SURFACES[r];
+    if (!spec.ask) continue;
+    const src = SCREEN_FILES[r].map((f) => readFileSync(f, "utf8")).join("\n");
     assert.match(src, /import Ask from "[./]*capabilities\/ask\/Ask\.[jt]sx"/, `${r}: mounts capabilities/ask`);
     assert.match(src, THREAD_OPENED[spec.ask], `${r}: opens its ${spec.ask} thread`);
     assert.match(src, new RegExp(`useProvideHere\\([^]*surface: [^,\\n]*"${r}"`), `${r}: publishes here with surface "${r}"`);
@@ -68,6 +73,17 @@ test("every screen mounts the Ask on the thread the table names, and says what i
     const pending = PENDING[r] ?? [];
     if (spec.replyToCard && !pending.includes("replyToCard")) assert.match(src, /<Ask[^>]*onCompose=|onCompose=\{/, `${r}: a reply can become a card`);
   }
+});
+
+test("the keeps mount no Ask: no dock, no per-card ask, nothing published for one, and the room's and the library's are hidden under them", () => {
+  const files = ["web/surfaces/keeps/KeepsSurface.tsx", "web/surfaces/keeps/keeps-load.ts", "web/surfaces/keeps/KeepsScreen.tsx"];
+  for (const f of files) {
+    const src = readFileSync(f, "utf8");
+    assert.doesNotMatch(src, /capabilities\/ask\//, `${f}: imports nothing from capabilities/ask`);
+    assert.doesNotMatch(src, /<Ask\b|\bAsk:|openAsk|prefillAsk|useProvideHere|onCompose/, `${f}: no Ask, no / to open one, no reply → card`);
+  }
+  assert.match(readFileSync("web/shell/BoardRoute.tsx", "utf8"), /keepsUp \|\|[^?]*\? null : <RoomAsk /, "the room's Ask stays hidden while the keeps are up");
+  assert.match(readFileSync("web/surfaces/library/LibraryScreen.tsx", "utf8"), /covered=\{!!\(up & \([^)]*\bKEEPS\b/, "the library's Ask is hidden under its keeps");
 });
 
 const CARD_MOUNTS: Partial<Record<Route, { files: string[]; note: RegExp; del: RegExp[]; history: RegExp }>> = {
