@@ -195,16 +195,44 @@ try {
         return n.nodeType === 3 ? n.data : n.matches?.(".katex, code, pre") ? "" : [...n.childNodes].map(text).join("");
       }).join("")));
   }));
-  await answers().last().hover();
-  await answers().last().locator(".fi-mk").click();
-  await page.fill(".comp-ta.back", "patience is what makes the threat credible");
-  await page.getByRole("button", { name: "Format & Preview" }).click();
-  await page.getByRole("button", { name: "Confirm save" }).click();
-  await page.waitForSelector(".comp", { state: "detached", timeout: 10000 });
-  const kept = await turnsNow();
-  check("making a card keeps every turn of the thread", said.length === 4 && JSON.stringify(kept) === JSON.stringify(said),
-    `${said.length} turns before, ${kept.length} after`);
+  check("a conversation under words has every turn and no card door", said.length === 4
+    && await page.locator(".fold .fi.asked button").filter({ hasText: /card/i }).count() === 0, `${said.length} turns`);
   check("the reader has no dock: a source is asked under its words", await page.locator(".askwrap").count() === 0);
+
+  // a card written under words is formatted in place, then kept: Keep is not offered before Format
+  await page.locator(".fold .fold-shut").first().click({ timeout: 2000 }).catch(() => {});
+  await page.keyboard.press("Escape");
+  await atRest(page);
+  const words = await page.evaluate(() => {
+    const R = document.querySelector(".page").getBoundingClientRect();
+    const el = [...document.querySelectorAll(".tlayer [data-i]")].filter((e) => {
+      const r = e.getBoundingClientRect();
+      return e.textContent.length >= 16 && r.width > 80 && r.top > R.top + 80 && r.bottom < R.bottom - 160;
+    }).at(-1);
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x0: r.left + 2, x1: r.left + r.width * 0.8, y: r.top + r.height / 2 };
+  });
+  if (words) {
+    await page.mouse.move(words.x0, words.y); await page.mouse.down();
+    await page.mouse.move(words.x1, words.y, { steps: 8 }); await page.mouse.up();
+  }
+  const carded = words && await page.locator(".selmenu").getByRole("button", { name: "Card", exact: true }).click({ timeout: 3000 }).then(() => true, () => false);
+  const draft = page.locator(".fold .fi.draft");
+  const drafted = !!carded && await draft.waitFor({ timeout: 5000 }).then(() => true, () => false);
+  check("Card on picked words opens a draft that offers Format, not Keep", drafted
+    && await draft.locator(".fi-format").count() === 1 && await draft.locator(".fi-keep").count() === 0, `words ${!!words} · card ${!!carded} · draft ${drafted}`);
+  if (drafted) {
+    await draft.locator(".fi-front").fill("what makes the threat credible?");
+    await draft.locator(".fi-back").fill("patience");
+    await draft.locator(".fi-format").click();
+    const formatted = await page.locator(".fold .fi.draft.formatted .fi-keep").waitFor({ timeout: 10000 }).then(() => true, () => false);
+    check("Format tidies the faces in place and then offers Keep", formatted
+      && await page.locator(".fold .fi.draft.formatted .fi-front").inputValue() === "what makes the threat credible?");
+    await page.locator(".fold .fi.draft .fi-keep").click().catch(() => {});
+    check("Keep saves the formatted card and the draft leaves the fold",
+      await page.locator(".fold .fi.draft").waitFor({ state: "detached", timeout: 10000 }).then(() => true, () => false));
+  }
 
   // the dock is the board's: asked from the board's page
   await page.evaluate(() => { if (document.activeElement && document.activeElement !== document.body) document.activeElement.blur(); });

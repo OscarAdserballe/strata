@@ -5,7 +5,7 @@ import type { LayerItem } from "../fold/layers.ts";
 /** A mark on a page's words; one on a labelled box (data-strata-id) names it in `box`. */
 export interface LiveMark { id: string; start: number; end: number; quote: string; note: boolean; box?: string | null }
 export interface Box { left: number; top: number; width: number; height: number }
-export type LayerIntent = "edit" | "leave" | "remove" | "reply" | "show" | "later" | "grade" | "keep" | "discard" | "ask" | "capture" | "again";
+export type LayerIntent = "edit" | "leave" | "remove" | "reply" | "show" | "later" | "grade" | "format" | "keep" | "discard" | "ask" | "again";
 
 export type ToPage =
   | { t: "marks"; marks: LiveMark[]; open: string | null }
