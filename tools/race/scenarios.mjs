@@ -726,6 +726,48 @@ const keepsToggle = {
 
 
 
+const dispatchBackToTodo = {
+  name: "dispatch-back-to-todo",
+  what: "move a Decide thread back to to-do from its Dispatch card and lose the move's answer; it lands once in to-do with its page kept, and leaves the pane",
+  checks: {
+    held: "the server has the thread in to-do with its one version",
+    shown: "the Decide pane no longer shows the thread",
+  },
+  async run(t) {
+    const title = `Race back to to-do · seed ${t.seed} · ${Date.now().toString(36)}`;
+    const id = `t_race${Date.now().toString(36)}${t.seed}`;
+    await t.api("/api/dashboard/tasks", "POST", { id, title, body: "A thread to send and bring back." });
+    t.later(() => t.api(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "dropped", cleared: true }));
+    await t.api(`/api/dashboard/tasks/${id}/send`, "POST", {});
+    const { token } = await t.api("/api/agent/tokens", "POST", { name: "race-dispatch", write: true });
+    const r = await fetch(`${t.base}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "tools/call", params: { name: "dashboard_post", arguments: { key: `race-back-${id.slice(2)}`, id, page: "<!doctype html><p>v1</p>" } } }) });
+    const posted = (await r.json()).result;
+    if (posted?.isError) throw new Error(`the page was not posted: ${posted.content[0].text}`);
+    const isMove = (e) => e.method === "PATCH" && e.path.split("?")[0] === `/api/dashboard/tasks/${id}`;
+    const page = await t.open({ latency: true, lostAck: { match: isMove, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    await page.goto(`${t.base}/dispatch?view=decide`);
+    const closed = page.locator("button.ws-card", { hasText: title });
+    const card = page.locator(`section.ws-card[aria-label="${title}"]`);
+    await Promise.race([closed.waitFor(), card.waitFor()]);
+    if (await closed.count()) await closed.click();
+    await card.getByRole("button", { name: "Back to to-do", exact: true }).click();
+    await page.evaluate(() => window.__strataSettled?.());
+    await t.net.idle(600);
+    const deadline = Date.now() + GRACE_MS;
+    let rows = [];
+    while (Date.now() < deadline) {
+      rows = t.sql("SELECT stage FROM dashboard_tasks WHERE id = ?", id);
+      if (rows[0]?.stage === "todo") break;
+      await sleep(250);
+    }
+    const versions = t.sql("SELECT n FROM dashboard_versions WHERE task_id = ?", id).length;
+    t.check("held", rows[0]?.stage === "todo" && versions === 1, `stage ${rows[0]?.stage ?? "missing"}, ${versions} version(s), ${t.net.entries.filter(isMove).length} move request(s)`);
+    const left = (await closed.count()) + (await card.count());
+    t.check("shown", left === 0, left ? "the card is still in Decide" : "gone from Decide");
+  },
+};
+
 // three moves faster than the wire: the server must end with the plan the last gesture showed
 const planThreeMoves = {
   name: "plan-three-moves",
@@ -2167,4 +2209,4 @@ const padTwoTabs = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchBackToTodo, dispatchNewThread, padTwoTabs];

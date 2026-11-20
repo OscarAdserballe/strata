@@ -36,10 +36,11 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   const [tall, setTall] = useState<{ rid: string; h: number } | null>(null);
   const fit = v && tall?.rid === v.resourceId ? Math.max(tall.h, 240) : null;
 
-  function press(th: DispatchThread, kind: "send" | "drop" | "archive"): void {
+  function press(th: DispatchThread, kind: "send" | "drop" | "archive" | "todo"): void {
     const rest = here.filter((x) => x.id !== th.id);
     setSel(rest[0] ? { thread: rest[0].id, n: null } : null);
     setReopening(null);
+    if (kind === "todo") { toast("Back in to-do"); dash.toTodo(th.id).catch((e) => toast(StrataWhy(e, "not moved"), 4200)); return; }
     if (kind === "drop") { toast("Dropped"); dash.end(th.id).catch((e) => toast(StrataWhy(e, "not dropped"), 4200)); return; }
     if (kind === "archive") { toast("Archived"); dash.end(th.id, "done").catch((e) => toast(StrataWhy(e, "not archived"), 4200)); return; }
     dash.press(th.id).catch((e) => toast(StrataWhy(e, "Send didn't reach Claude"), 4200));
@@ -66,6 +67,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
                 </ol>
                 {stage !== "finish" ? <div className="acts">
                   <button className="btn dark" onClick={() => press(x, "send")}>Send</button>
+                  <button className="btn quiet" onClick={() => press(x, "todo")}>Back to to-do</button>
                   <button className="btn quiet danger" onClick={() => press(x, "drop")}>Drop</button>
                 </div> : reopening === x.id ? <div className="acts reopen">
                   <p>Write what's wrong as a note on the page, then Send.</p>
@@ -74,6 +76,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
                 </div> : <div className="acts">
                   <button className="btn dark" onClick={() => press(x, "archive")}>Archive</button>
                   <button className="faint" onClick={() => setReopening(x.id)}>Reopen</button>
+                  <button className="faint" onClick={() => press(x, "todo")}>Back to to-do</button>
                 </div>}
               </section>
             : <button key={x.id} className="ws-card" onClick={() => setSel({ thread: x.id, n: null })}>

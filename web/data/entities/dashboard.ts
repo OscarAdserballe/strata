@@ -91,6 +91,13 @@ export const dashOps = {
         { key: DISPATCH_KEY, apply: (v: DispatchPane | undefined) => v && { ...v, threads: v.threads.filter((t) => t.id !== id) } }],
       confirm: (res, meta) => takeState(res, meta, s) };
   },
+  /** Out of Decide, Review or Finish and back into to-do: off Dispatch at once, its pages kept for when it is sent again. */
+  toTodo(id: string, s: Store = roomStore): Op<DashAnswer> {
+    return { label: "move that to to-do", lanes: [lane(id)], method: "PATCH", path: `/api/dashboard/tasks/${id}`, body: { stage: "todo" },
+      optimistic: [{ key: DASH_KEY, apply: onTasks(id, (t) => ({ ...t, stage: "todo", updatedAt: Date.now() })) },
+        { key: DISPATCH_KEY, apply: (v: DispatchPane | undefined) => v && { ...v, threads: v.threads.filter((t) => t.id !== id) } }],
+      confirm: (res, meta) => takeState(res, meta, s) };
+  },
   /** The doc's title and notes as typed: only the newest unsent text goes. */
   text(id: string, field: "title" | "body", value: string, s: Store = roomStore): Op<DashAnswer> {
     return { label: "save those notes", lanes: [lane(id)], coalesce: `dash:${id}:${field}`, method: "PATCH", path: `/api/dashboard/tasks/${id}`, body: { [field]: value },
@@ -136,6 +143,7 @@ export const dash = {
   text: (id: string, field: "title" | "body", value: string) => mutate(dashOps.text(id, field, value)),
   send: (id: string) => mutate(dashOps.send(id)),
   end: (id: string, stage: "dropped" | "done" = "dropped") => mutate(dashOps.end(id, stage)),
+  toTodo: (id: string) => mutate(dashOps.toTodo(id)),
   routine: (body: Record<string, unknown>) => mutate(dashOps.routine(body)),
   runRoutine: () => mutate(dashOps.runRoutine()),
   press: (id: string) => mutate(dashOps.press(id)),
