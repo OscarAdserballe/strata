@@ -14,7 +14,7 @@ export const HANDLE = "dispatch";
 export const PRESS_LABEL: Record<string, string> = { send: "Send", go: "Go", back: "Send back" };
 /** What a press reads as, to the agent and in the wake: Send on a Finish page reopens it. */
 export const pressLabel = (kind: string, stage: string): string => (kind === "send" && stage === "finish" ? "Reopen" : PRESS_LABEL[kind] ?? kind);
-const SENDABLE = ["todo"];
+const SENDABLE = ["todo", "thinking"];
 const ON_YOU = ["decide", "review", "finish"];
 export const LANDS = ["decide", "review", "finish"] as const;
 export type Lands = (typeof LANDS)[number];
@@ -33,12 +33,14 @@ function moveTo(t: TaskRow, stage: string, at: number): void {
 
 const thread = (id: string): TaskRow => q.task.get(id) ?? fail(`No thread ${id}.`);
 
-/** To-do → Implementing: Claude prepares the first page. */
+/** To-do or Thinking → Implementing: Claude prepares the first page, or the next one for a thread moved back off Dispatch. */
 export function sendThread(id: string, sessionUrl: string | null): PressRow {
   const t = thread(id), stage = stageOf(t);
-  if (!SENDABLE.includes(stage)) fail(`Only a thread in to-do is sent; this one is in ${stage}.`);
-  return press(t, "send", stage, null, sessionUrl);
+  if (!SENDABLE.includes(stage)) fail(notSendable(stage));
+  // a thread sent again keeps its pages, and the press reads as a note on the newest one
+  return press(t, "send", stage, q.lastN.get(id)!.n || null, sessionUrl);
 }
+const notSendable = (stage: string): string => `Only a thread in to-do or thinking is sent; this one is in ${stage}.`;
 
 /** Send on the page in Decide, Review or Finish: stored as the thread's newest note, and it goes to Claude, who reads the notes and picks what comes next. */
 export function pressThread(id: string, kind: unknown, sessionUrl: string | null): PressRow {
@@ -57,7 +59,7 @@ function press(t: TaskRow, kind: string, stage: string, version: number | null, 
 }
 
 /** Checked before anything awaits, so a press that can't happen never wakes the routine. */
-export function checkSend(id: string): void { const s = stageOf(thread(id)); if (!SENDABLE.includes(s)) fail(`Only a thread in to-do is sent; this one is in ${s}.`); }
+export function checkSend(id: string): void { const s = stageOf(thread(id)); if (!SENDABLE.includes(s)) fail(notSendable(s)); }
 export function checkPress(id: string, kind: unknown): string {
   if (kind !== "send" && kind !== "go" && kind !== "back") fail("kind is send.");
   const s = stageOf(thread(id));

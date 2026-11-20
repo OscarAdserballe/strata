@@ -45,7 +45,7 @@ test("sending a thread hands it to Claude: Implementing, a press stored, the rou
 
   const t = await thread(a);
   assert.deepEqual([t.stage, t.lands, t.versions.length, t.press.sessionUrl], ["implementing", "decide", 0, sent.body.press.session_url]);
-  assert.equal((await send(`/api/dashboard/tasks/${a}/send`, "POST", {})).status, 400, "only a to-do thread is sent");
+  assert.equal((await send(`/api/dashboard/tasks/${a}/send`, "POST", {})).status, 400, "a thread already with Claude is not sent again");
   assert.equal((await send(`/api/dashboard/tasks/${a}`, "PATCH", { stage: "decide" })).status, 400, "Decide is reached through Dispatch, not by hand");
   const focus = (await server.api("/api/dashboard")).body.tasks.find((x: any) => x.id === a);
   assert.equal(focus.dispatched, true, "Focus can tell a Dispatch thread from its own");
@@ -173,4 +173,22 @@ test("a page carries the ask and how Claude read it, kept per version; both or n
   await post(id, { page: page("v2", "No ask.") });
   assert.deepEqual((await thread(id)).versions.map((v: any) => [v.n, v.ask, v.heard]),
     [[1, "Let me see what I sent.", "Two fields above each page."], [2, null, null]], "each version keeps its own; a page without them shows the page alone");
+});
+
+test("a thread moves back off Dispatch to to-do or thinking, pages kept, and Send to Dispatch brings it back to its newest page", async () => {
+  const id = await newThread("A Later button on Dispatch");
+  await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  await post(id, { page: page("v1", "Three buttons.") });
+  const back = await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "todo" });
+  assert.equal(back.status, 200, JSON.stringify(back.body));
+  assert.equal(await thread(id), undefined, "to-do is off the Dispatch pane");
+  assert.equal((await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "thinking" })).status, 200);
+
+  const sent = await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  assert.equal(sent.status, 200, "Thinking's Send to Dispatch is taken");
+  assert.deepEqual([sent.body.press.stage, sent.body.press.version], ["thinking", 1]);
+  const t = await thread(id);
+  assert.deepEqual([t.stage, t.lands, t.versions.length], ["implementing", "decide", 1]);
+  assert.deepEqual((await open(id)).notes.at(-1), { id: sent.body.press.id, on: null, text: "Send" }, "the agent sees it as a press on the newest page");
+  assert.match((await post(id, { page: page("v2", "Two buttons.") })).text, /v2 posted; the thread is in Decide\./);
 });

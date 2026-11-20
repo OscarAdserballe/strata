@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { chromium } from "playwright";
 
-// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, keeps it on the sheet when another thread arrives, and drops threads from Decide and Thinking, and To-do opens from the header.
+// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, keeps it on the sheet when another thread arrives, drops threads from Decide and Thinking, moves one back to to-do and sends it again from Thinking, and To-do opens from the header.
 const base = (process.argv[2] || "http://127.0.0.1:8804").replace(/\/+$/, "");
 let n = 0;
 const key = () => `smoke-${Date.now().toString(36)}-${++n}`;
@@ -52,7 +52,6 @@ try {
   await shown.waitForSelector("text=Posted while you looked", { timeout: 2000 });
   assert.equal(await page.locator(".ws-card.open .t").textContent(), `Smoke ${run}: a page posted while Decide is open`);
   console.log("✓ a new thread doesn't replace the page being read");
-  await api(`/api/dashboard/tasks/${later}`, "PATCH", { stage: "dropped", cleared: true });
 
   // Drop on the open Decide card takes the thread off the board
   await page.getByRole("region", { name: `Smoke ${run}: a page posted while Decide is open` }).getByRole("button", { name: "Drop" }).click();
@@ -60,6 +59,25 @@ try {
   for (let i = 0; i < 20 && (await stageOf(fresh)) !== null; i++) await page.waitForTimeout(250);
   assert.equal(await stageOf(fresh), null, "a dropped Decide thread leaves the board");
   console.log("✓ Drop on a Decide card");
+
+  // Back to to-do takes a Decide thread off Dispatch with its page; Thinking's Send to Dispatch brings it back
+  const card = page.getByRole("region", { name: `Smoke ${run}: a thread that arrives later` });
+  await card.getByRole("button", { name: "to-do", exact: true }).waitFor({ timeout: 5000 });
+  if (process.env.DISPATCH_BACK_SHOT) await card.screenshot({ path: process.env.DISPATCH_BACK_SHOT });
+  await card.getByRole("button", { name: "to-do", exact: true }).click();
+  await page.waitForSelector(`text=Smoke ${run}: a thread that arrives later`, { state: "detached", timeout: 5000 });
+  for (let i = 0; i < 20 && (await stageOf(later)) !== "todo"; i++) await page.waitForTimeout(250);
+  assert.equal(await stageOf(later), "todo", "Back to to-do moves the thread to to-do");
+  console.log("✓ Back to to-do on a Decide card");
+  await api(`/api/dashboard/tasks/${later}`, "PATCH", { stage: "thinking" });
+  await page.goto(`${base}/dashboard?view=thinking`, { waitUntil: "networkidle" });
+  await page.getByRole("button", { name: `Smoke ${run}: a thread that arrives later` }).click();
+  await page.getByRole("button", { name: "Send to Dispatch" }).click();
+  for (let i = 0; i < 20 && (await stageOf(later)) !== "implementing"; i++) await page.waitForTimeout(250);
+  assert.equal(await stageOf(later), "implementing", "Send to Dispatch from Thinking is taken");
+  assert.equal((await api("/api/dashboard/dispatch")).threads.find((t) => t.id === later)?.versions.length, 1, "and the thread keeps its page");
+  console.log("✓ Send to Dispatch from Thinking");
+  await api(`/api/dashboard/tasks/${later}`, "PATCH", { stage: "dropped", cleared: true });
 
   // Drop in a Thinking doc
   const think = await thread(`Smoke ${run}: a thought not worth keeping`, "thinking");
