@@ -11,3 +11,4 @@ for someone else, and link it from the source. If the `strata` server is not con
 the file in your scratchpad; don't commit it.
 An interactive page keeps its state with `window.strata.load()`/`save()` (see the `uploads` guide), never `localStorage`.
 Don't build note boxes for feedback: give each thing the reader may write a note on a stable `data-strata-id`, read their notes from `<board>/comments`, and answer under each with `reply_note`.
+When a change is visual, show before and after (Figma or an exploration page) before building; skip it for anything non-visual.
