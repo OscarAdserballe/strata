@@ -83,9 +83,6 @@ export const SURFACES: Record<Route, SurfaceSpec> = {
   },
   review: {
     route: "review",
-    ask: "card",
-    askSelection: true,
-    replyToCard: true,
     card: ["new", "edit", "delete", "grade", "history", "jump"],
     sources: [],
     imports: true,

@@ -17,9 +17,6 @@ import CardFace, { type FaceCard } from "../../capabilities/card/CardFace.tsx";
 import Composer, { type ComposerProps } from "../../capabilities/card/Composer.tsx";
 import type { ComposerDraft } from "../../capabilities/card/composing.ts";
 import { loadSessionMap, sessionMapNow, type SessionMapProps } from "./session-map-load.ts";
-import Ask from "../../capabilities/ask/Ask.tsx";
-import { closeAsk, openAsk } from "../../capabilities/ask/control.ts";
-import { cardThreadKey } from "../../capabilities/ask/threads.ts";
 import { useProvideHere } from "../../shell/here.ts";
 import CardHistory from "../../capabilities/card/CardHistory.tsx";
 import ClaimTree, { Line } from "../../engines/tree/ClaimTree.tsx";
@@ -308,7 +305,6 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
         return;
       }
       if (k === "escape" && ref.current.editing) { e.preventDefault(); setEditing(null); return; }
-      if (k === "escape" && closeAsk()) { e.preventDefault(); return; }
       if (k === "escape") { e.preventDefault(); endSession(); return; }
       if (ref.current.overview) {
         if ((k === " " || k === "enter") && !e.repeat) { e.preventDefault(); beginRef.current(); }
@@ -318,7 +314,6 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
       if (k === "e" && !ref.current.editing && !grades.hasCard(c.id)) { e.preventDefault(); setEditing(c.id); return; }
       if (ref.current.editing) return;
       if (k === " ") { e.preventDefault(); advance(); return; }
-      if (k === "/") { e.preventDefault(); openAsk(); return; }
       // !e.repeat: a held key must not answer and judge in one press
       if (c.type === "mcq" && ref.current.picked === null) {
         if (k >= "1" && k <= "4" && !e.repeat) { e.preventDefault(); pick(+k - 1); }
@@ -397,11 +392,6 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
           </div>
         ) : null}
       </div>}
-      {/* one Ask per card (key), so a thread left open doesn't open over the next card */}
-      {card && !finished && !inOverview ? <Ask key={card.id} thread={cardThreadKey(card.course, card.id)} name="this card’s thread"
-        placeholder="ask about this card…" locked={answered ? null : "turn the card over to ask about it"}
-        onCompose={onNewCard ? (q, a) => onNewCard(card, q, a) : null}
-        feedback={{ board: null, card: card.id, deck: card.deck, context: { review: true, card } }} /> : null}
     </div>
   );
 }
