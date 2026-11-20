@@ -1,23 +1,27 @@
 // dashboard_read's answer: the board as Markdown, one block per thread, cut to the token budget.
 import { paged, pagedText, when } from "../agent/render.ts";
 import { archive, handledSince, OPEN_STAGES, snapshot, type Handled, type TaskView } from "./dashboard.ts";
+import { dashboardRepo as q } from "./repo.ts";
 
 const HEADS: [string, string][] = [["todo", "To-do"], ["thinking", "Thinking"], ["decide", "Decide"], ["implementing", "Implementing"], ["review", "Review"], ["finish", "Finish"], ["done", "Done"], ["dropped", "Dropped"]];
 const linkLine = (ls: TaskView["links"]): string => ls.map((l) => `${l.kind} ${l.ref}${l.title ? ` (${l.title})` : ""}${l.url ? ` <${l.url}>` : ""}`).join(" · ");
+const titleOf = (id: string): string => { const t = q.task.get(id); return t ? ` ("${t.title}")` : ""; };
+const origin = (id: string): string => `Came up in thread ${id}${titleOf(id)}: dashboard_read({ task: "${id}" }) for its notes, dashboard_open({ id: "${id}" }) for its page.`;
 const ended = (t: TaskView): boolean => t.stage === "done" || t.stage === "dropped";
 
 function block(t: TaskView): string {
   const lines = [`### ${t.title} · ${t.id} · ${t.area}${t.clearedAt ? " · archived" : ""}`];
   if (t.links.length) lines.push(`Links: ${linkLine(t.links)}`);
   if (t.createdFrom) lines.push(`From: ${t.createdFrom.source}${t.createdFrom.quote ? ` — "${t.createdFrom.quote}"` : ""}`);
+  if (t.createdFrom?.thread) lines.push(origin(t.createdFrom.thread));
   if (t.body.trim()) lines.push("", t.body.trim());
   for (const u of t.updates) lines.push("", `── ${when.minute(u.at)} · ${u.from?.source ?? "you"} ──`, u.text);
   return lines.join("\n");
 }
 
 function inboxLine(i: Record<string, unknown>): string {
-  const from = (i.from as { source?: string } | undefined)?.source ?? "?";
-  return `- ${String(i.id)} · "${String(i.title ?? i.text ?? "")}" · from ${from}${i.context ? `\n  ${String(i.context).replace(/\n+/g, " ")}` : ""}`;
+  const f = i.from as { source?: string; thread?: string } | undefined;
+  return `- ${String(i.id)} · "${String(i.title ?? i.text ?? "")}" · from ${f?.source ?? "?"}${i.context ? `\n  ${String(i.context).replace(/\n+/g, " ")}` : ""}${f?.thread ? `\n  ${origin(f.thread)}` : ""}`;
 }
 
 export const HANDLED_DAYS = 7;

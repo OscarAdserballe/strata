@@ -45,7 +45,7 @@ const ACCEPTED = /\.(pdf|md|markdown|txt|html?)$/i;
 const dashAsync = async <T,>(fn: () => Promise<T>): Promise<T> => { try { return await fn(); } catch (e) { if (e instanceof DashError) throw new AgentError(e.message); throw e; } };
 const dash = <T,>(fn: () => T): T => { try { return fn(); } catch (e) { if (e instanceof DashError) throw new AgentError(e.message); throw e; } };
 const DASH_LINK = schema({ kind: { type: "string", enum: [...LINK_KINDS] }, ref: { type: "string", description: "e.g. GD-247, PR #42, #north-beds" }, title: STR, url: STR }, ["kind", "ref"]);
-const DASH_FROM = schema({ source: { type: "string", description: "e.g. Notion · 1:1 with Mara · 23 Oct" }, url: STR, quote: { type: "string", description: "The words it came from." } }, ["source"]);
+const DASH_FROM = schema({ source: { type: "string", description: "e.g. Notion · 1:1 with Mara · 23 Oct" }, url: STR, quote: { type: "string", description: "The words it came from." }, thread: { type: "string", description: "The Dispatch thread it came up in (t_ id), so whoever picks it up can read that thread." } }, ["source"]);
 const DASH_ITEM = {
   type: "object", additionalProperties: false, required: ["title", "from"],
   properties: {
@@ -229,7 +229,7 @@ export const TOOLS: Tool[] = [
   // The dashboard is its own app that borrows this MCP server, so it gets its own tools instead of apply ops.
   {
     name: "dashboard_add_items", title: "Add to the dashboard inbox", scope: "write",
-    description: "Puts tasks in the dashboard's inbox; the reader keeps each in to-do, or drops it. A task is a title, a line or two of context, where it came from (from, with the words it came from as quote) and links to what already exists: Linear issues, GitHub PRs, Slack threads, Notion pages. The reader writes the notes themselves in Thinking, so don't draft a plan or a spec. Read dashboard_read first and don't add what is already there. All or nothing.",
+    description: "Puts tasks in the dashboard's inbox; the reader keeps each in to-do, or drops it. A task is a title, a line or two of context, where it came from (from, with the words it came from as quote) and links to what already exists: Linear issues, GitHub PRs, Slack threads, Notion pages. The reader writes the notes themselves in Thinking, so don't draft a plan or a spec. A side idea from a reader's note in a Dispatch thread names that thread as from.thread, with the note as quote. Read dashboard_read first and don't add what is already there. All or nothing.",
     inputSchema: schema({ key: KEY, items: { type: "array", minItems: 1, maxItems: 50, items: DASH_ITEM } }, ["key", "items"]),
     write: async (x) => {
       if (!Array.isArray(x.items) || !x.items.length || x.items.length > 50) fail("items is a list of 1 to 50 items.");

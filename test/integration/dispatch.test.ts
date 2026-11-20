@@ -174,3 +174,34 @@ test("a page carries the ask and how Claude read it, kept per version; both or n
   assert.deepEqual((await thread(id)).versions.map((v: any) => [v.n, v.ask, v.heard]),
     [[1, "Let me see what I sent.", "Two fields above each page."], [2, null, null]], "each version keeps its own; a page without them shows the page alone");
 });
+
+test("Later and To thinking take a thread out of Dispatch with its pages kept, and Send from either picks up after them", async () => {
+  const later = await newThread("Later button on Dispatch");
+  const think = await newThread("Think more about the reader");
+  for (const id of [later, think]) { await send(`/api/dashboard/tasks/${id}/send`, "POST", {}); await post(id, { page: page("v1", "A proposal."), lands: id === think ? "review" : "decide" }); }
+  assert.equal((await send(`/api/dashboard/tasks/${later}`, "PATCH", { stage: "todo" })).status, 200, "Later is a move to to-do");
+  assert.equal((await send(`/api/dashboard/tasks/${think}`, "PATCH", { stage: "thinking" })).status, 200, "and To thinking a move to thinking");
+  assert.deepEqual([await thread(later), await thread(think)], [undefined, undefined], "neither is in the pane while it waits");
+
+  for (const id of [later, think]) {
+    const sent = await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+    assert.equal(sent.status, 200, JSON.stringify(sent.body));
+    assert.match((await post(id, { page: page("v2", "Picked up again.") })).text, /v2 posted; the thread is in Decide\./, "the next page follows the kept one");
+    assert.deepEqual((await thread(id)).versions.map((v: any) => v.n), [1, 2]);
+  }
+});
+
+test("a side idea filed from a thread names it, and reading the item or its kept thread points back to the origin", async () => {
+  const origin = await newThread("A Later button on Dispatch");
+  const from = { source: "Dispatch · A Later button on Dispatch", thread: origin, quote: "can we link to the original session?" };
+  assert.match((await call("dashboard_add_items", { key: `side-bad-${Date.now()}`, items: [{ title: "x", from: { ...from, thread: "t_nothere" } }] })).text, /items\[0\]\.from\.thread names no thread: t_nothere/);
+  const added = await call("dashboard_add_items", { key: `side-${Date.now()}`, items: [{ title: "Link filed ideas to their thread", context: "So the next agent sees the worry.", from }] });
+  assert.equal(added.isError, false, added.text);
+  const hint = new RegExp(`Came up in thread ${origin} \\("A Later button on Dispatch"\\): dashboard_read\\(\\{ task: "${origin}" \\}\\) for its notes, dashboard_open\\(\\{ id: "${origin}" \\}\\) for its page\\.`);
+  assert.match((await call("dashboard_read")).text, hint, "the inbox line points back");
+  const item = ((await server.api("/api/dashboard")).body.inbox as any[]).find((i) => i.title === "Link filed ideas to their thread");
+  assert.equal((await send(`/api/dashboard/inbox/${item.id}/keep`, "POST", {})).status, 200);
+  const one = await call("dashboard_read", { task: "Link filed ideas to their thread" });
+  assert.match(one.text, /From: Dispatch · A Later button on Dispatch — "can we link to the original session\?"/);
+  assert.match(one.text, hint, "and so does the thread it became");
+});

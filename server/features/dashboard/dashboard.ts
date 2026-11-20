@@ -24,7 +24,7 @@ export const guessArea = (source: string | undefined): string => (WORK.test(sour
 const MAX = { title: 300, body: 20000, context: 400, source: 300, quote: 2000, ref: 200, url: 2000, links: 20, pad: 200000 };
 
 export interface Link { kind: string; ref: string; title?: string; url?: string }
-export interface From { source: string; url?: string; quote?: string }
+export interface From { source: string; url?: string; quote?: string; thread?: string }
 export interface Item { kind: "task"; title: string; body: string; context?: string; area: string; links: Link[]; from: From }
 
 const str = (v: unknown, field: string, max: number, required = false): string | undefined => {
@@ -53,9 +53,11 @@ export function checkLinks(raw: unknown, field = "links"): Link[] {
 
 function checkFrom(raw: unknown, field: string): From {
   const o = (raw ?? {}) as Record<string, unknown>;
-  if (typeof raw !== "object" || raw === null) fail(`${field} is { source, url?, quote? }.`);
+  if (typeof raw !== "object" || raw === null) fail(`${field} is { source, url?, quote?, thread? }.`);
   const url = str(o.url, `${field}.url`, MAX.url);
-  return { source: str(o.source, `${field}.source`, MAX.source, true)!, ...(url ? { url } : {}), ...(o.quote ? { quote: str(o.quote, `${field}.quote`, MAX.quote) } : {}) };
+  const thread = str(o.thread, `${field}.thread`, 60);
+  if (thread && !q.task.get(thread)) fail(`${field}.thread names no thread: ${thread}.`);
+  return { source: str(o.source, `${field}.source`, MAX.source, true)!, ...(url ? { url } : {}), ...(o.quote ? { quote: str(o.quote, `${field}.quote`, MAX.quote) } : {}), ...(thread ? { thread } : {}) };
 }
 
 /** Checks one inbox item's shape; returns it normalized. */

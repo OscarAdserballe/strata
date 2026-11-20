@@ -1929,6 +1929,66 @@ const dispatchPress = {
   },
 };
 
+const dispatchLater = {
+  name: "dispatch-later",
+  what: "in Dispatch you press Later on one thread's page in Decide and To thinking on another's in Review, on a lossy wire with the first move's answer lost; each lands in to-do or thinking with no press, and sending it again keeps its pages, the next one landing after them",
+  checks: {
+    moved: "the thread Later was pressed on is in to-do, the other in thinking",
+    unpressed: "neither move stored a press",
+    shown: "the pane no longer lists either thread where it was moved from",
+    kept: "sent again, each keeps its first page and the next post is v2",
+  },
+  async run(t) {
+    const tag = `${t.seed}-${Date.now().toString(36)}`;
+    const { token } = await t.api("/api/agent/tokens", "POST", { name: `race later ${t.seed}`, write: true });
+    let n = 0;
+    const post = async (id, html, lands) => {
+      const r = await fetch(`${t.base}/mcp`, { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "tools/call", params: { name: "dashboard_post", arguments: { key: `race-later-${tag}-${n}`, id, page: html, lands } } }) });
+      const body = await r.json();
+      if (!body.result || body.result.isError) throw new Error(`dashboard_post: ${JSON.stringify(body).slice(0, 200)}`);
+    };
+    const ids = [0, 1].map((i) => `t_dsl${i}${t.seed}${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_]/g, ""));
+    const titles = [`Race later ${tag}`, `Race to thinking ${tag}`];
+    const from = ["decide", "review"], to = ["todo", "thinking"], button = ["Later", "To thinking"];
+    for (const [i, id] of ids.entries()) {
+      await t.api("/api/dashboard/tasks", "POST", { id, title: titles[i], body: "Under loss.", area: "work" });
+      await t.api(`/api/dashboard/tasks/${id}/send`, "POST", {});
+      await post(id, `<!doctype html><html><body><h1>${titles[i]}</h1><p>A page to put off.</p></body></html>`, from[i]);
+    }
+    const moves = (e) => e.write && e.method === "PATCH" && /\/api\/dashboard\/tasks\/[^/]+$/.test(e.path);
+    const page = await t.open({ latency: true, lostAck: { match: moves, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    const moveOn = async (view, title, name) => {
+      await page.goto(`${t.base}/dispatch?view=${view}`);
+      const card = page.locator(".ws-card", { hasText: title });
+      await card.first().waitFor();
+      if (!(await card.first().evaluate((el) => el.classList.contains("open")))) await card.first().click();
+      await page.locator(".ws-card.open", { hasText: title }).getByRole("button", { name, exact: true }).click();
+      await page.evaluate(() => window.__strataSettled?.());
+      return (await page.locator(".ws-list").textContent()) ?? "";
+    };
+    const listed = [await moveOn("decide", titles[0], button[0]), await moveOn("built", titles[1], button[1])];
+    const stageOf = (id) => t.sql("SELECT stage FROM dashboard_tasks WHERE id = ?", id)[0]?.stage;
+    const until = performance.now() + GRACE_MS * 2;
+    for (;;) {
+      if (ids.every((id, i) => stageOf(id) === to[i]) || performance.now() > until) break;
+      await sleep(250);
+    }
+    await t.net.idle(500);
+    const stages = ids.map(stageOf);
+    const presses = ids.map((id) => t.sql("SELECT COUNT(*) n FROM dashboard_presses WHERE task_id = ? AND version IS NOT NULL", id)[0].n);
+    t.check("moved", stages.every((s, i) => s === to[i]), stages.join(", "));
+    t.check("unpressed", presses.every((x) => x === 0), presses.join(", "));
+    t.check("shown", listed.every((l, i) => !l.includes(titles[i])), listed.map((l) => JSON.stringify(l.slice(0, 120))).join(" · "));
+    for (const [i, id] of ids.entries()) {
+      await t.api(`/api/dashboard/tasks/${id}/send`, "POST", {});
+      await post(id, `<!doctype html><html><body><h1>${titles[i]} v2</h1></body></html>`, "decide");
+    }
+    const ns = ids.map((id) => t.sql("SELECT n FROM dashboard_versions WHERE task_id = ? ORDER BY n", id).map((r) => r.n).join(","));
+    t.check("kept", ns.every((x) => x === "1,2"), ns.join("; "));
+  },
+};
+
 const dispatchNewThread = {
   name: "dispatch-new-thread",
   what: "from Decide's sidebar you write a thread and Send it to Dispatch, then write another and Keep it, on a lossy wire with the first create's answer lost; each thread is on the server once with its context, the sent one with Claude after one send, the kept one in to-do",
@@ -2167,4 +2227,4 @@ const padTwoTabs = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchLater, dispatchNewThread, padTwoTabs];
