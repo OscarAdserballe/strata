@@ -5,6 +5,7 @@ import { db } from "../../platform/db/db.ts";
 import { httpError, sendJson } from "../../platform/http/http.ts";
 import { route, type Route } from "../../platform/router/router.ts";
 import { imports, startImportPump } from "../imports/pump.ts";
+import { htmlProblems } from "../sources/check-html.ts";
 import { idOf } from "../../../shared/agent/ids.ts";
 import { agentRepo as a } from "./repo.ts";
 import { answerMcp } from "./mcp.ts";
@@ -41,6 +42,8 @@ export const agentPublicRoutes: Route[] = [
     if (row.sha256 && createHash("sha256").update(bytes).digest("hex") !== row.sha256) {
       sendJson(res, 400, { error: "These bytes don't match the sha256 given to request_upload." }); return;
     }
+    const problems = /\.html?$/i.test(row.filename) ? htmlProblems(bytes.toString("utf-8")) : [];
+    if (problems.length) { sendJson(res, 422, { error: `${row.filename} wasn't taken: ${problems.join("; ")}. Fix it and call request_upload again.` }); return; }
     // chunk() accepts a part it already holds unchanged, so a resent PUT after a cut is safe.
     for (let at = 0; at < size; at += CHUNK) imports.chunk(id, at, bytes.subarray(at, Math.min(size, at + CHUNK)));
     commit(() => {

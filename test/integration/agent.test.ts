@@ -304,6 +304,12 @@ test("journey: upload an HTML page, and it opens live", async () => {
   const live = await server.fetch(`/api/boards/${board}/resources/${src}/live`);
   assert.equal(live.status, 200);
   assert.match(live.headers.get("content-security-policy") ?? "", /sandbox allow-scripts/);
+  const broken = Buffer.from("<!DOCTYPE html><html><body><p>Hi</p><script>if (</script></body></html>");
+  const bfile = { name: "broken.html", bytes: broken.length, sha256: createHash("sha256").update(broken).digest("hex") };
+  const bput = new URL(/upload_url: (\S+)/.exec(await ok("request_upload", { board: "thesis", key: "upload-html-3", files: [bfile] }))![1]);
+  const bres = await server.fetch(`${bput.pathname}${bput.search}`, { method: "PUT", body: new Uint8Array(broken) });
+  assert.equal(bres.status, 422);
+  assert.match((await bres.json()).error, /broken\.html wasn't taken: script 1/);
   const refused = await call("request_upload", { board: "thesis", key: "upload-html-2", files: [{ ...file, name: "chapter-3.docx" }] });
   assert.ok(refused.isError && /\.html or \.htm/.test(refused.text));
 });

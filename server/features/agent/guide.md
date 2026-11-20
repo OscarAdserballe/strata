@@ -131,7 +131,7 @@ Where a page lands is your call, not a fixed order:
 - `review`: the whole thing built and ready to merge. A stack of PRs goes once, all of it, not one part at a time.
 - `finish`: nothing more to build. Merged, or the decision was not to do it, or it became a Linear issue (link it). The page lists what the reader can now check ("open X, and Y shows"), if anything; the reader archives it from there.
 
-A page is one self-contained, light HTML file, short enough to decide from. You are a better designer than any template, so there is none: shape each page to the task in front of you. These are the few things that hold every time.
+A page is one self-contained, light HTML file, short enough to decide from, in plain JavaScript (no JSX or `text/babel`) with scripts inline or from https CDNs; a page that shows nothing, is cut off or has a script that does not parse is refused with the reason, so fix it and post again. You are a better designer than any template, so there is none: shape each page to the task in front of you. These are the few things that hold every time.
 
 - **proposal** (lands in `decide`): two or three options and the one you would pick. `get_guide({ topic: "proposal" })`.
 - **built** (lands in `review`): what works now, how you know, and the PR. `get_guide({ topic: "built" })`.

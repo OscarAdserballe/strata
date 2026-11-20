@@ -5,6 +5,7 @@ import { insertBoard } from "../boards/create.ts";
 import { agentRepo as a } from "../agent/repo.ts";
 import { htmlSource, prepareSource, writeSource, type PreparedSource } from "../sources/ingest.ts";
 import { bytesOf } from "../sources/blobs.ts";
+import { htmlProblems } from "../sources/check-html.ts";
 import { DashError, stageOf } from "./dashboard.ts";
 import { dashboardRepo as q, type PressRow, type TaskRow, type VersionRow } from "./repo.ts";
 import type { Link } from "./dashboard.ts";
@@ -104,6 +105,8 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
   const page = raw.page === undefined ? undefined : typeof raw.page === "string" && raw.page.trim() ? raw.page : fail("page is the HTML of the next version.");
   if (page !== undefined && Buffer.byteLength(page) > MAX_UPLOAD_BYTES) fail("page is too big.");
   if (page !== undefined && stageOf(t) !== "implementing") fail(`This thread is in ${stageOf(t)}, with the reader. Post a page only while it is implementing; replies can go any time.`);
+  const problems = page === undefined ? [] : htmlProblems(page, { remoteOnly: true });
+  if (problems.length) fail(`The page wasn't posted: ${problems.join("; ")}. Fix it and post again.`);
   if (raw.lands !== undefined && raw.page === undefined) fail("lands goes with a page.");
   if (raw.lands !== undefined && !(LANDS as readonly unknown[]).includes(raw.lands)) fail(`lands is one of ${LANDS.join(", ")}.`);
   if ((raw.ask !== undefined || raw.heard !== undefined) && raw.page === undefined) fail("ask and heard go with a page.");
