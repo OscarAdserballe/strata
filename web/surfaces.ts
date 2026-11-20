@@ -16,9 +16,10 @@ export type BoardAction = (typeof BOARD_ACTIONS)[number];
 
 export interface SurfaceSpec {
   route: Route;
-  ask: AskThread;
+  /** null: the screen has no Ask; the keeps are for choosing cards, not for talking about them */
+  ask: AskThread | null;
   askSelection?: true;
-  replyToCard: true;
+  replyToCard?: true;
   card: CardVerb[];
   annotate?: true;
   plan?: true;
@@ -107,9 +108,7 @@ export const SURFACES: Record<Route, SurfaceSpec> = {
   },
   keeps: {
     route: "keeps",
-    ask: "board",
-    askSelection: true,
-    replyToCard: true,
+    ask: null,
     card: ["new", "edit", "delete", "history", "jump", "keep"],   // delete ≠ un-keep
     sources: [],
     imports: false,
