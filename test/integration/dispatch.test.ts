@@ -45,7 +45,7 @@ test("sending a thread hands it to Claude: Implementing, a press stored, the rou
 
   const t = await thread(a);
   assert.deepEqual([t.stage, t.lands, t.versions.length, t.press.sessionUrl], ["implementing", "decide", 0, sent.body.press.session_url]);
-  assert.equal((await send(`/api/dashboard/tasks/${a}/send`, "POST", {})).status, 400, "only a to-do thread is sent");
+  assert.equal((await send(`/api/dashboard/tasks/${a}/send`, "POST", {})).status, 400, "only a to-do or thinking thread is sent");
   assert.equal((await send(`/api/dashboard/tasks/${a}`, "PATCH", { stage: "decide" })).status, 400, "Decide is reached through Dispatch, not by hand");
   const focus = (await server.api("/api/dashboard")).body.tasks.find((x: any) => x.id === a);
   assert.equal(focus.dispatched, true, "Focus can tell a Dispatch thread from its own");
@@ -173,4 +173,23 @@ test("a page carries the ask and how Claude read it, kept per version; both or n
   await post(id, { page: page("v2", "No ask.") });
   assert.deepEqual((await thread(id)).versions.map((v: any) => [v.n, v.ask, v.heard]),
     [[1, "Let me see what I sent.", "Two fields above each page."], [2, null, null]], "each version keeps its own; a page without them shows the page alone");
+});
+
+test("Later and To thinking take a thread out of Dispatch with its pages, and Send brings it back to carry on", async () => {
+  const id = await newThread("A Later button on Dispatch");
+  await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  await post(id, { page: page("v1", "Three options."), ask: "Later on cards.", heard: "Three options." });
+  const later = await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "todo" });
+  assert.equal(later.status, 200, JSON.stringify(later.body));
+  assert.equal(await thread(id), undefined, "Later takes it out of Dispatch");
+  assert.equal((await server.api("/api/dashboard")).body.tasks.find((x: any) => x.id === id).stage, "todo");
+  assert.equal((await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "thinking" })).status, 200);
+  const back = await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  assert.equal(back.status, 200, "Send to Dispatch works from Thinking");
+  assert.deepEqual([back.body.press.stage, back.body.press.version], ["thinking", null]);
+  assert.match((await open(id)).page, /Three options/, "its pages were kept: Claude opens the last one and carries on");
+  await post(id, { page: page("v2", "Built."), ask: "Later on cards.", heard: "Built." });
+  assert.deepEqual([(await thread(id)).stage, (await thread(id)).versions.length], ["decide", 2]);
+  await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "thinking" });
+  assert.equal((await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "implementing" })).status, 400, "Implementing is still only reached by a press");
 });
