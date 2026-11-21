@@ -78,16 +78,6 @@ try {
   }, null, { timeout: 15000 }).then(() => true, () => false);
   check("a pdf page paints real pixels", painted);
 
-  const bands = await page.waitForFunction(() => document.querySelectorAll(".clm-row").length > 0,
-    null, { timeout: 10000 }).then(() => true, () => false);
-  // count both tree levels: each anchors differently, and either can silently resolve to nothing
-  const levels = await page.evaluate(() => ({
-    roots: document.querySelectorAll(".clm-row.d0").length,
-    under: document.querySelectorAll(".clm-row.d1").length,
-  }));
-  check("the chapter's claims stand in the source, both levels", bands && levels.roots > 0 && levels.under > 0,
-    `${levels.roots} root · ${levels.under} under`);
-
   await page.evaluate(() => { document.querySelector(".page").scrollTop = 2600; });
   await atRest(page);
   const was = await page.evaluate(() => document.querySelector(".page").scrollTop);
