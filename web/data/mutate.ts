@@ -7,7 +7,8 @@ import { confirmByShape } from "./entities/confirm.ts";
    - One key per op, minted once and reused on every retry and on the pagehide flush.
    - 2xx confirms; a lost answer, deadline, 408/425/429 or 5xx is retried with backoff, paused while offline.
    - A 409 hands its value to the store and may rebuild the op once; any other 4xx rolls back.
-   - A held op paints at once and waits holdMs before it may leave, so withdraw(key) can take it back unsent. */
+   - A held op paints at once and waits holdMs before it may leave, so withdraw(key) can take it back unsent;
+     hurry(key) ends the hold early. */
 
 export interface Conflict { rev: number; value: unknown }
 
@@ -494,6 +495,18 @@ export class Mutator {
     return true;
   }
 
+  /** Ends a held op's hold now: it leaves as soon as it heads its lanes. False if it is not held. */
+  hurry(key: string): boolean {
+    const item = this.items.find((i) => i.key === key);
+    if (!item || !item.holding) return false;
+    if (item.holdTimer !== null) this.d.clearTimer(item.holdTimer);
+    item.holdTimer = null;
+    item.holding = false;
+    this.changed();
+    this.pump();
+    return true;
+  }
+
   /** Drops a lane's failed ops so they no longer wedge every later write behind them. */
   discardFailed(lane: string): void {
     for (const item of [...this.items]) if (item.state === "failed" && item.op.lanes.includes(lane)) this.discard(item.id);
@@ -598,5 +611,6 @@ export const settled = (): Promise<void> => mutator.settled();
 export const retry = (id: string): void => mutator.retry(id);
 export const discard = (id: string): void => mutator.discard(id);
 export const withdraw = (key: string): boolean => mutator.withdraw(key);
+export const hurry = (key: string): boolean => mutator.hurry(key);
 export const discardFailed = (lane: string): void => mutator.discardFailed(lane);
 export const release = <Res>(op: Op<Res>): Promise<Res> => mutator.release(op);

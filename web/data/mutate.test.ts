@@ -572,6 +572,25 @@ test("a held op paints at once, holds its lane and leaves only when its hold is 
   assert.equal(sent.length, 2, "never sent");
 });
 
+test("hurry ends a hold early: the op goes at once, the op behind it follows, and it can no longer be taken back", async () => {
+  const { m, sent, timers } = harness();
+  const goes = m.mutate(op(["mark:a"], { key: "mk-a", holdMs: 15000 }));
+  const behind = m.mutate(op(["mark:a"], { body: "note" }));
+  assert.equal(sent.length, 0, "held");
+  assert.equal(m.hurry("mk-a"), true);
+  assert.equal(timers.filter((t) => t.ms === 15000).length, 0, "its hold timer is cleared");
+  assert.equal(sent.length, 1, "sent at once");
+  assert.equal(sent[0].req.headers["Idempotency-Key"], "mk-a");
+  assert.equal(m.hurry("mk-a"), false, "no longer held");
+  assert.equal(m.withdraw("mk-a"), false, "on its way: too late to take back");
+  sent[0].reply.resolve(answer(200));
+  await goes; await tick();
+  assert.equal(sent.length, 2, "then the op behind it");
+  sent[1].reply.resolve(answer(200));
+  await behind;
+  assert.equal(m.hurry("nobody"), false, "an unknown key is not held");
+});
+
 test("a held flush op goes with the pagehide flush, keeps its key when the hold is up, and arms no unsaved prompt", async () => {
   const { m, sent, fire } = harness();
   const win = new EventTarget() as EventTarget & { __strataSettled?: () => Promise<void> };

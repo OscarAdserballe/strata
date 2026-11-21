@@ -1,6 +1,6 @@
 import type { Mark, MarkReply } from "../../../shared/types/index.ts";
 import { store as roomStore, type Store } from "../store.ts";
-import { discard, mutate, pending, type Op } from "../mutate.ts";
+import { discard, hurry, mintKey, mutate, pending, withdraw, type Op } from "../mutate.ts";
 import { marksKey, revOf } from "./boards.ts";
 
 // A mark's id is its identity, never the op's key: a redo of an undone create is a new act with a new key.
@@ -78,6 +78,13 @@ export const markOps = {
 
 export const marks = {
   create: (board: string, draft: MarkDraft) => mutate(markOps.create(board, draft)),
+  /** A create painted now and held up to `ms`: `send(key)` lets it go early, `takeBack(key)` unmakes it unsent. */
+  hold: (board: string, draft: MarkDraft, ms: number) => {
+    const key = mintKey();
+    return { key, saving: mutate({ ...markOps.create(board, draft), key, holdMs: ms }) };
+  },
+  send: (key: string) => hurry(key),
+  takeBack: (key: string) => withdraw(key),
   note: (board: string, id: string, note: string | null) => mutate(markOps.note(board, id, note)),
   reply: (board: string, mid: string, text: string) => mutate(markOps.reply(board, mid, newReplyId(), text)),
   remove: (board: string, id: string, undo = false) => mutate(markOps.remove(board, id, undo)),
