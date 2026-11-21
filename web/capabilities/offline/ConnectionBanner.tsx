@@ -9,7 +9,6 @@ export default function ConnectionBanner() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const banner = useRef<HTMLDivElement>(null);
-  const waiting = useSyncExternalStore(subscribePending, () => pending().length);
   const refused = useSyncExternalStore(subscribeUnsynced, unsynced);
   const [listOpen, setListOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -61,7 +60,6 @@ export default function ConnectionBanner() {
   const copy = async () => {
     try { await navigator.clipboard.writeText(unsyncedText(refused)); setCopied(true); } catch { setListOpen(true); }
   };
-  const changes = waiting ? `${waiting} change${waiting === 1 ? "" : "s"} waiting, sent when you’re back` : "reviews, highlights and notes are kept until you’re back";
   return <div ref={banner} className="connection-banner" role="status" aria-live="polite">
     {refused.length ? <div className="unsynced">
       <span><strong>{refused.length} change{refused.length === 1 ? "" : "s"} made offline didn’t land</strong> · copy the list to sort them out</span>
@@ -70,9 +68,15 @@ export default function ConnectionBanner() {
       <button onClick={() => { clearUnsynced(); setListOpen(false); setCopied(false); }}>Clear</button>
       {listOpen ? <textarea readOnly aria-label="Changes that didn't land" value={unsyncedText(refused)} onFocus={(e) => e.currentTarget.select()} /> : null}
     </div> : null}
-    {connection.offline ? <span><strong>Offline</strong> · {savedAt ? `saved copies from ${new Date(savedAt).toLocaleString()}` : "saved date unavailable"} · {changes}</span>
+    {connection.offline ? <span><strong>Offline</strong> · {savedAt ? `saved copies from ${new Date(savedAt).toLocaleString()}` : "saved date unavailable"} · <Waiting /></span>
       : !connection.needsReload ? null : <><span>{connection.outdated ? "Strata was updated · this page is an older version." : "Back online · reload to refresh saved content."}</span>
         <button onClick={update} disabled={busy}>{busy ? "Checking…" : connection.outdated ? "Reload" : "Refresh now"}</button></>}
     {error ? <span>{error}</span> : null}
   </div>;
+}
+
+// mounted only while offline: online, every save would otherwise commit the banner
+function Waiting() {
+  const n = useSyncExternalStore(subscribePending, () => pending().length);
+  return <>{n ? `${n} change${n === 1 ? "" : "s"} waiting, sent when you’re back` : "reviews, highlights and notes are kept until you’re back"}</>;
 }

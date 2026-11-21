@@ -1,8 +1,6 @@
 import type { Outbox, SavedOp, Unsynced } from "./mutate.ts";
 
-/* Writes made offline outlive the tab here, in IndexedDB: `ops` holds what is still owed to the server,
-   `unsynced` what the server refused once it came back. The conflicts list reads `unsynced`; the person
-   copies it as text and clears it, so nothing is resolved here. */
+// Offline writes outlive the tab here: `ops` is what is still owed, `unsynced` what the server refused after.
 
 const OPS = "ops", UNSYNCED = "unsynced";
 const dbName = (): string => {
