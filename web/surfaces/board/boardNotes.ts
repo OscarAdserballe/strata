@@ -3,6 +3,7 @@ import { NotesSave } from "../../data/notes-save.ts";
 import { notesSender } from "../../data/entities/notes.ts";
 import { StrataAnswer, StrataFromShelf } from "../../data/api.ts";
 import { mutator } from "../../data/mutate.ts";
+import { outbox } from "../../data/outbox.ts";
 
 export interface NotesView {
   text: string;
@@ -20,8 +21,17 @@ const publish = (next: NotesView) => {
 let failed: (e: unknown) => void = () => {};
 let save: NotesSave | null = null;
 export function notesSave(): NotesSave {
-  return save ??= new NotesSave({ send: notesSender(), failed: (e) => failed(e) });
+  // a clash is listed by the offline banner, so it is not said again in a toast
+  return save ??= new NotesSave({ send: notesSender(), failed: (e) => { if (!(e as { clashed?: boolean } | null)?.clashed) failed(e); } });
 }
+
+// the box holding the clashed text settles it itself, or its next save would be refused again
+outbox.resolver("notes", (clash, how) => {
+  const ns = notesSave(), board = clash.where.board;
+  if (!ns.holdsConflict(board)) return false;
+  if (how === "mine") ns.keepMine(); else boardNotes.set(ns.useTheirs());
+  return true;
+});
 
 export const boardNotes = {
   view: (): NotesView => view,

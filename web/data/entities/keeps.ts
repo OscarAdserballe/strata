@@ -3,6 +3,7 @@ import { StrataAnswer } from "../api.ts";
 import { store as roomStore, type Store } from "../store.ts";
 import { mutator as roomMutator, type Mutator, type Op } from "../mutate.ts";
 import { revOf } from "./boards.ts";
+import { Outbox, outbox as roomOutbox } from "../outbox.ts";
 
 // One op per card changed (never the whole set), so an earlier toggle's answer never undoes a later guess.
 
@@ -42,8 +43,18 @@ export function holdKeeps(slug: string, read: DeckKeepsResponse, s: Store = room
   s.apply<KeptSet>(keepsKey(slug), revOf(read.rev), { ids: read.ids ?? [] }, meta?.origin ?? "wire", { epoch: meta?.epoch ?? "", stamp: meta?.stamp });
 }
 
-/** Ops that run out of retries release their lanes with their guess removed. */
+export type KeepAct = { do: "toggle"; slug: string; id: string; keep: boolean } | { do: "question"; slug: string; board: string; mint: string };
+export const keepActOp = (a: KeepAct): Op<any> => (a.do === "toggle" ? keepOps.toggle(a.slug, a.id, a.keep) : keepOps.keepQuestion(a.slug, a.board, a.mint));
+roomOutbox.kind<KeepAct>("keep", { build: keepActOp, release: true });
+
+/** Ops that run out of retries release their lanes with their guess removed; offline they wait on the device. */
 export const keeps = {
-  toggle: (slug: string, id: string, keep: boolean, m: Mutator = roomMutator) => m.release(keepOps.toggle(slug, id, keep)),
-  keepQuestion: (slug: string, board: string, mint: string, m: Mutator = roomMutator) => m.release(keepOps.keepQuestion(slug, board, mint)),
+  toggle: (slug: string, id: string, keep: boolean, m: Mutator = roomMutator) => sendKeep(m, { do: "toggle", slug, id, keep }) as Promise<DeckKeepsResponse>,
+  keepQuestion: (slug: string, board: string, mint: string, m: Mutator = roomMutator) => sendKeep(m, { do: "question", slug, board, mint }) as Promise<DeckKeepMintedResponse>,
 };
+const outboxes = new WeakMap<Mutator, Outbox>([[roomMutator, roomOutbox]]);
+function sendKeep(m: Mutator, a: KeepAct): Promise<unknown> {
+  let o = outboxes.get(m);
+  if (!o) { o = new Outbox(m); o.kind<KeepAct>("keep", { build: keepActOp, release: true }); outboxes.set(m, o); }
+  return o.send("keep", a);
+}

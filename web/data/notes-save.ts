@@ -111,6 +111,9 @@ export class NotesSave {
     this.publish();
   }
 
+  /** The box on `board` holds a text it was refused over, waiting on keepMine or useTheirs. */
+  holdsConflict(board: string): boolean { return this.board === board && this.theirs !== null; }
+
   keepMine(): void {
     if (this.theirs === null) return;
     this.theirs = null;

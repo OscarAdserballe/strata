@@ -1,4 +1,5 @@
 import { mintKey, mutator as roomMutator, type Mutator, type Op, type PendingOp, type SaveError } from "../mutate.ts";
+import { localShelf, noShelf, type Shelf } from "../outbox.ts";
 
 export type GradeRequest = {
   requestId: string; course: string; card: string; got: boolean; ms?: number;
@@ -71,20 +72,8 @@ const realTimers: Timers = {
 
 const mine = (ops: PendingOp[]) => ops.filter((p) => p.lanes.includes(GRADES_LANE));
 
-/** Where unconfirmed grades wait, so a tab closed on the plane still owes them on the next open. */
-export interface Shelf { put(id: string, value: string): void; drop(id: string): void; all(): string[] }
+export type { Shelf };
 const OUTBOX = "strata.outbox.grade.";
-const localShelf: Shelf = {
-  put: (id, value) => { try { localStorage.setItem(OUTBOX + id, value); } catch { /* private window or full: the grade still rides the tab */ } },
-  drop: (id) => { try { localStorage.removeItem(OUTBOX + id); } catch { /* no storage */ } },
-  all: () => {
-    const out: string[] = [];
-    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k?.startsWith(OUTBOX)) out.push(localStorage.getItem(k) ?? ""); } }
-    catch { /* no storage */ }
-    return out;
-  },
-};
-const noShelf: Shelf = { put: () => {}, drop: () => {}, all: () => [] };
 
 export class Grades {
   private state: GradeState = { pending: 0, error: null };
@@ -96,7 +85,7 @@ export class Grades {
   private readonly timers: Timers;
   private readonly shelf: Shelf;
 
-  constructor(m: Mutator = roomMutator, timers: Timers = realTimers, shelf: Shelf = typeof localStorage === "undefined" ? noShelf : localShelf) {
+  constructor(m: Mutator = roomMutator, timers: Timers = realTimers, shelf: Shelf = typeof localStorage === "undefined" ? noShelf : localShelf(OUTBOX)) {
     this.m = m;
     this.timers = timers;
     this.shelf = shelf;

@@ -37,8 +37,18 @@ and every read must be ordered against the writes it may have missed.
 - **One save path** (`web/data/mutate.ts`). Every write is an op: it waits in the FIFO lanes it
   names (`mark:<id>`, `notes:<board>`, `grades`…), carries one key minted once and reused on every
   retry, and is retried on a lost answer, timeout, 408/425/429 or 5xx. A 409 rebuilds the op once
-  from the current value; any other 4xx rolls back and says why. Offline, writes are refused rather
-  than queued. Unsent writes flush with `keepalive` when the page hides.
+  from the current value; any other 4xx rolls back and says why. Offline, an op marked
+  `waitsOffline` is taken, painted and held on its lanes until the wire is back; any other write is
+  refused. Unsent writes flush with `keepalive` when the page hides.
+- **Outbox** (`web/data/outbox.ts`). Grades, marks, keeps and board notes wait offline. Each is
+  shelved in `localStorage` (`strata.outbox.<kind>.<key>`) under the receipt it is sent with, and
+  dropped once the server confirms or refuses it. On open, `restore()` puts back what an earlier tab
+  never heard confirmed, in the order it was made, so each lane keeps its order and a replay is the
+  same write. A notes save is a whole document: only the newest per board is replayed, its If-Match
+  frozen at the click. A highlight's note written offline carries `was`, the note it is written
+  over, and the server refuses it with a 409 if another note is there now. If a save that waited
+  offline gets a 409 with a different text, it is not written over. It becomes a clash (`strata.clash.<key>`: where, mine, theirs, rev), listed by the
+  offline banner until you keep mine (sent over the new rev), keep theirs, or hand it to an agent.
 - **Undo.** An op may be held (`holdMs`): its layers paint at once, it leaves only when the hold is
   up, and until then `withdraw(key)` takes it back unsent. The pagehide flush sends a held op early.
   A source's delete is held 8 s for the Undo in its toast; the server keeps that source's kept cards.
@@ -46,5 +56,5 @@ and every read must be ordered against the writes it may have missed.
 ## Checked by
 
 - `test/integration/receipts.test.ts`, `revisions.test.ts`, `concurrency.test.ts`, `receipt-modes.test.ts`
-- `web/data/store.test.ts`, `web/data/mutate.test.ts`
+- `web/data/store.test.ts`, `web/data/mutate.test.ts`, `web/data/outbox.test.ts`
 - `tools/race/scenarios.mjs`: each journey ends in invariants checked against the server's database
