@@ -1,6 +1,7 @@
-// The room's one bar: Today, Projects and Review, the day counter, Jump to and + Add. Every screen but the reader wears it.
+// The room's one bar: Today, Projects, Review and a link out to the dashboard, the day counter, Jump to and + Add. Every screen but the reader wears it.
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import type { RegisterResponse } from "../../shared/types/index.ts";
+import { StrataPath } from "../data/api.ts";
 import { useEntity } from "../data/store.ts";
 import { REGISTER } from "../data/entities/sources.ts";
 import { useReviewStrip } from "../data/entities/review.ts";
@@ -78,6 +79,7 @@ export default function TopNav(p: TopNavProps) {
         {tab("today", "Today", () => openTab("today"))}
         {tab("projects", "Projects", () => openTab("projects"))}
         {tab("review", <>Review{due ? <span className="tn-badge">{due}</span> : null}</>, () => { journey("review.open"); setReviewing(true); })}
+        <a className="tn-tab" href={StrataPath("/dashboard")}>Dashboard</a>
       </div>
       <span className="tn-grow" />
       {p.tools}

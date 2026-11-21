@@ -1,4 +1,5 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
+import { StrataPath } from "../../data/api.ts";
 import { store } from "../../data/store.ts";
 import { DASH_KEY, DISPATCH_KEY, useDashBoard, useDispatch } from "../../data/entities/dashboard.ts";
 import { hideToast, subscribeToast, toastSaid } from "../../shell/layers.ts";
@@ -65,6 +66,7 @@ function Header() {
   return (
     <header className="dh">
       <div className="dh-side">
+        <a className="dh-reader" href={StrataPath("/")}>← Reader</a>
         <div className="dh-modes" role="tablist" aria-label="Mode">
           {(["focus", "dispatch"] as Mode[]).map((m) => <button key={m} role="tab" aria-selected={nav.mode === m} onClick={() => go({ mode: m })}>
             {m === "focus" ? "Focus" : "Dispatch"}</button>)}
