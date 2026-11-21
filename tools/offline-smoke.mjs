@@ -34,7 +34,8 @@ try {
   await context.setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.locator(".connection-banner").getByText(/saved copies from/).waitFor();
-  assert.match(await page.locator(".connection-banner").innerText(), /changes can’t be saved/);
+  // offline is no longer read-only: the banner says writes wait on the device
+  assert.match(await page.locator(".connection-banner").innerText(), /save here and sync later/);
   await page.getByRole("navigation", { name: "Strata" }).getByRole("button", { name: "Today", exact: true }).click();
   assert.ok(await page.locator(".connection-banner").isVisible(), "library must retain the offline notice");
   await page.setViewportSize({ width: 390, height: 844 });
