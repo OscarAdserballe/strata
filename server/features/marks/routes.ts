@@ -71,8 +71,13 @@ export const markRoutes: Route[] = [
     const [boardId, mid] = params;
     const cur = q.mark.get(boardId, mid) as MarkRow | undefined;
     if (!cur) { sendJson(res, 404, { error: "no such mark" }); return; }
-    const b = await body<{ note?: string | null }>();
-    const note = b.note == null || !String(b.note).trim() ? null : String(b.note).slice(0, 4000);
+    const b = await body<{ note?: string | null; was?: string | null }>();
+    const said = (v: unknown) => (v == null || !String(v).trim() ? null : String(v).slice(0, 4000));
+    const note = said(b.note);
+    // written over a note that has changed since (another device, or an agent): refuse rather than overwrite it
+    if ("was" in b && said(b.was) !== cur.note && note !== cur.note) {
+      sendJson(res, 409, { error: "that note changed elsewhere", conflict: { rev: boardRev(boardId), value: { note: cur.note } } }); return;
+    }
     commit(() => {
       q.setMarkNote.run(note, now(), boardId, mid);
       logEvent(db, APP, "mark_note", { board: boardId, said: !!note }, ssn);

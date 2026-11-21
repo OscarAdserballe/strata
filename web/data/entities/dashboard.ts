@@ -56,6 +56,11 @@ const onTasks = (id: string, fn: (t: DashTask) => DashTask | null) => (v: DashBo
 const lane = (id: string) => `dash:${id}`;
 
 export const dashOps = {
+  /** An item in the inbox, as an agent would add it; the key makes a resend land once. */
+  inbox(item: { title: string; context?: string; body?: string; from: DashFrom; links?: DashLink[]; area?: string }, key: string, s: Store = roomStore): Op<DashAnswer> {
+    return { label: "file that in Dispatch", lanes: ["dash:inbox"], method: "POST", path: "/api/dashboard/inbox", body: item, key,
+      confirm: (res, meta) => takeState(res, meta, s) };
+  },
   keep(id: string, area: string, s: Store = roomStore): Op<DashAnswer> {
     return { label: "keep that item", lanes: [lane(id)], method: "POST", path: `/api/dashboard/inbox/${id}/keep`, body: { stage: "todo", area },
       optimistic: [{ key: DASH_KEY, apply: (v: DashBoard | undefined) => v && { ...v, inbox: v.inbox.filter((i) => i.id !== id) } }],

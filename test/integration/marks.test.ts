@@ -117,3 +117,21 @@ test("marks travel with the pair that moves to another board", async () => {
   await api(`/api/boards/${from.board.id}`, { method: "DELETE" });
   await api(`/api/boards/${to.board.id}`, { method: "DELETE" });
 });
+
+test("a note written over one that has changed since is a 409 carrying theirs; nothing is overwritten", async () => {
+  const { body: made } = await api("/api/boards", { method: "POST", body: JSON.stringify({ title: "note clash" }) });
+  const id = made.board.id;
+  const { body: res } = await api(`/api/boards/${id}/resources`, { method: "POST", body: JSON.stringify({ filename: "a.md", text: "Alpha beta gamma delta epsilon." }) });
+  const { body: mk } = await api(`/api/boards/${id}/marks`, { method: "POST", body: JSON.stringify({ resourceId: res.id, start: 6, end: 16, quote: "beta gamma" }) });
+  const patch = (note: string | null, was: string | null) => api(`/api/boards/${id}/marks/${mk.id}`, { method: "PATCH", body: JSON.stringify({ note, was }) });
+
+  assert.equal((await patch("toward OLS", null)).status, 200, "the laptop writes over an empty note");
+  const clash = await patch("toward OLS because X̂ is mostly noise", null);
+  assert.equal(clash.status, 409, "the plane wrote over the empty note too");
+  assert.deepEqual(clash.body.conflict.value, { note: "toward OLS" });
+  assert.equal((await patch("toward OLS", null)).status, 200, "the same words are no clash");
+  assert.equal((await patch("mine after all", "toward OLS")).status, 200, "keep mine: sent over theirs");
+  const { body: after } = await api(`/api/boards/${id}`);
+  assert.equal(after.marks[0].note, "mine after all");
+  await api(`/api/boards/${id}`, { method: "DELETE" });
+});

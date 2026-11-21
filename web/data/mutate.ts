@@ -2,7 +2,9 @@ import { store as roomStore, type Store } from "./store.ts";
 import { confirmByShape } from "./entities/confirm.ts";
 
 /* The one save path: every write is an Op handed to mutate().
-   - Enqueue refuses at once while the wire is known down, unless the op waitsOffline; else it paints layers and marks queries stale.
+   - Enqueue refuses at once while the wire is known down, unless the op waitsOffline (its caller keeps it) or can be kept (revive); else it paints layers and marks queries stale.
+   - A kept op outlives a reload in the outbox and is rebuilt from its recipe, under the same key, at boot.
+   - A 409 on an op that names a clash becomes a listed Clash (keep mine · keep theirs · hand to an agent), not a toast.
    - Lanes keep order: an op starts when it heads every lane it names; a failed head holds its lanes.
    - One key per op, minted once and reused on every retry and on the pagehide flush.
    - 2xx confirms; a lost answer, deadline, 408/425/429 or 5xx is retried with backoff, paused while offline.
@@ -41,12 +43,31 @@ export interface Op<Res = unknown> {
   holdMs?: number;
   /** Taken while the wire is down and sent on reconnect: only for appends that cannot conflict, kept durable by the caller. */
   waitsOffline?: boolean;
+  /** How to build this op again after a reload; an op with one waits on the device while offline. */
+  revive?: Recipe;
+  /** What a 409 with no rebuild means to the reader: listed as a clash instead of failing out loud. */
+  clash?: (conflict: Conflict) => ClashSpec | null;
+}
+
+/** A serializable way back to an op: build(kind, args) in data/entities/revive.ts. */
+export interface Recipe { kind: string; args: unknown[] }
+export interface ClashSpec { where: string; mine: string; theirs: string; keepMine: Recipe; ref?: string }
+export interface Clash extends ClashSpec { id: string; label: string; at: number }
+
+/** Device storage for kept ops and open clashes; a failure to store only loses the reload safety. */
+export interface OutboxRecord { id: string; type: "op" | "clash"; seq: number; at: number; label: string; key?: string; recipe?: Recipe; clash?: Clash }
+export interface Outbox {
+  put(rec: OutboxRecord): void;
+  drop(id: string): void;
+  list(): Promise<OutboxRecord[]>;
 }
 
 export type PendingState = "held" | "queued" | "sending" | "retrying" | "failed";
 export interface PendingOp {
   id: string; label: string; lanes: string[]; state: PendingState; attempts: number; error: unknown;
   key: string;
+  /** Waiting on this device for the wire. */
+  kept: boolean;
 }
 
 export interface Failure { id: string; label: string; error: SaveError }
@@ -60,6 +81,8 @@ export interface SaveError extends Error {
   epoch?: string;
   /** taken back with withdraw() inside its hold: nothing was sent */
   withdrawn?: boolean;
+  /** listed as a clash: the reader settles it there, so no toast is owed */
+  clashed?: boolean;
 }
 
 /** Resolves for every HTTP status; rejects only when no answer came back at all. */
@@ -94,6 +117,9 @@ export interface MutateDeps {
   now?(): number;
   clearReads?(): void;
   surface?(failure: Failure): void;
+  outbox?: Outbox;
+  /** Builds an op from its recipe; null when the kind is unknown or its args no longer make sense. */
+  build?(recipe: Recipe): Op<unknown> | null;
 }
 
 export const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 16000];
@@ -111,7 +137,7 @@ export function mintKey(): string {
 function saveError(message: string, extra: Partial<SaveError> = {}): SaveError {
   return Object.assign(new Error(message), extra);
 }
-const offline = () => saveError("offline — read only", { status: 0 });
+const offline = () => saveError("offline — this needs the wire", { status: 0 });
 const bytes = (s: string | undefined) => (s === undefined ? 0 : new TextEncoder().encode(s).length);
 const retryableStatus = (status: number) => status === 408 || status === 425 || status === 429 || status >= 500;
 
@@ -139,6 +165,8 @@ interface Item {
   /** Still inside its hold: painted, not yet allowed on the wire. */
   holding: boolean;
   holdTimer: unknown;
+  /** Written to the outbox, so it is dropped from there when it finishes. */
+  stored: boolean;
 }
 
 export class Mutator {
@@ -154,8 +182,10 @@ export class Mutator {
   /** Bytes of keepalive requests in flight; the browser's 64 KB budget is shared by all of them. */
   private aliveBytes = 0;
   private readonly leaving = new Set<() => void>();
-  private d!: Required<Omit<MutateDeps, "transport" | "surface" | "clearReads">> & Pick<MutateDeps, "transport" | "surface" | "clearReads">;
+  private d!: Required<Omit<MutateDeps, "transport" | "surface" | "clearReads" | "outbox" | "build">> & Pick<MutateDeps, "transport" | "surface" | "clearReads" | "outbox" | "build">;
   private offWire: (() => void) | null = null;
+  private clashList: Clash[] = [];
+  private readonly clashListeners = new Set<() => void>();
 
   constructor(deps: MutateDeps = {}) { this.configure(deps); }
 
@@ -175,8 +205,8 @@ export class Mutator {
     }
   }
 
-  mutate<Res>(op: Op<Res>): Promise<Res> {
-    if (this.d.wire.down() && !op.waitsOffline) return Promise.reject(offline());
+  mutate<Res>(op: Op<Res>, key?: string): Promise<Res> {
+    if (this.d.wire.down() && !op.waitsOffline && !op.revive) return Promise.reject(offline());
     if (!this.d.transport) return Promise.reject(saveError("the save path is not wired to data/api.ts yet"));
     return new Promise<Res>((resolve, reject) => {
       const waiter = { resolve: resolve as (v: unknown) => void, reject };
@@ -186,9 +216,9 @@ export class Mutator {
         was.waiters.push(waiter);
       } else {
         const item: Item = {
-          id: `op${++this.seq}`, seq: this.seq, op: op as Op<unknown>, key: op.key ?? mintKey(), body: undefined,
+          id: `op${++this.seq}`, seq: this.seq, op: op as Op<unknown>, key: key ?? op.key ?? mintKey(), body: undefined,
           state: "queued", attempts: 0, sent: false, error: null, removers: [], waiters: [waiter],
-          timer: null, due: null, remaining: null, conflicts: 0, carrying: 0, holding: false, holdTimer: null,
+          timer: null, due: null, remaining: null, conflicts: 0, carrying: 0, holding: false, holdTimer: null, stored: false,
         };
         if (op.holdMs && op.holdMs > 0) {
           item.holding = true;
@@ -202,10 +232,50 @@ export class Mutator {
           if (!queue) this.lanes.set(lane, queue = []);
           queue.push(item);
         }
+        if (this.d.wire.down()) this.keep(item);
       }
       this.changed();
       this.pump();
     });
+  }
+
+  /** Writes a kept op to the outbox, so a reload in the air does not lose it. */
+  private keep(item: Item): void {
+    if (item.stored || !item.op.revive || !this.d.outbox) return;
+    item.stored = true;
+    try { this.d.outbox.put({ id: item.key, type: "op", seq: item.seq, at: this.d.now(), label: item.op.label, key: item.key, recipe: item.op.revive }); }
+    catch (e) { console.error("[strata] keeping", item.op.label, e); }
+  }
+
+  private unkeep(item: Item): void {
+    if (!item.stored) return;
+    item.stored = false;
+    try { this.d.outbox?.drop(item.key); } catch { /* storage gone: nothing left to drop */ }
+  }
+
+  /** At boot: kept ops come back under their own keys (a receipt makes a landed one a replay), and clashes come back listed. */
+  async revive(): Promise<number> {
+    const { outbox, build } = this.d;
+    if (!outbox || !build) return 0;
+    let records: OutboxRecord[];
+    try { records = await outbox.list(); } catch { return 0; }
+    let n = 0;
+    for (const rec of records.sort((a, b) => a.seq - b.seq || a.at - b.at)) {
+      if (rec.type === "clash" && rec.clash) {
+        if (!this.clashList.some((c) => c.id === rec.clash!.id)) { this.clashList = [...this.clashList, rec.clash]; this.clashesChanged(); }
+        continue;
+      }
+      if (!rec.recipe || !rec.key || this.items.some((i) => i.key === rec.key)) continue;
+      let op: Op<unknown> | null = null;
+      try { op = build(rec.recipe); } catch (e) { console.error("[strata] reviving", rec.label, e); }
+      if (!op) { outbox.drop(rec.id); continue; }
+      n++;
+      const item = this.mutate(op, rec.key);
+      const live = this.items.find((i) => i.key === rec.key);
+      if (live) live.stored = true;
+      item.catch(() => {});
+    }
+    return n;
   }
 
   /** Read-only POSTs: no lane, no key, no retry, no registry. */
@@ -235,6 +305,8 @@ export class Mutator {
 
   /** Replaces the item's op (coalesced, or rebuilt after a 409): a new request, so a new key. */
   private rebuild(item: Item, op: Op<unknown>, toHead: boolean): void {
+    const wasKept = item.stored;
+    this.unkeep(item);
     this.unpaint(item);
     const lanesMoved = toHead || op.lanes.join("\n") !== item.op.lanes.join("\n");
     if (lanesMoved) this.leaveLanes(item);
@@ -250,7 +322,7 @@ export class Mutator {
       if (!queue) this.lanes.set(lane, queue = []);
       if (toHead) queue.unshift(item); else queue.push(item);
     }
-    this.paint(item);
+    this.paint(item);    if (wasKept) this.keep(item);
   }
 
   private leaveLanes(item: Item): void {
@@ -389,6 +461,7 @@ export class Mutator {
   private wireChanged(): void {
     const down = this.d.wire.down();
     for (const item of this.items) {
+      if (down) this.keep(item);
       if (down && item.timer !== null) {
         this.d.clearTimer(item.timer);
         item.timer = null;
@@ -396,7 +469,7 @@ export class Mutator {
         item.due = null;
       } else if (!down && item.remaining !== null) this.wait(item, item.remaining);
     }
-    if (!down) this.pump();
+    if (down) this.changed(); else this.pump();
   }
 
   /** Out of retries: layers stay and lanes stay held until retry(id) or discard(id). */
@@ -417,21 +490,60 @@ export class Mutator {
     if (take) this.d.store.patch(take.key, conflict.rev, (held) => take.fold(held, conflict), { epoch: answer.epoch, ordered: take.rev ?? true });
     for (const stale of this.behind(item)) if (stale.op.base) this.fail(stale, this.refusal(answer));
     const next = ++item.conflicts < 2 ? item.op.onConflict?.(conflict, answer.epoch) ?? null : null;
-    if (!next) return this.fail(item, this.refusal(answer));
+    if (!next) {
+      let spec: ClashSpec | null = null;
+      try { spec = item.op.clash?.(conflict) ?? null; } catch (e) { console.error("[strata] clash", item.op.label, e); }
+      if (spec) return this.fail(item, saveError(`${item.op.label}: it changed elsewhere, so it waits in the clash list`, { status: 409, conflict, clashed: true }), spec);
+      return this.fail(item, this.refusal(answer));
+    }
     this.rebuild(item, next as Op<unknown>, true);
     this.changed();
     this.pump();
   }
 
-  private fail(item: Item, error: SaveError): void {
+  private fail(item: Item, error: SaveError, clash?: ClashSpec): void {
     this.unpaint(item);
     this.d.store.settle(item.id, null);
     for (const w of item.waiters) w.reject(error);
     this.finish(item);
+    if (clash) return this.list({ ...clash, id: `clash-${item.key}`, label: item.op.label, at: this.d.now() });
     this.d.surface?.({ id: item.id, label: item.op.label, error });
   }
 
+  private list(clash: Clash): void {
+    if (this.clashList.some((c) => c.id === clash.id)) return;
+    this.clashList = [...this.clashList, clash];
+    try { this.d.outbox?.put({ id: clash.id, type: "clash", seq: 0, at: clash.at, label: clash.label, clash }); }
+    catch (e) { console.error("[strata] listing a clash", e); }
+    this.clashesChanged();
+  }
+
+  /** A stable array of open clashes, new only when one comes or goes. */
+  clashes(): Clash[] { return this.clashList; }
+
+  subscribeClashes(cb: () => void): () => void {
+    this.clashListeners.add(cb);
+    return () => { this.clashListeners.delete(cb); };
+  }
+
+  /** Settles a clash: mine sends the recipe it carries, agent files both texts in Dispatch, theirs just takes it off the list. */
+  settleClash(id: string, how: "mine" | "theirs" | "agent"): Promise<unknown> {
+    const clash = this.clashList.find((c) => c.id === id);
+    if (!clash) return Promise.resolve(null);
+    const recipe = how === "mine" ? clash.keepMine : how === "agent" ? { kind: "clash.agent", args: [clash] } : null;
+    const op = recipe ? this.d.build?.(recipe) ?? null : null;
+    if (recipe && !op) return Promise.reject(saveError("this clash can't be sent from here"));
+    const sent = op ? this.mutate(op, how === "agent" ? clash.id : undefined) : Promise.resolve(null);
+    this.clashList = this.clashList.filter((c) => c !== clash);
+    try { this.d.outbox?.drop(clash.id); } catch { /* storage gone */ }
+    this.clashesChanged();
+    return sent;
+  }
+
+  private clashesChanged(): void { for (const cb of [...this.clashListeners]) cb(); }
+
   private finish(item: Item): void {
+    this.unkeep(item);
     if (item.timer !== null) this.d.clearTimer(item.timer);
     item.timer = null;
     if (item.holdTimer !== null) this.d.clearTimer(item.holdTimer);
@@ -510,7 +622,7 @@ export class Mutator {
   }
 
   private changed(): void {
-    this.snapshot = this.items.map((i) => ({ id: i.id, label: i.op.label, lanes: i.op.lanes, state: i.holding && i.state === "queued" ? "held" : i.state, attempts: i.attempts, error: i.error, key: i.key }));
+    this.snapshot = this.items.map((i) => ({ id: i.id, label: i.op.label, lanes: i.op.lanes, state: i.holding && i.state === "queued" ? "held" : i.state, attempts: i.attempts, error: i.error, key: i.key, kept: i.stored }));
     for (const cb of [...this.listeners]) cb();
     if (!this.items.length && this.idle.length) {
       const idle = this.idle;
@@ -576,8 +688,8 @@ export class Mutator {
     const guard = (e: Event) => { e.preventDefault(); (e as BeforeUnloadEvent).returnValue = ""; };
     let armed = false;
     this.rearm = () => {
-      // a held op goes out with the pagehide flush, so its undo window alone is no reason to ask
-      const want = this.items.some((i) => !i.holding) || [...this.holders].some((owes) => owes());
+      // a held op goes out with the pagehide flush, and a kept one waits in the outbox: neither is a reason to ask
+      const want = this.items.some((i) => !i.holding && !i.stored) || [...this.holders].some((owes) => owes());
       if (want === armed) return;
       armed = want;
       if (want) win.addEventListener("beforeunload", guard);
@@ -602,3 +714,6 @@ export const discard = (id: string): void => mutator.discard(id);
 export const withdraw = (key: string): boolean => mutator.withdraw(key);
 export const discardFailed = (lane: string): void => mutator.discardFailed(lane);
 export const release = <Res>(op: Op<Res>): Promise<Res> => mutator.release(op);
+export const clashes = (): Clash[] => mutator.clashes();
+export const subscribeClashes = (cb: () => void): (() => void) => mutator.subscribeClashes(cb);
+export const settleClash = (id: string, how: "mine" | "theirs" | "agent"): Promise<unknown> => mutator.settleClash(id, how);

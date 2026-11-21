@@ -3,8 +3,8 @@ import type { PendingOp } from "../data/mutate.ts";
 export const SLOW_MS = 1000;
 
 export function saveLine(all: readonly PendingOp[], slow: boolean): string {
-  // a held op is waiting out its undo, not saving
-  const ops = all.filter((p) => p.state !== "held");
+  // a held op is waiting out its undo and a kept one the wire (the banner counts those), neither is saving
+  const ops = all.filter((p) => p.state !== "held" && !p.kept);
   const failed = ops.filter((p) => p.state === "failed").length;
   if (failed) return String(failed);
   return ops.length && (slow || ops.some((p) => p.state === "retrying")) ? "saving" : "";
@@ -21,7 +21,7 @@ export function saveWatch(m: SaveSource, timers: Timers = browserTimers) {
     let told = read();
     const tell = () => { const now = read(); if (now !== told) { told = now; changed(); } };
     const tick = () => {
-      const busy = m.pending().some((p) => p.state !== "failed" && p.state !== "held");
+      const busy = m.pending().some((p) => p.state !== "failed" && p.state !== "held" && !p.kept);
       if (!busy) { if (timer !== null) timers.clear(timer); timer = null; slow = false; }
       else if (!slow && timer === null) timer = timers.set(() => { timer = null; slow = true; tell(); }, SLOW_MS);
       tell();

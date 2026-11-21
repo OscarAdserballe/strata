@@ -22,9 +22,9 @@ test("a bare status is turned into something a person can act on", () => {
   assert.equal(StrataReason(err("HTTP 500", 500)), "the server said 500");
 });
 
-test("offline is named as offline — and read-only, which is the part that explains it", () => {
+test("offline is named as offline, and says this write is one that needs the wire", () => {
   // refuseWrite's error: status 0, thrown before fetch was ever reached
-  assert.match(StrataReason(err("offline — read only", 0)), /offline, and offline is read-only/);
+  assert.match(StrataReason(err("offline — read only", 0)), /offline, and this one needs the wire/);
 });
 
 test("a fetch that never got a status says the server didn't answer, not the browser's dialect", () => {

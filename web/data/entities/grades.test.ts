@@ -18,7 +18,9 @@ function harness() {
   const setTimer = (fn: () => void, ms: number) => { const t = { id: ++ids, fn, ms }; timers.push(t); return t.id; };
   const clearTimer = (id: unknown) => { const at = timers.findIndex((t) => t.id === id); if (at >= 0) timers.splice(at, 1); };
   const sent: { req: SendRequest; reply: ReturnType<typeof deferred<SendAnswer>> }[] = [];
-  const wire = { isDown: false, down: () => wire.isDown, subscribe: () => () => {} };
+  const heard = new Set<() => void>();
+  const wire = { isDown: false, down: () => wire.isDown, subscribe: (fn: () => void) => { heard.add(fn); return () => { heard.delete(fn); }; },
+    set(down: boolean) { wire.isDown = down; for (const fn of [...heard]) fn(); } };
   const m = new Mutator({
     store: new Store(), wire, setTimer, clearTimer, now: () => 0,
     transport: (req) => { const reply = deferred<SendAnswer>(); sent.push({ req, reply }); return reply.promise; },

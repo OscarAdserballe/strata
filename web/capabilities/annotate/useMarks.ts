@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { widenQuote } from "../../../shared/reading/compile-quote.ts";
 import type { MutableRefObject } from "react";
 import type { Mark } from "../../../shared/types/index.ts";
-import { StrataAPI, StrataWireDown } from "../../data/api.ts";
+import { StrataAPI } from "../../data/api.ts";
 import { store as roomStore } from "../../data/store.ts";
 import { marksKey } from "../../data/entities/boards.ts";
 import { marks as markOps, newMarkId, type MarkDraft } from "../../data/entities/marks.ts";
@@ -113,8 +113,6 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
     const st = reader.live();
     const id = st.activeId, s = st.src;
     if (!id || !s || st.onHome || st.treeOpen) return;
-    // the ref, not the render-time snapshot: the menu can be clicked before a re-render
-    if (StrataWireDown()) { toast("offline — marks need the wire (read only)"); return; }
     const sel = selectionNow() as (PdfRange | (ReturnType<typeof proseSelection> & { page?: number; rects?: number[][] })) | null;
     if (!sel) { toast("select a passage first"); return; }
     const payload = {

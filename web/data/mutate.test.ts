@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Store } from "./store.ts";
-import { Mutator, RETRY_DELAYS_MS, ATTEMPT_DEADLINE_MS, type Failure, type Op, type SaveError, type SendAnswer, type SendRequest } from "./mutate.ts";
+import { Mutator, RETRY_DELAYS_MS, ATTEMPT_DEADLINE_MS, type Failure, type Op, type OutboxRecord, type SaveError, type SendAnswer, type SendRequest } from "./mutate.ts";
 
 const tick = async () => { for (let i = 0; i < 3; i++) await new Promise((resolve) => setImmediate(resolve)); };
 function deferred<T>() {
@@ -202,7 +202,7 @@ test("while the wire is down the retry clock is paused, not spent; accepted ops 
   await second;
 });
 
-test("offline refuses a new write at once, painting nothing", async () => {
+test("offline refuses a new write that can't be kept, painting nothing", async () => {
   const { m, sent, store, wire } = harness();
   store.apply("notes:b", 1, { text: "server" }, "wire");
   wire.set(true);
@@ -614,4 +614,95 @@ test("an op that waitsOffline is taken while the wire is down and sent when it c
   await waiting;
   assert.equal(sent.length, 1);
   assert.equal(sent[0].path, "/api/g");
+});
+
+function memoryOutbox() {
+  const rows = new Map<string, OutboxRecord>();
+  return { rows, put: (r: OutboxRecord) => { rows.set(r.id, structuredClone(r)); }, drop: (id: string) => { rows.delete(id); }, list: async () => [...rows.values()] };
+}
+const kept = (lanes: string[], extra: Partial<Op> = {}): Op => op(lanes, { revive: { kind: "thing", args: [lanes[0]] }, ...extra });
+
+test("offline, a write that can be kept waits on the device: painted, in the outbox, sent on reconnect and dropped from there", async () => {
+  const { m, sent, store, wire } = harness();
+  const outbox = memoryOutbox();
+  m.configure({ outbox });
+  store.apply("marks:b", 1, [], "wire");
+  wire.set(true);
+  const saving = m.mutate(kept(["mark:1"], { key: "k1", optimistic: [{ key: "marks:b", apply: (l: string[]) => [...l, "mk-1"] }] }));
+  assert.deepEqual(store.get("marks:b"), ["mk-1"], "painted at once, in the air");
+  assert.equal(sent.length, 0);
+  assert.deepEqual(m.pending().map((p) => [p.state, p.kept]), [["queued", true]]);
+  assert.deepEqual([...outbox.rows.values()].map((r) => [r.type, r.key, r.recipe?.kind]), [["op", "k1", "thing"]]);
+  wire.set(false);
+  await tick();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].req.headers["Idempotency-Key"], "k1");
+  sent[0].reply.resolve(answer(200, {}, 2));
+  await saving;
+  assert.equal(outbox.rows.size, 0, "landed: nothing left to keep");
+});
+
+test("ops waiting when the wire drops are kept too", async () => {
+  const { m, sent, wire } = harness();
+  const outbox = memoryOutbox();
+  m.configure({ outbox });
+  m.mutate(kept(["grades"], { key: "g1" })).catch(() => {});
+  m.mutate(op(["other"], { key: "o1" })).catch(() => {});
+  sent[0].reply.reject(lost());
+  sent[1].reply.reject(lost());
+  await tick();
+  wire.set(true);
+  assert.deepEqual([...outbox.rows.keys()], ["g1"], "only an op with a recipe can be built again");
+});
+
+test("at boot the outbox comes back in order under its own keys; an unknown recipe is dropped", async () => {
+  const { m, sent } = harness();
+  const outbox = memoryOutbox();
+  outbox.put({ id: "b", type: "op", seq: 2, at: 0, label: "second", key: "b", recipe: { kind: "thing", args: ["grades"] } });
+  outbox.put({ id: "a", type: "op", seq: 1, at: 0, label: "first", key: "a", recipe: { kind: "thing", args: ["grades"] } });
+  outbox.put({ id: "z", type: "op", seq: 3, at: 0, label: "gone", key: "z", recipe: { kind: "nope", args: [] } });
+  m.configure({ outbox, build: (r) => (r.kind === "thing" ? kept([String(r.args[0])]) : null) });
+  assert.equal(await m.revive(), 2);
+  assert.equal(outbox.rows.has("z"), false);
+  await tick();
+  assert.deepEqual(sent.map((x) => x.req.headers["Idempotency-Key"]), ["a"], "FIFO in its lane, the first one first");
+  sent[0].reply.resolve(answer(200, { replayed: true }));
+  await tick();
+  assert.deepEqual(sent.map((x) => x.req.headers["Idempotency-Key"]), ["a", "b"]);
+  sent[1].reply.resolve(answer(200));
+  await m.settled();
+  assert.equal(outbox.rows.size, 0);
+});
+
+test("a 409 on an op that names a clash is listed, not toasted; keep mine sends its recipe, theirs and agent take it off", async () => {
+  const { m, sent, surfaced } = harness();
+  const outbox = memoryOutbox();
+  const built: string[] = [];
+  m.configure({ outbox, build: (r) => { built.push(r.kind); return op(["x"], { path: `/api/${r.kind}` }); } });
+  const clashing = (key: string) => op(["mark:1"], {
+    key, clash: (c) => ({ where: "note on “beta”", mine: "mine", theirs: String((c.value as { note: string }).note), keepMine: { kind: "mine", args: [] } }),
+  });
+  const one = m.mutate(clashing("c1"));
+  sent[0].reply.resolve(answer(409, { error: "changed", conflict: { rev: 3, value: { note: "theirs" } } }));
+  const e = await failure(one);
+  assert.equal(e.clashed, true);
+  assert.equal(surfaced.length, 0, "the clash list says it, not a toast");
+  assert.deepEqual(m.clashes().map((c) => [c.id, c.mine, c.theirs]), [["clash-c1", "mine", "theirs"]]);
+  assert.equal(outbox.rows.get("clash-c1")?.type, "clash", "a reload keeps the clash");
+
+  void m.settleClash("clash-c1", "mine");
+  assert.deepEqual(built, ["mine"]);
+  assert.equal(sent.at(-1)?.req.path, "/api/mine");
+  assert.deepEqual(m.clashes(), []);
+  assert.equal(outbox.rows.has("clash-c1"), false);
+  sent.at(-1)!.reply.resolve(answer(200));
+
+  const two = m.mutate(clashing("c2"));
+  await tick();
+  sent.at(-1)!.reply.resolve(answer(409, { error: "changed", conflict: { rev: 4, value: { note: "again" } } }));
+  await failure(two);
+  void m.settleClash("clash-c2", "agent");
+  assert.deepEqual(built, ["mine", "clash.agent"]);
+  assert.equal(sent.at(-1)?.req.headers["Idempotency-Key"], "clash-c2", "handing over twice files it once");
+  assert.deepEqual(m.clashes(), []);
 });

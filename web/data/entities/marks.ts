@@ -16,6 +16,7 @@ export const newReplyId = (): string =>
 
 export type MarkDraft = Omit<Mark, "id" | "note" | "createdAt"> & { id?: string; note?: string | null };
 
+const markIn = (s: Store, board: string, id: string): Mark | undefined => s.get<Mark[]>(marksKey(board))?.find((m) => m.id === id);
 const without = (id: string) => (list: Mark[] | undefined) => (list ?? []).filter((m) => m.id !== id);
 
 export const markOps = {
@@ -30,18 +31,32 @@ export const markOps = {
       body: { ...draft, id },
       optimistic: [{ key: marksKey(board), apply: (list: Mark[] | undefined) => [...without(id)(list), mark] }],
       flush: true,
+      revive: { kind: "mark.create", args: [board, { ...draft, id }, mark.createdAt] },
     };
   },
 
-  note(board: string, id: string, note: string | null): Op<{ mark: Mark; rev?: number }> {
+  /** `was` is the note this edit was written over: the server refuses it with a 409 if the note has changed since. */
+  note(board: string, id: string, note: string | null, was: string | null | undefined = markIn(roomStore, board, id)?.note ?? null): Op<{ mark: Mark; rev?: number }> {
     return {
       label: "save that note",
       lanes: [markLane(id)],
       method: "PATCH",
       path: `/api/boards/${board}/marks/${id}`,
-      body: { note },
+      body: was === undefined ? { note } : { note, was },
       optimistic: [{ key: marksKey(board), apply: (list: Mark[] | undefined) => (list ?? []).map((m) => (m.id === id ? { ...m, note } : m)) }],
       flush: true,
+      revive: { kind: "mark.note", args: [board, id, note, was] },
+      clash: (conflict) => {
+        const theirs = (conflict.value as { note?: string | null } | null)?.note ?? null;
+        const quote = markIn(roomStore, board, id)?.quote ?? "";
+        return {
+          where: quote ? `note on “${quote.length > 80 ? `${quote.slice(0, 80)}…` : quote}”` : "a note on a passage",
+          mine: note ?? "", theirs: theirs ?? "",
+          // sent over theirs, so it lands even if theirs is what the server holds now
+          keepMine: { kind: "mark.note", args: [board, id, note, theirs] },
+          ref: `${board}/${id}`,
+        };
+      },
     };
   },
 
@@ -59,6 +74,7 @@ export const markOps = {
       // the answer carries no mark, so the reply is written into its mark here or it would vanish with the optimistic copy
       confirm: (res, meta) => { s.patch<Mark[]>(marksKey(board), revOf(res?.rev), withReply(res?.reply ?? reply), { epoch: meta.epoch, stamp: meta.rev }); },
       flush: true,
+      revive: { kind: "mark.reply", args: [board, mid, id, text, reply.at] },
     };
   },
 
@@ -72,6 +88,7 @@ export const markOps = {
       optimistic: [{ key: marksKey(board), apply: without(id) }],
       confirm: (res, meta) => { s.patch<Mark[]>(marksKey(board), revOf(res?.rev), without(id), { epoch: meta.epoch, stamp: meta.rev }); },
       flush: true,
+      revive: { kind: "mark.remove", args: [board, id, undo] },
     };
   },
 };

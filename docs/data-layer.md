@@ -37,8 +37,15 @@ and every read must be ordered against the writes it may have missed.
 - **One save path** (`web/data/mutate.ts`). Every write is an op: it waits in the FIFO lanes it
   names (`mark:<id>`, `notes:<board>`, `grades`…), carries one key minted once and reused on every
   retry, and is retried on a lost answer, timeout, 408/425/429 or 5xx. A 409 rebuilds the op once
-  from the current value; any other 4xx rolls back and says why. Offline, writes are refused rather
-  than queued. Unsent writes flush with `keepalive` when the page hides.
+  from the current value; any other 4xx rolls back and says why. Unsent writes flush with `keepalive`
+  when the page hides.
+- **Offline.** Grades wait offline on their own shelf (`waitsOffline`, `entities/grades.ts`). An op with a
+  `revive` recipe (keeps, marks and their notes and replies) waits
+  on the device while the wire is down: painted at once and written to IndexedDB (`web/data/outbox.ts`),
+  so a reload in the air rebuilds it from its recipe (`web/data/entities/revive.ts`) under the same key.
+  Any other write is still refused offline. A mark's note carries the note it was written over (`was`);
+  if that changed meanwhile the server answers 409, and an op with a `clash` lists it (keep mine, keep
+  theirs, or hand to an agent, which files both texts in the Dispatch inbox) instead of failing.
 - **Undo.** An op may be held (`holdMs`): its layers paint at once, it leaves only when the hold is
   up, and until then `withdraw(key)` takes it back unsent. The pagehide flush sends a held op early.
   A source's delete is held 8 s for the Undo in its toast; the server keeps that source's kept cards.
@@ -47,4 +54,5 @@ and every read must be ordered against the writes it may have missed.
 
 - `test/integration/receipts.test.ts`, `revisions.test.ts`, `concurrency.test.ts`, `receipt-modes.test.ts`
 - `web/data/store.test.ts`, `web/data/mutate.test.ts`
-- `tools/race/scenarios.mjs`: each journey ends in invariants checked against the server's database
+- `tools/race/scenarios.mjs`: each journey ends in invariants checked against the server's database;
+  `offline-then-sync` covers the offline queue and the clash list

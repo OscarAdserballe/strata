@@ -2167,5 +2167,93 @@ const padTwoTabs = {
   },
 };
 
+// in the air: a highlight and a note edit wait on the device; the laptop changed that note meanwhile; landing, the clash is listed
+const offlineThenSync = {
+  name: "offline-then-sync",
+  what: "offline, highlight a passage and rewrite a note the laptop rewrites too; back online the highlight lands once, the laptop's note is not overwritten, and the clash is listed until Keep mine sends it",
+  checks: {
+    kept: "offline, both writes are painted and nothing is refused",
+    once: "back online the new highlight is on the server exactly once",
+    theirs: "the laptop's note is not overwritten by the one written in the air",
+    listed: "the clash is listed with both texts",
+    mine: "Keep mine puts the note written in the air on the server",
+  },
+  async run(t) {
+    const b = await board(t, "Race offline");
+    const unique = "A write made in the air waits on the device and lands once when the wire comes back.";
+    const phrase = "lands once when the wire comes back";
+    const s = await prose(t, b.id, "race-offline.md", essay("Offline, then sync", unique));
+    const page = await t.open({ latency: true });
+    await page.goto(readerUrl(t, b.id, s));
+    await proseShown(page, unique);
+    await t.net.idle(400);
+    // the note both devices will rewrite, made here before the flight
+    const first = await phraseAt(page, "waits on the device");
+    await page.mouse.move(first.x0, first.y0);
+    await page.mouse.down();
+    await page.mouse.move(first.x1, first.y1, { steps: 4 });
+    await page.mouse.up();
+    await page.locator(".selmenu").getByRole("button", { name: "Note", exact: true }).click();
+    await page.locator(".fold .fi-edit").first().waitFor();
+    await page.keyboard.type("first thoughts");
+    await page.keyboard.press("Escape");
+    await page.evaluate(() => window.__strataSettled?.());
+    await t.net.idle(400);
+    const seeded = t.sql("SELECT id FROM marks WHERE board_id = ? AND note = ?", b.id, "first thoughts")[0]?.id;
+    if (!seeded) throw new Error("the note made before the flight never reached the server");
+    await t.context.setOffline(true);
+    await page.locator(".connection-banner").filter({ hasText: "Offline" }).waitFor();
+    const refusals = [];
+    page.on("console", (m) => { if (/needs the wire|read only/.test(m.text())) refusals.push(m.text()); });
+
+    const at = await phraseAt(page, phrase);
+    await page.mouse.move(at.x0, at.y0);
+    await page.mouse.down();
+    await page.mouse.move(at.x1, at.y1, { steps: 4 });
+    await page.mouse.up();
+    await page.locator(".selmenu").getByRole("button", { name: "Note", exact: true }).click();
+    await page.keyboard.press("Escape");
+    const made = await page.evaluate((seeded) => [...document.querySelectorAll(".page-col.prose .mk[data-mark]")].map((el) => el.dataset.mark).find((id) => id !== seeded) ?? null, seeded);
+
+    const mine = `toward OLS because X̂ is mostly noise, seed ${t.seed}`;
+    await page.locator(`.page-col.prose .mk[data-mark="${seeded}"]`).first().click();
+    await page.locator(".fold .fi-note").first().click();
+    const editor = page.locator(".fold .fi-edit").first();
+    await editor.fill(mine);
+    await page.keyboard.press("Escape");
+    await sleep(300);
+    const banner = await page.locator(".connection-banner").innerText();
+    const toasts = await page.locator(".toast").allInnerTexts().catch(() => []);
+    t.check("kept", !!made && /2 changes kept/.test(banner) && !toasts.some((x) => /offline/.test(x)) && !refusals.length,
+      `banner: ${JSON.stringify(banner)}; toasts: ${JSON.stringify(toasts)}`);
+
+    // the laptop, meanwhile
+    await t.api(`/api/boards/${b.id}/marks/${seeded}`, "PATCH", { note: "toward OLS", was: "first thoughts" });
+    await t.context.setOffline(false);
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    const clash = page.locator(".connection-banner .clash-count");
+    await clash.waitFor({ timeout: 60_000 }).catch(() => {});
+    await page.evaluate(() => window.__strataSettled?.());
+    await t.net.idle(500);
+    const rows = t.sql("SELECT id, note FROM marks WHERE board_id = ?", b.id);
+    const ours = rows.filter((r) => r.id === made);
+    t.check("once", ours.length === 1, `${ours.length} row(s) for ${made}`);
+    t.check("theirs", rows.find((r) => r.id === seeded)?.note === "toward OLS", `the note reads ${JSON.stringify(rows.find((r) => r.id === seeded)?.note)}`);
+    let listed = "";
+    if (await clash.count()) {
+      await clash.click();
+      listed = await page.locator(".clash-list .clash").first().innerText().catch(() => "");
+    }
+    t.check("listed", listed.includes(mine) && listed.includes("toward OLS"), listed ? JSON.stringify(listed.slice(0, 200)) : "no clash listed");
+    if (listed) {
+      await page.locator(".clash-list").getByRole("button", { name: "Keep mine", exact: true }).first().click();
+      await page.evaluate(() => window.__strataSettled?.());
+      await t.net.idle(500);
+    }
+    const after = t.sql("SELECT note FROM marks WHERE id = ?", seeded)[0]?.note;
+    t.check("mine", after === mine, `the note reads ${JSON.stringify(after)}`);
+  },
+};
+
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, offlineThenSync];

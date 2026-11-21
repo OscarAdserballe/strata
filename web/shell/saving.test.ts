@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import type { PendingOp, PendingState } from "../data/mutate.ts";
 import { SLOW_MS, saveLine, saveWatch } from "./saving.ts";
 
-const op = (state: PendingState, id: string = state): PendingOp => ({ id, label: "save", lanes: [], state, attempts: 0, error: null, key: id });
+const op = (state: PendingState, id: string = state): PendingOp => ({ id, label: "save", lanes: [], state, attempts: 0, error: null, key: id, kept: false });
 
 test("the line: quiet, saving, or how many failed", () => {
   assert.equal(saveLine([], false), "");

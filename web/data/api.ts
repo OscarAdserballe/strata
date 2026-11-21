@@ -23,7 +23,7 @@ export function StrataReason(e: unknown): string {
   const msg = String(err.message ?? "").trim();
   const vague = !msg || /^HTTP \d+$/.test(msg);
   // refuseWrite's own error: status 0, thrown before fetch was called
-  if (err.status === 0 || /^offline/i.test(msg)) return "you're offline, and offline is read-only";
+  if (err.status === 0 || /^offline/i.test(msg)) return "you're offline, and this one needs the wire";
   // fetch itself failed: no status, and a message that differs per browser
   if (err.status === undefined) {
     if (!msg) return "no reason given";
@@ -39,7 +39,7 @@ export const StrataWhy = (e: unknown, said: string): string => `${said} — ${St
 export const StrataMB = (n: number): string =>
   n >= 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} MB` : `${Math.max(1, Math.round(n / 1024))} kB`;
 
-// Offline is read-only: while the wire is known down, every mutating call is refused here, before fetch.
+// While the wire is known down, a mutating call that reaches here is refused before fetch; the save path keeps the ones it can.
 let savedAt: number | null = null;
 let unknownSavedAt = false;
 let serverBuild: string | null = null;
