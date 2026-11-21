@@ -1,6 +1,7 @@
 import type { Mark, MarkReply } from "../../../shared/types/index.ts";
 import { store as roomStore, type Store } from "../store.ts";
-import { discard, mutate, pending, type Op } from "../mutate.ts";
+import { discard, pending, type Op } from "../mutate.ts";
+import { outbox } from "../outbox.ts";
 import { marksKey, revOf } from "./boards.ts";
 
 // A mark's id is its identity, never the op's key: a redo of an undone create is a new act with a new key.
@@ -76,11 +77,30 @@ export const markOps = {
   },
 };
 
+/** What a reopened tab rebuilds a shelved mark act from. */
+export type MarkAct =
+  | { do: "create"; board: string; draft: MarkDraft & { id: string }; at: number }
+  | { do: "note"; board: string; id: string; note: string | null }
+  | { do: "reply"; board: string; mid: string; id: string; text: string; at: number }
+  | { do: "remove"; board: string; id: string; undo: boolean };
+
+export function markActOp(a: MarkAct): Op<any> {
+  switch (a.do) {
+    case "create": return markOps.create(a.board, a.draft, () => a.at);
+    case "note": return markOps.note(a.board, a.id, a.note);
+    case "reply": return markOps.reply(a.board, a.mid, a.id, a.text, () => a.at);
+    case "remove": return markOps.remove(a.board, a.id, a.undo);
+  }
+}
+outbox.kind<MarkAct>("mark", { build: markActOp });
+const act = <Res>(a: MarkAct): Promise<Res> => outbox.send<Res>("mark", a, markActOp(a) as Op<Res>);
+
+// offline every act waits on the device in its mark's lane, so a create still reaches the server before its note
 export const marks = {
-  create: (board: string, draft: MarkDraft) => mutate(markOps.create(board, draft)),
-  note: (board: string, id: string, note: string | null) => mutate(markOps.note(board, id, note)),
-  reply: (board: string, mid: string, text: string) => mutate(markOps.reply(board, mid, newReplyId(), text)),
-  remove: (board: string, id: string, undo = false) => mutate(markOps.remove(board, id, undo)),
+  create: (board: string, draft: MarkDraft) => act<MarkAnswer>({ do: "create", board, draft: { ...draft, id: draft.id ?? newMarkId() }, at: Date.now() }),
+  note: (board: string, id: string, note: string | null) => act<{ mark: Mark; rev?: number }>({ do: "note", board, id, note }),
+  reply: (board: string, mid: string, text: string) => act<{ reply: MarkReply; rev?: number }>({ do: "reply", board, mid, id: newReplyId(), text, at: Date.now() }),
+  remove: (board: string, id: string, undo = false) => act<{ ok: boolean; id: string; rev?: number }>({ do: "remove", board, id, undo }),
   /** Gives up on a failed create and what waits behind it, so the page shows what the server has. */
   abandon: (id: string) => { for (const op of pending()) if (op.lanes.includes(markLane(id))) discard(op.id); },
 };

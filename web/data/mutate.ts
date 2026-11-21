@@ -39,7 +39,7 @@ export interface Op<Res = unknown> {
   keepalive?: boolean;
   /** Painted at once, sent no sooner than this: until then withdraw(key) takes it back. A pagehide flush sends it early. */
   holdMs?: number;
-  /** Taken while the wire is down and sent on reconnect: only for appends that cannot conflict, kept durable by the caller. */
+  /** Taken while the wire is down and sent on reconnect: kept durable by the caller (outbox.ts), and safe to replay under its key. */
   waitsOffline?: boolean;
 }
 
@@ -207,6 +207,9 @@ export class Mutator {
       this.pump();
     });
   }
+
+  /** The wire is known down: what is sent now waits, if it waitsOffline. */
+  offline(): boolean { return this.d.wire.down(); }
 
   /** Read-only POSTs: no lane, no key, no retry, no registry. */
   async call<Res>(method: string, path: string, body?: unknown): Promise<Res> {
