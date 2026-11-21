@@ -2167,6 +2167,15 @@ const padTwoTabs = {
   },
 };
 
+// the menu offers Note itself, or Mark first with Note among the chips after it
+async function noteFromMenu(page) {
+  const menu = page.locator(".selmenu");
+  await menu.getByRole("button").first().waitFor();
+  const mark = menu.getByRole("button", { name: "Mark", exact: true });
+  if (await mark.count()) await mark.click();
+  await menu.getByRole("button", { name: "Note", exact: true }).click();
+}
+
 // in the air: a highlight and a note edit wait on the device; the laptop changed that note meanwhile; landing, the clash is listed
 const offlineThenSync = {
   name: "offline-then-sync",
@@ -2193,7 +2202,7 @@ const offlineThenSync = {
     await page.mouse.down();
     await page.mouse.move(first.x1, first.y1, { steps: 4 });
     await page.mouse.up();
-    await page.locator(".selmenu").getByRole("button", { name: "Note", exact: true }).click();
+    await noteFromMenu(page);
     await page.locator(".fold .fi-edit").first().waitFor();
     await page.keyboard.type("first thoughts");
     await page.keyboard.press("Escape");
@@ -2211,7 +2220,7 @@ const offlineThenSync = {
     await page.mouse.down();
     await page.mouse.move(at.x1, at.y1, { steps: 4 });
     await page.mouse.up();
-    await page.locator(".selmenu").getByRole("button", { name: "Note", exact: true }).click();
+    await noteFromMenu(page);
     await page.keyboard.press("Escape");
     const made = await page.evaluate((seeded) => [...document.querySelectorAll(".page-col.prose .mk[data-mark]")].map((el) => el.dataset.mark).find((id) => id !== seeded) ?? null, seeded);
 
@@ -2224,7 +2233,7 @@ const offlineThenSync = {
     await sleep(300);
     const banner = await page.locator(".connection-banner").innerText();
     const toasts = await page.locator(".toast").allInnerTexts().catch(() => []);
-    t.check("kept", !!made && /2 changes kept/.test(banner) && !toasts.some((x) => /offline/.test(x)) && !refusals.length,
+    t.check("kept", !!made && /2 other changes kept/.test(banner) && !toasts.some((x) => /offline/.test(x)) && !refusals.length,
       `banner: ${JSON.stringify(banner)}; toasts: ${JSON.stringify(toasts)}`);
 
     // the laptop, meanwhile

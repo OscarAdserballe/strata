@@ -64,11 +64,14 @@ export default function ConnectionBanner() {
     finally { setBusy(false); }
   };
   // grades keep their own shelf (entities/grades.ts); every other kept write is in the outbox
-  const owed = kept + (connection.offline ? waiting : 0);
-  const keeping = owed ? `${owed} ${owed === 1 ? "change" : "changes"} kept on this device, they sync when you’re back` : "grades, marks and keeps are kept on this device until you’re back";
+  const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+  const keeping = [
+    waiting ? `${plural(waiting, "review", "reviews")} waiting to sync` : "",
+    kept ? `${plural(kept, "other change", "other changes")} kept on this device` : "",
+  ].filter(Boolean).join(" · ") || "reviews, marks and keeps save here and sync later";
   return <div ref={banner} className="connection-banner" role="status" aria-live="polite">
     {connection.offline ? <span><strong>Offline</strong> · {savedAt ? `saved copies from ${new Date(savedAt).toLocaleString()}` : "saved date unavailable"} · {keeping}</span>
-      : kept ? <span>Syncing {kept} {kept === 1 ? "change" : "changes"} made offline…</span>
+      : kept ? <span>Syncing {plural(kept, "change", "changes")} made offline…</span>
       : connection.needsReload ? <><span>{connection.outdated ? "Strata was updated · this page is an older version." : "Back online · reload to refresh saved content."}</span>
         <button onClick={update} disabled={busy}>{busy ? "Checking…" : connection.outdated ? "Reload" : "Refresh now"}</button></> : null}
     {clashing ? <button className="clash-count" onClick={() => setOpen((o) => !o)} aria-expanded={open}>{clashing} {clashing === 1 ? "clash" : "clashes"} to settle</button> : null}
