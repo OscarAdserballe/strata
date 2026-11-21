@@ -105,7 +105,7 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
   const page = raw.page === undefined ? undefined : typeof raw.page === "string" && raw.page.trim() ? raw.page : fail("page is the HTML of the next version.");
   if (page !== undefined && Buffer.byteLength(page) > MAX_UPLOAD_BYTES) fail("page is too big.");
   if (page !== undefined && stageOf(t) !== "implementing") fail(`This thread is in ${stageOf(t)}, with the reader. Post a page only while it is implementing; replies can go any time.`);
-  const problems = page === undefined ? [] : htmlProblems(page, { remoteOnly: true });
+  const problems = page === undefined ? [] : htmlProblems(page, { remoteOnly: true, document: true });
   if (problems.length) fail(`The page wasn't posted: ${problems.join("; ")}. Fix it and post again.`);
   if (raw.lands !== undefined && raw.page === undefined) fail("lands goes with a page.");
   if (raw.lands !== undefined && !(LANDS as readonly unknown[]).includes(raw.lands)) fail(`lands is one of ${LANDS.join(", ")}.`);

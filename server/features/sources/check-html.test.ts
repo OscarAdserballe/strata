@@ -22,6 +22,16 @@ test("each way a page opens blank is named", () => {
   assert.match(htmlProblems("<html><body><p>x</p><script>let a").join(), /never closed.*no <\/body>/);
 });
 
+test("a dashboard page must be a whole document with real content", () => {
+  const page = { remoteOnly: true, document: true };
+  assert.match(htmlProblems("PLACEHOLDER", page).join(), /isn't an HTML document.*placeholder/);
+  assert.match(htmlProblems("<h1>Pick B</h1>", page).join(), /isn't an HTML document/);
+  for (const stub of ["PLACEHOLDER", "TODO", "  tbd. ", "Lorem ipsum dolor sit amet", "…"]) assert.match(htmlProblems(ok(`<p>${stub}</p>`), page).join(), /placeholder/, stub);
+  assert.deepEqual(htmlProblems(ok("<h1>Placeholder images are gone</h1>"), page), []);
+  assert.deepEqual(htmlProblems(ok("<canvas></canvas><p>TODO</p>"), page), [], "a drawing carries the page");
+  assert.deepEqual(htmlProblems("PLACEHOLDER"), [], "an upload may be a text fragment");
+});
+
 test("the pages the routine is shown as examples pass", () => {
   const dir = new URL("../../../tools/dispatch-pages/", import.meta.url);
   for (const f of readdirSync(dir)) assert.deepEqual(htmlProblems(readFileSync(new URL(f, dir), "utf-8"), { remoteOnly: true }), [], f);
