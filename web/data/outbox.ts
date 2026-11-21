@@ -61,7 +61,9 @@ export async function owed(): Promise<SavedOp[]> {
 export async function loadUnsynced(): Promise<void> {
   const saved = (await run<Unsynced[]>(UNSYNCED, "readonly", (s) => s.getAll())) ?? [];
   const keys = new Set(rows.map((r) => r.key));
-  setRows([...rows, ...saved.filter((r) => !keys.has(r.key))]);
+  const fresh = saved.filter((r) => !keys.has(r.key));
+  // a new array wakes the banner: an empty outbox at boot must not commit it
+  if (fresh.length) setRows([...rows, ...fresh]);
 }
 
 export const unsynced = (): Unsynced[] => rows;
