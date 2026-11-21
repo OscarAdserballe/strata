@@ -2200,7 +2200,7 @@ const offlineReopen = {
     await page.mouse.down();
     await page.mouse.move(at.x1, at.y1, { steps: 4 });
     await page.mouse.up();
-    await page.locator(".selmenu").getByRole("button", { name: "Note", exact: true }).click();
+    await markThen(page, "Note");
     await page.locator(".fold .fi-edit").waitFor();
     const note = `Written offline, seed ${t.seed}.`;
     await page.keyboard.type(note);
