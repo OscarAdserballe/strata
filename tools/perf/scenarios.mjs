@@ -351,8 +351,8 @@ export async function highlight(env, t, pageN) {
       const clickTs = await nextEventTs(s, "click");
       const resp = s.page.waitForResponse((x) => x.url().endsWith(`/api/boards/${t.board}/marks`) && x.request().method() === "POST");
       const ra = await rooms();
-      // a highlight is a note left empty: the mark paints on the click, before the note is written
-      await s.page.locator(".selmenu button", { hasText: "Note" }).click();
+      // the mark paints on the click; its chips come up under it
+      await s.page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click();
       const body = await (await resp).json();
       made = body.id;
       await s.page.waitForFunction((id) => window.__perf.mk.some((m) => m.id === id), made);
@@ -432,6 +432,11 @@ async function pickWords(s) {
   await s.page.mouse.move(run.x1, run.y, { steps: 8 }); await s.page.mouse.up();
   await s.page.locator(".selmenu").waitFor({ timeout: 5000 });
 }
+// Mark the picked words, so their chips (Note · Ask · Card) are up
+async function markWords(s) {
+  await s.page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click();
+  await s.page.locator(".selmenu.chips").waitFor({ timeout: 5000 });
+}
 
 export async function chat(env, t, text = "how does the variance of this estimator behave") {
   const s = await session(env, ["view", "firstCanvas"]);
@@ -442,8 +447,9 @@ export async function chat(env, t, text = "how does the variance of this estimat
     await netIdle(s);
     await quiet(s);
     await s.page.waitForTimeout(SETTLE_MS);
-    // a source is asked under its words: Ask on picked words opens the fold's line
+    // a source is asked under its words: Ask under a fresh mark opens the fold's line
     await pickWords(s);
+    await markWords(s);
     const input = s.page.locator(".fold .fi.asked .fi-q");
     const a0 = await snapshot(s);
     const clickTs = await nextEventTs(s, "click");
@@ -495,6 +501,7 @@ export async function idle(env, where, t) {
     await s.page.waitForTimeout(SETTLE_MS);
     if (where === "pdf-chat") {
       await pickWords(s);
+      await markWords(s);
       await arm(s, ["askLine"]);
       await s.page.locator(".selmenu").getByRole("button", { name: "Ask", exact: true }).click();
       await waitMarks(s, ["askLine"], 30_000);

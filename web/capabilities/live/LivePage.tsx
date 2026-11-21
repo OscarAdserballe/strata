@@ -81,7 +81,7 @@ export default function LivePage({ board, resource, scale = 1, onHeight }: LiveP
   return (
     <div className="livepage" ref={pageRef} onMouseDown={marks.onReaderDown} onClick={marks.onReaderClick}>
       {url && src ? <HtmlSource engine={engine} url={url} scale={scale} /> : <p className="livepage-wait">Loading the page…</p>}
-      {marks.selMenu ? <SelectionMenu at={marks.selMenu} onNote={() => void marks.markSelection(true)} /> : null}
+      {marks.selMenu ? <SelectionMenu at={marks.selMenu} onMark={marks.markHere} /> : null}
     </div>
   );
 }

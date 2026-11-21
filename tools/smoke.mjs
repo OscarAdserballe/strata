@@ -172,9 +172,10 @@ try {
     await page.mouse.move(run.x0, run.y); await page.mouse.down();
     await page.mouse.move(run.x1, run.y, { steps: 8 }); await page.mouse.up();
   }
-  const asked = run && await page.locator(".selmenu").getByRole("button", { name: "Ask", exact: true }).click({ timeout: 3000 }).then(() => true, () => false);
+  const asked = run && await page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click({ timeout: 3000 })
+    .then(() => page.locator(".selmenu.chips").getByRole("button", { name: "Ask", exact: true }).click({ timeout: 3000 })).then(() => true, () => false);
   const line = page.locator(".fold .fi.asked .fi-q");
-  check("Ask on picked words opens a fold under them", !!asked && await line.waitFor({ timeout: 5000 }).then(() => true, () => false));
+  check("Ask under a fresh mark opens a fold under its words", !!asked && await line.waitFor({ timeout: 5000 }).then(() => true, () => false));
   const answers = () => page.locator(".fold .fi.asked .fi-turn.claude:not(.writing)");
   const turnsNow = () => page.$$eval(".fold .fi.asked .fi-turn", (ts) => ts.map((t) => t.querySelector(".fi-say").innerText));
   await line.fill("why does repetition discipline pricing?");

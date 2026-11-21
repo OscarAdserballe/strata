@@ -16,3 +16,17 @@
 .selmenu button + button{border-left:1px solid oklch(1 0 0 / 0.14);}
 .selmenu button:hover{background:oklch(1 0 0 / 0.13);}
 .selmenu:after{content:"";position:absolute;left:50%;bottom:-5px;width:10px;height:10px;background:var(--ink);transform:translateX(-50%) rotate(45deg);border-radius:1px;z-index:-1;}
+.selmenu kbd{font:500 10px/1 var(--mono);margin-left:7px;padding:0;border:none;background:none;box-shadow:none;color:inherit;opacity:.5;}
+/* under the words, where a phone's own copy menu doesn't go */
+.selmenu.chips{transform:translate(-50%,8px);background:none;box-shadow:none;overflow:visible;gap:5px;border-radius:0;}
+.selmenu.chips:after{content:none;}
+.selmenu.chips button{color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:6px 11px;box-shadow:var(--shadow-soft);}
+.selmenu.chips button + button{border-left:1px solid var(--line);}
+.selmenu.chips button:hover{background:var(--paper-3);}
+.selmenu.chips button.rm{color:var(--ink-soft);padding:6px 9px;}
+@media (pointer: coarse){
+  .selmenu button{padding:11px 15px;}
+  .selmenu.chips{transform:translate(-50%,14px);gap:8px;}
+  .selmenu.chips button{padding:9px 14px;}
+  .selmenu kbd{display:none;}
+}
