@@ -33,7 +33,7 @@ export type RoomKeyActions = Record<
   | "setCapture" | "openKeysSheet" | "setGo" | "setComposer" | "setTreeOpen" | "openAsk" | "closeAsk" | "askIsOpen"
   | "setRevealed" | "setOpenMark" | "setEditing" | "setBenchEdit" | "setLauncher" | "panelOpen" | "hideShelf" | "showShelf"
   | "toggleCardsOnly" | "toggleBench" | "closeBench" | "closeTopLayer" | "openFind" | "closeFind" | "stepUi" | "stepHistory"
-  | "mintCapture" | "mintOpenCard" | "move" | "answer" | "gradeCard" | "jumpToCard" | "goToCardSource" | "adoptDrift"
+  | "mintOpenCard" | "move" | "answer" | "gradeCard" | "jumpToCard" | "goToCardSource" | "adoptDrift"
   | "logCard" | "openCram" | "log" | "warmKeyed" | "togglePrimerPlan",
   Act>;
 
@@ -92,7 +92,6 @@ export function makeKeyHandler(ctx: RoomKeysCtx): (e: KeyboardEvent) => void {
     if (e.key === "?" || (e.key === "/" && (e.shiftKey || e.metaKey || e.ctrlKey))) { e.preventDefault(); a.panelOpen("keys"); a.openKeysSheet(); return; }
     if (k === "escape" && b.launcher) { e.preventDefault(); a.closeTopLayer(); return; }
     const c = r.card, isDone = r.done, sc = pageRef.current;
-    if (k === "c" && !e.metaKey && !e.ctrlKey) { e.preventDefault(); a.mintCapture(); return; }
     if (k === "e" && c && !c.mintOpen && !e.metaKey && !e.ctrlKey) { e.preventDefault(); a.setEditing(c.id); return; }
     if (k === "h") { e.preventDefault(); if (b.sheetsOver) a.hideShelf(); else a.showShelf(true); return; }
     if (k === "b") { e.preventDefault(); a.panelOpen("launcher"); a.setLauncher(true); return; }

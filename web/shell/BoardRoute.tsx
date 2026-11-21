@@ -28,7 +28,7 @@ import { useBoardActions } from "../capabilities/sources/useBoardActions.ts";
 import { boardContainment, mintedToCards } from "../capabilities/card/authored.ts";
 import Composer from "../capabilities/card/Composer.tsx";
 import { setComposer, useComposer } from "../capabilities/card/composing.ts";
-import { bindCardRoom, captureReply, openComposer, saveComposed } from "../capabilities/card/doors.ts";
+import { bindCardRoom, openComposer, saveComposed } from "../capabilities/card/doors.ts";
 import { closeTopLayer, openKeysSheet } from "../capabilities/keys/registry.ts";
 import { navigation } from "./routes.ts";
 import { CRAM, KEEPS, LIBRARY, REVIEW, closeKeeps, hideBoardPage, openCram, openLibrary, panelOpen, screensNow, setKeeps, setKeepsEditing, setLibrary, showBoardPage, toggleKeeps, useScreensUp } from "./screens.ts";
@@ -182,7 +182,7 @@ export default function BoardRoute() {
       setCapture: closeCapture, openKeysSheet, setGo: setPicker, setComposer, openAsk, closeAsk, askIsOpen,
       setRevealed: drill.setRevealed, setLauncher: setLibrary,
       panelOpen, hideShelf: hideBoardPage, showShelf: showBoardPage, toggleCardsOnly, stepUi,
-      mintCapture: captureReply, mintOpenCard, move: drill.move, answer: drill.answer, gradeCard: drill.gradeCard, goToCardSource: drill.goToCardSource,
+      mintOpenCard, move: drill.move, answer: drill.answer, gradeCard: drill.gradeCard, goToCardSource: drill.goToCardSource,
       setEditing: drill.setEditing, setBenchEdit: setKeepsEditing, toggleBench: toggleKeeps, closeBench: closeKeeps, closeTopLayer,
       logCard: drill.logCard, openCram, log: StrataAPI.log, warmKeyed, togglePrimerPlan: togglePlan,
     }) as unknown as RoomKeyActions,
@@ -252,7 +252,7 @@ export default function BoardRoute() {
           {!keepsUp && !cramming && !launcher ? <ImportsStatus onOpen={(b, r) => openBoard(b, r)} /> : null}
           {!onHome && openSection ? <button className="tn-more" aria-pressed={followChapters} title="Switch the deck automatically as you read into another chapter"
             onClick={() => setFollowChapters(on=>{localStorage.setItem("strata.followChapters",on?"0":"1");return !on;})}>Follow chapters: {followChapters ? "on" : "off"}</button> : null}
-          <button className="tn-more newcard" onClick={() => openComposer("", "")} title="make a card (c grabs the last answer)">+ card</button>
+          <button className="tn-more newcard" onClick={() => openComposer("", "")} title="make a card">+ card</button>
         </>} />}
 
       <div className={"panes" + (solo ? " solo" : "")} ref={panesRef}

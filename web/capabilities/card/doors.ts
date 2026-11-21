@@ -1,16 +1,14 @@
 import { flushSync } from "react-dom";
 import { StrataAPI, StrataWhy } from "../../data/api.ts";
-import { store } from "../../data/store.ts";
 import { authored } from "../../data/entities/authored.ts";
 import { reviewStrip } from "../../data/entities/review.ts";
 import { ATTEMPT_DEADLINE_MS, mintKey } from "../../data/mutate.ts";
 import { quoteAnchor } from "../../../shared/reading/anchors.ts";
 import { toast } from "../../shell/layers.ts";
-import { storeKeyOf } from "../ask/useThread.ts";
 import type { ComposedCard } from "./Composer.tsx";
-import { composerNow, setComposer, type FoldPlace } from "./composing.ts";
+import { composerNow, setComposer, type ComposerDraft, type FoldPlace } from "./composing.ts";
 import { deckOf, saveAuthored, saveCard } from "./saveCard.ts";
-import { withDeadline } from "./tidy.ts";
+import { createCardTidier, withDeadline } from "./tidy.ts";
 
 type Wire = any;
 
@@ -28,18 +26,6 @@ export function bindCardRoom(r: CardRoom): void { room = r; }
 
 function toastWhy(e: unknown, said: string) { console.warn("[strata]", said, e); toast(StrataWhy(e, said), 4200); }
 
-export function captureReply(): void {
-  if (composerNow()) return;
-  const { askKey } = room.at();
-  // a board's canned greeting (idx 0) is not an exchange
-  const th = ((askKey && store.get<Wire>(storeKeyOf(askKey))?.messages) || []).filter((m: Wire) => m.idx > 0 || m.role === "user");
-  let ai = -1;
-  for (let i = th.length - 1; i >= 0; i--) if (th[i].role !== "user") { ai = i; break; }
-  if (ai < 0) { toast("nothing to capture yet — ask something first"); return; }
-  let question = "";
-  for (let i = ai - 1; i >= 0; i--) if (th[i].role === "user") { question = th[i].text; break; }
-  openComposer(question, th[ai].text);
-}
 function visiblePage(sc: HTMLElement | null) {
   if (!sc) return null;
   const top = sc.getBoundingClientRect().top;
@@ -76,6 +62,22 @@ export function openFoldCard(at: FoldPlace, kind: string): void {
   const source = (kind === "pdf" && at.page ? "p. " + at.page + " · " : "") + quoteAnchor(at.quote);
   setComposer({ front: "", answer: "", mintId: null, pairId: p && !p.isHome ? p.id : null, source,
     anchor: p && !p.isHome ? p.label || null : null, requestId: mintKey(), fold: at });
+}
+const tidier = createCardTidier((body) => StrataAPI.tidyCard(body));
+/** The fold's draft, tidied the way every other card editor tidies, and shown in place to be kept. */
+export async function formatFold(front: string, back: string): Promise<void> {
+  const c = composerNow();
+  if (!c?.fold || c.tidy?.phase === "formatting") return;
+  setComposer({ ...c, tidy: { phase: "formatting", front, back, error: "" } });
+  let next: NonNullable<ComposerDraft["tidy"]>;
+  try {
+    const faces = await tidier("flashcard", { front, back });
+    next = { phase: "formatted", front: String(faces.front ?? front), back: String(faces.back ?? back), error: "" };
+  } catch (e) {
+    next = { phase: "writing", front, back, error: StrataWhy(e, "couldn't format this card — your words are still here") };
+  }
+  // discarded or replaced while it was being tidied: the answer belongs to no draft
+  setComposer((was) => (was && was.requestId === c.requestId && was.fold ? { ...was, tidy: next } : was));
 }
 export async function compose(card: Wire, front = "", answer = "", home: Wire = null): Promise<void> {
   let where: Wire = null;
