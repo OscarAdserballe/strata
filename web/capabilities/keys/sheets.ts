@@ -51,7 +51,7 @@ export const REVIEW: readonly KeyGroup[] = [
     ["1 / 2", "missed / got it (unrevealed, they reveal)"],
     ["↵", "show me where this card lives, once answered"],
     ["e", "rewrite this card (⌘↵ formats · esc leaves)"],
-    ["esc", "the editor, then the thread, then the sitting: once into the map, once out of it"],
+    ["esc", "the editor, then the sitting: once into the map, once out of it"],
   ]],
 ];
 

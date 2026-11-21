@@ -130,38 +130,14 @@ try {
     console.log("✓ ending a session waits for its pending grades before loading the day's map");
   } finally { await ended.close(); }
 
-  // the card's id is real-shaped (`<course>/<type>/<key>`): its thread key must split at the course
   const asked = await fixture([card("review-fixture/flashcard/ask")]);
   try {
-    const turns = [];
-    await asked.page.route(`${base}/api/review/chat`, (route) => {
-      turns.push({ body: route.request().postDataJSON(), key: route.request().headers()["idempotency-key"] });
-      return route.fulfill({ status: 200, headers: { "Content-Type": "text/event-stream" }, body:
-        'event: start\ndata: {"userIdx":0,"replyIdx":1}\n\nevent: delta\ndata: {"t":"Because the card says so."}\n\n' +
-        'event: done\ndata: {"userIdx":0,"replyIdx":1,"messages":[{"idx":0,"role":"user","text":"why?"},{"idx":1,"role":"assistant","text":"Because the card says so."}]}\n\n' });
-    });
-    const line = asked.page.locator(".ask .line input");
-    assert.ok(await line.isDisabled(), "before the reveal the line is shut");
     await asked.page.keyboard.press("Space");
     await asked.review.locator(".a").waitFor();
     await asked.page.keyboard.press("/");
-    await asked.page.waitForFunction(() => document.activeElement === document.querySelector(".ask .line input"));
-    await line.fill("why?");
-    await line.press("Enter");
-    await asked.page.locator(".ask .turn.it .said").filter({ hasText: "Because the card says so." }).waitFor();
-    assert.equal(turns.length, 1);
-    assert.deepEqual([turns[0].body.card, turns[0].body.course, turns[0].body.message], ["review-fixture/flashcard/ask", "review-fixture", "why?"]);
-    assert.ok(turns[0].key, "the turn goes under an Idempotency-Key");
-    await asked.page.evaluate(() => { document.activeElement?.blur?.(); });
-    assert.equal(await asked.page.locator(".ask.open").count(), 1, "the thread is open after the reply");
-    await asked.page.keyboard.press("Escape");
-    assert.equal(await asked.page.locator(".ask.open").count(), 0, "esc closes the open Ask");
-    assert.ok(await asked.review.isVisible(), "…and does not end the sitting");
-    await line.fill("a draft");
-    await line.press("Escape");
-    assert.equal(await line.inputValue(), "a draft", "esc closes the thread and keeps the draft");
-    assert.ok(await asked.review.isVisible(), "esc in the line does not end the sitting");
-    console.log("✓ the review's Ask: shut before the reveal, / opens it, the card's thread answers, esc closes it first and keeps the draft");
+    assert.equal(await asked.page.locator(".ask").count(), 0, "the review mounts no Ask");
+    assert.ok(await asked.review.isVisible(), "/ does nothing to the sitting");
+    console.log("✓ the review has no Ask: / after the reveal opens nothing");
   } finally { await asked.close(); }
 
   const phone = await fixture([card("tap"), card("next")], true);

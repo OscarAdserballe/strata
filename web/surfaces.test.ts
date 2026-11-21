@@ -13,7 +13,8 @@ test("every screen has exactly one entry, keyed by its own route", () => {
 test("every screen lists only known capabilities", () => {
   for (const spec of Object.values(SURFACES)) {
     for (const field of Object.keys(spec)) assert.ok(fields.has(field), `${spec.route}: unknown capability ${field}`);
-    assert.ok((ASK_THREADS as readonly string[]).includes(spec.ask), `${spec.route}: unknown thread ${spec.ask}`);
+    if (spec.ask) assert.ok((ASK_THREADS as readonly string[]).includes(spec.ask), `${spec.route}: unknown thread ${spec.ask}`);
+    assert.ok(spec.ask || (!spec.askSelection && !spec.replyToCard), `${spec.route}: no Ask, so nothing to select into or reply from`);
     for (const v of spec.card) assert.ok((CARD_VERBS as readonly string[]).includes(v), `${spec.route}: unknown card verb ${v}`);
     for (const v of spec.sources) assert.ok((SOURCE_VERBS as readonly string[]).includes(v), `${spec.route}: unknown source verb ${v}`);
     for (const v of spec.boardActions ?? []) assert.ok((BOARD_ACTIONS as readonly string[]).includes(v), `${spec.route}: unknown board action ${v}`);
@@ -39,7 +40,8 @@ test("the table's fixed points hold: annotate in the reader only, plan and downl
   assert.deepEqual(on("download"), ["board"]);
   assert.deepEqual(ROUTES.filter((r) => SURFACES[r].card.includes("grade-local")), ["cram"]);
   assert.ok(!SURFACES.cram.card.includes("grade"), "the cram never feeds the schedule");
-  for (const r of ROUTES) assert.ok(SURFACES[r].feedback && SURFACES[r].suggest && SURFACES[r].replyToCard, `${r}: feedback, suggest and reply → card are everywhere`);
+  for (const r of ROUTES) assert.ok(SURFACES[r].feedback && SURFACES[r].suggest, `${r}: feedback and suggest are everywhere`);
+  for (const r of ROUTES) if (SURFACES[r].ask) assert.ok(SURFACES[r].replyToCard, `${r}: wherever there is an Ask, a reply can become a card`);
 });
 
 const SCREEN_FILES: Record<Route, string[]> = {
@@ -61,6 +63,11 @@ const THREAD_OPENED: Record<string, RegExp> = {
 test("every screen mounts the Ask on the thread the table names, and says what is on it", () => {
   for (const r of ROUTES) {
     const spec = SURFACES[r], src = SCREEN_FILES[r].map((f) => readFileSync(f, "utf8")).join("\n");
+    if (!spec.ask) {
+      assert.doesNotMatch(src, /capabilities\/ask\/Ask\.[jt]sx|<Ask[\s>]/, `${r}: the table says no Ask, so none is mounted`);
+      assert.match(src, new RegExp(`useProvideHere\\([^]*surface: [^,\\n]*"${r}"`), `${r}: publishes here with surface "${r}"`);
+      continue;
+    }
     assert.match(src, /import Ask from "[./]*capabilities\/ask\/Ask\.[jt]sx"/, `${r}: mounts capabilities/ask`);
     assert.match(src, THREAD_OPENED[spec.ask], `${r}: opens its ${spec.ask} thread`);
     assert.match(src, new RegExp(`useProvideHere\\([^]*surface: [^,\\n]*"${r}"`), `${r}: publishes here with surface "${r}"`);
