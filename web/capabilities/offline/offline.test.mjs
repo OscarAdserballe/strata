@@ -175,6 +175,32 @@ test("explicit download stamps the saved copy and surfaces quota failures", asyn
   await assert.rejects(saveOfflineUrl("/api/boards/b"), /QuotaExceededError/);
 });
 
+test("a source's bytes already on this device are not fetched again; everything else is", async (t) => {
+  let fetched = 0;
+  t.mock.method(globalThis, "fetch", async () => { fetched++; return new Response("wire"); });
+  const oldLocation = globalThis.location, oldCaches = globalThis.caches;
+  t.after(() => { globalThis.location = oldLocation; globalThis.caches = oldCaches; });
+  globalThis.location = new URL(origin);
+  const stores = new Map();
+  globalThis.caches = { open: async (name) => {
+    if (!stores.has(name)) stores.set(name, new Map());
+    const m = stores.get(name), key = (u) => new URL(u, origin).href;
+    return { match: async (u) => m.get(key(u))?.clone(), put: async (u, r) => { m.set(key(u), r.clone()); } };
+  } };
+  const raw = "/api/boards/b/resources/r/raw", opened = "/api/boards/b/resources/q/raw";
+  await saveOfflineUrl(raw, { unchanging: true });
+  await saveOfflineUrl(raw, { unchanging: true });
+  assert.equal(fetched, 1, "the second download reuses the saved bytes");
+  (await globalThis.caches.open("strata-reader-v1")).put(opened, new Response("read earlier"));
+  await saveOfflineUrl(opened, { unchanging: true });
+  assert.equal(fetched, 1, "a PDF the reader already holds is moved to the shelf, not fetched");
+  const moved = await (await globalThis.caches.open(api)).match(opened);
+  assert.equal(await moved.text(), "read earlier");
+  assert.ok(Number(moved.headers.get("X-Strata-Saved-At")) > 0);
+  await saveOfflineUrl("/api/boards/b"); await saveOfflineUrl("/api/boards/b");
+  assert.equal(fetched, 3, "board data is fetched fresh every time");
+});
+
 test("download rejects expired authentication and stale fallback responses", async (t) => {
   const oldLocation = globalThis.location;
   t.after(() => { globalThis.location = oldLocation; });

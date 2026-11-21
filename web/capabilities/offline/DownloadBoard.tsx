@@ -43,10 +43,12 @@ export async function downloadBoard(id: string | null, b: Board, say: Say): Prom
     const css = cssUrl ? await (await fetchAsset(cssUrl)).text() : "";
     for (const m of css.matchAll(/url\((['"]?)([^)'"]+?\.woff2)\1\)/g)) urls.add(new URL(m[2], cssUrl).href);
   } catch { /* maths falls back to whatever fonts are already cached */ }
+  // a new upload is a new id, so a source's bytes saved once are never fetched again
+  const unchanging = new Set<string>();
   for (const p of b.pairs || []) if (p.deck) urls.add(StrataPath(`/api/decks/${p.deck}`));
   for (const r of b.resources || []) {
     urls.add(StrataPath(`/api/boards/${id}/messages?resource=${encodeURIComponent(r.id)}`));
-    urls.add(StrataAPI.resourceRawUrl(id, r.id));
+    urls.add(StrataAPI.resourceRawUrl(id, r.id)); unchanging.add(StrataAPI.resourceRawUrl(id, r.id));
     if (r.kind !== "pdf") urls.add(StrataPath(`/api/boards/${id}/resources/${r.id}/preview`));
     urls.add(StrataPath(`/api/boards/${id}/resources/${r.id}/tree`));
   }
@@ -58,7 +60,7 @@ export async function downloadBoard(id: string | null, b: Board, say: Say): Prom
     while (list.length) {
       const u = list.shift() as string;
       // a 404 means the source was never distilled, not a miss
-      try { await saveOfflineUrl(u); }
+      try { await saveOfflineUrl(u, { unchanging: unchanging.has(u) }); }
       catch { missed++; }
       done++; tell(`${done} / ${done + list.length}`);
     }

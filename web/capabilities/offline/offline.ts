@@ -7,14 +7,27 @@ export function fetchAsset(url: string, init?: RequestInit): Promise<Response> {
 }
 
 /** Download explicitly; report storage failures instead of claiming an unsaved copy exists. */
-export async function saveOfflineUrl(url: string): Promise<void> {
+export async function saveOfflineUrl(url: string, opts: { unchanging?: boolean } = {}): Promise<void> {
   const target = new URL(url, location.href);
+  if (opts.unchanging && await alreadySaved(target)) return;
   const response = await StrataFetchForShelf(target);
   if (response.status === 404 && target.pathname.endsWith("/tree")) return; // Optional trees may not have been generated.
   if (!response.ok || response.headers.has("X-Strata-Shelf")) throw new Error("Download needs a live connection");
   const kind = target.origin === location.origin && target.pathname.startsWith(StrataPath("/api/")) ? "api" : "shell";
   const cache = await caches.open(`strata-off-v2-${kind}`);
   await cache.put(target, await savedCopy(response));
+}
+
+/** Bytes that can never change under their URL are not fetched twice: the shelf's copy stands, or the reader's is moved onto it. */
+async function alreadySaved(target: URL): Promise<boolean> {
+  try {
+    const shelf = await caches.open("strata-off-v2-api");
+    if ((await shelf.match(target, { ignoreVary: true }))?.status === 200) return true;
+    const opened = await (await caches.open("strata-reader-v1")).match(target, { ignoreVary: true });
+    if (opened?.status !== 200) return false;
+    await shelf.put(target, await savedCopy(opened));
+    return true;
+  } catch { return false; }
 }
 
 async function savedCopy(response: Response): Promise<Response> {
