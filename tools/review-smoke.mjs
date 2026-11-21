@@ -22,21 +22,26 @@ async function fixture(cards, touch = false) {
   page.setDefaultNavigationTimeout(30000);
   await page.addInitScript(() => { Math.random = () => 0.999; }); // Keep the shuffled fixture order stable.
   const attempts = [], receipts = new Map(), errors = [];
+  const wire = { cut: false };
+  // registered first, so it runs last: while the wire is cut nothing on /api answers
+  await page.route(`${base}/api/**`, route => wire.cut ? route.abort("internetdisconnected") : route.fallback());
   let loads = 0, maps = 0;
   page.on("pageerror", error => errors.push(error.message));
   await page.route(`${base}/api/review`, route => {
     loads++;
     return route.fulfill({ json: { cards: loads === 1 ? cards : [], total: loads === 1 ? cards.length : 0, nextDueAt: null, unkeptDue: 0 } });
   });
-  await page.route(`${base}/api/review/tree?*`, route => route.fulfill({ json: { tree: null } }));
-  await page.route(`${base}/api/review/history?*`, route => route.fulfill({ json: { reviews: [] } }));
-  await page.route(`${base}/api/log`, route => route.fulfill({ json: {} }));
+  await page.route(`${base}/api/review/tree?*`, route => wire.cut ? route.fallback() : route.fulfill({ json: { tree: null } }));
+  await page.route(`${base}/api/review/history?*`, route => wire.cut ? route.fallback() : route.fulfill({ json: { reviews: [] } }));
+  await page.route(`${base}/api/log`, route => wire.cut ? route.fallback() : route.fulfill({ json: {} }));
   await page.route(`${base}/api/review/session?*`, route => {
+    if (wire.cut) return route.fallback();
     maps++;
     return route.fulfill({ json: { cards: new Set([...receipts.values()].map(r => r.card)).size,
       got: 1, missed: 0, sittings: 1, minutes: 1, dueLeft: 0, topics: [] } });
   });
   await page.route(`${base}/api/review/grade`, async route => {
+    if (wire.cut) return route.fallback();
     const body = route.request().postDataJSON();
     const response = Promise.withResolvers();
     attempts.push({ body, reply: (status = 200) => response.resolve(status) });
@@ -50,7 +55,7 @@ async function fixture(cards, touch = false) {
   // a desk opens on the overview; the phone goes straight to the cards
   if (!touch) await review.getByRole("button", { name: /^Start/ }).click();
   await review.locator(".q").waitFor();
-  return { page, review, attempts, receipts, get loads() { return loads; }, get maps() { return maps; },
+  return { page, review, attempts, receipts, wire, get loads() { return loads; }, get maps() { return maps; },
     async attempt(n) { await until(() => attempts.length >= n); return attempts[n - 1]; },
     async close() {
       for (const attempt of attempts) attempt.reply();
@@ -129,6 +134,34 @@ try {
     await ended.review.locator(".smleft").filter({ hasText: "1 left in this sitting" }).waitFor();
     console.log("✓ ending a session waits for its pending grades before loading the day's map");
   } finally { await ended.close(); }
+
+  const flight = await fixture([card("up"), card("down"), card("left")]);
+  try {
+    flight.wire.cut = true;
+    await flight.page.evaluate(() => window.dispatchEvent(new Event("offline")));
+    await flight.page.locator(".connection-banner").getByText("Offline", { exact: true }).waitFor({ timeout: 30000 });
+    await flight.page.keyboard.press("Space");
+    await flight.page.keyboard.press("2");
+    await flight.review.locator(".q").filter({ hasText: "Question down" }).waitFor();
+    await flight.page.keyboard.press("Space");
+    await flight.page.keyboard.press("1");
+    await flight.review.locator(".q").filter({ hasText: "Question left" }).waitFor();
+    assert.equal(await flight.review.getByRole("alert").count(), 0, "offline grading raises no save alert");
+    await flight.page.locator(".connection-banner").getByText(/2 reviews waiting to sync/).waitFor();
+    const shelved = await flight.page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith("strata.outbox.grade.")).length);
+    assert.equal(shelved, 2, "both offline grades are kept on the device");
+    assert.equal(flight.attempts.length, 0);
+    flight.wire.cut = false;
+    await flight.page.evaluate(() => window.dispatchEvent(new Event("online")));
+    const first = await flight.attempt(1);
+    first.reply();
+    const second = await flight.attempt(2);
+    second.reply();
+    assert.deepEqual([first.body.card, first.body.got, second.body.card, second.body.got], ["up", true, "down", false]);
+    assert.notEqual(first.body.requestId, second.body.requestId);
+    await flight.page.waitForFunction(() => !Object.keys(localStorage).some(k => k.startsWith("strata.outbox.grade.")));
+    console.log("✓ offline, grading carries on, the grades wait on the device, and they sync once, in order, on reconnect");
+  } finally { await flight.close(); }
 
   const asked = await fixture([card("review-fixture/flashcard/ask")]);
   try {

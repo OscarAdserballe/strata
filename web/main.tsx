@@ -39,10 +39,13 @@ import { beacon, stampSession, StrataPath } from "./data/api.ts";
 import { sendSamplesWith } from "./platform/rum.ts";
 import { watchTaps } from "./platform/taps.ts";
 import { watchSnapshots } from "./data/snapshot.ts";
+import { grades } from "./data/entities/grades.ts";
 
 stampSession();
 watchSnapshots();
 sendSamplesWith(beacon);
+// grades taken offline in an earlier tab go out on this one's wire
+grades.restore();
 
 // Fire-and-forget: without a service worker the app simply stays online-only.
 if ("serviceWorker" in navigator) { void navigator.serviceWorker.register(StrataPath("/sw.js"), { scope: StrataPath("/"), updateViaCache: "none" }).catch(() => {}); }

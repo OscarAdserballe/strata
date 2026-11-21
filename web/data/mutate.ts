@@ -2,7 +2,7 @@ import { store as roomStore, type Store } from "./store.ts";
 import { confirmByShape } from "./entities/confirm.ts";
 
 /* The one save path: every write is an Op handed to mutate().
-   - Enqueue refuses at once while the wire is known down; else it paints layers and marks queries stale.
+   - Enqueue refuses at once while the wire is known down, unless the op waitsOffline; else it paints layers and marks queries stale.
    - Lanes keep order: an op starts when it heads every lane it names; a failed head holds its lanes.
    - One key per op, minted once and reused on every retry and on the pagehide flush.
    - 2xx confirms; a lost answer, deadline, 408/425/429 or 5xx is retried with backoff, paused while offline.
@@ -39,6 +39,8 @@ export interface Op<Res = unknown> {
   keepalive?: boolean;
   /** Painted at once, sent no sooner than this: until then withdraw(key) takes it back. A pagehide flush sends it early. */
   holdMs?: number;
+  /** Taken while the wire is down and sent on reconnect: only for appends that cannot conflict, kept durable by the caller. */
+  waitsOffline?: boolean;
 }
 
 export type PendingState = "held" | "queued" | "sending" | "retrying" | "failed";
@@ -174,7 +176,7 @@ export class Mutator {
   }
 
   mutate<Res>(op: Op<Res>): Promise<Res> {
-    if (this.d.wire.down()) return Promise.reject(offline());
+    if (this.d.wire.down() && !op.waitsOffline) return Promise.reject(offline());
     if (!this.d.transport) return Promise.reject(saveError("the save path is not wired to data/api.ts yet"));
     return new Promise<Res>((resolve, reject) => {
       const waiter = { resolve: resolve as (v: unknown) => void, reject };
