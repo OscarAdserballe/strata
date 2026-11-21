@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { Store } from "./store.ts";
-import { Mutator, RETRY_DELAYS_MS, ATTEMPT_DEADLINE_MS, type Failure, type Op, type SaveError, type SendAnswer, type SendRequest } from "./mutate.ts";
+import { Mutator, RETRY_DELAYS_MS, ATTEMPT_DEADLINE_MS, type Failure, type Op, type SaveError, type SavedOp, type SendAnswer, type SendRequest, type Unsynced } from "./mutate.ts";
 
 const tick = async () => { for (let i = 0; i < 3; i++) await new Promise((resolve) => setImmediate(resolve)); };
 function deferred<T>() {
@@ -29,7 +29,10 @@ function harness() {
   const sent: { req: SendRequest; reply: ReturnType<typeof deferred<SendAnswer>> }[] = [];
   const surfaced: Failure[] = [];
   let cleared = 0;
+  const box = { ops: new Map<string, SavedOp>(), refused: [] as Unsynced[] };
+  const outbox = { put: (o: SavedOp) => { box.ops.set(o.key, o); }, drop: (k: string) => { box.ops.delete(k); }, refused: (r: Unsynced) => { box.refused.push(r); } };
   const m = new Mutator({
+    outbox,
     store, wire,
     transport: (req) => { const reply = deferred<SendAnswer>(); sent.push({ req, reply }); return reply.promise; },
     setTimer: (fn, ms) => { const t = { id: ++ids, fn, ms, due: clock.now + ms }; timers.push(t); return t.id; },
@@ -47,7 +50,7 @@ function harness() {
     t.fn();
   };
   const retryGaps = () => timers.filter((t) => t.ms !== ATTEMPT_DEADLINE_MS).map((t) => t.ms);
-  return { m, store, wire, sent, surfaced, timers, clock, fire, retryGaps, cleared: () => cleared };
+  return { m, store, wire, sent, surfaced, timers, clock, fire, retryGaps, box, cleared: () => cleared };
 }
 
 const op = (lanes: string[], extra: Partial<Op> = {}): Op => ({ label: "save it", lanes, method: "POST", path: "/api/thing", body: { lanes }, ...extra });
@@ -211,6 +214,79 @@ test("offline refuses a new write at once, painting nothing", async () => {
   assert.deepEqual(store.get("notes:b"), { text: "server" });
   assert.equal(sent.length, 0);
   assert.deepEqual(m.pending(), []);
+});
+
+test("offline, an op that may wait is painted, kept in the outbox, and sent with its key on reconnect", async () => {
+  const { m, sent, store, wire, box } = harness();
+  store.apply("marks:b", 1, [], "wire");
+  wire.set(true);
+  const saved = m.mutate(op(["mark:1"], { key: "k-offline-1", offline: true, invalidates: ["board:b"], optimistic: [{ key: "marks:b", apply: () => ["mine"] }] }));
+  assert.deepEqual(store.get("marks:b"), ["mine"], "painted at once");
+  assert.equal(sent.length, 0);
+  assert.deepEqual([...box.ops.keys()], ["k-offline-1"]);
+  assert.deepEqual(box.ops.get("k-offline-1")!.invalidates, ["board:b"]);
+  wire.set(false);
+  await tick();
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].req.headers["Idempotency-Key"], "k-offline-1");
+  sent[0].reply.resolve(answer(200, {}));
+  await saved;
+  assert.equal(box.ops.size, 0, "dropped once the server has it");
+  assert.deepEqual(box.refused, []);
+});
+
+test("an op already queued when the wire goes down is kept in the outbox then; one that may not wait is not", async () => {
+  const { m, sent, wire, box } = harness();
+  void m.mutate(op(["grades"], { key: "k-flying", offline: true, body: { g: 1 } }));
+  void m.mutate(op(["plan:b"], { key: "k-plan" }));
+  sent[0].reply.reject(lost());
+  await tick();
+  wire.set(true);
+  assert.deepEqual([...box.ops.keys()], ["k-flying"]);
+  assert.equal(box.ops.get("k-flying")!.body, JSON.stringify({ g: 1 }), "the exact bytes");
+});
+
+test("a write that waited and is then refused lands in the conflicts list with what the server has", async () => {
+  const { m, sent, wire, box } = harness();
+  wire.set(true);
+  const e = failure(m.mutate(op(["notes:b"], { key: "k-stale", offline: true, body: { text: "mine" }, base: () => 3 })));
+  assert.equal(box.ops.get("k-stale")!.base, 3, "the rev it was based on, read when it was kept");
+  wire.set(false);
+  await tick();
+  sent[0].reply.resolve(answer(409, { error: "changed elsewhere", conflict: { rev: 5, value: { text: "theirs" } } }));
+  assert.equal((await e).status, 409);
+  assert.equal(box.ops.size, 0);
+  assert.equal(box.refused.length, 1);
+  assert.deepEqual({ ...box.refused[0], at: 0 }, { key: "k-stale", label: "save it", method: "POST", path: "/api/thing", body: JSON.stringify({ text: "mine" }), status: 409, said: "changed elsewhere", server: { text: "theirs" }, at: 0 });
+});
+
+test("an op that never waited is refused as before, outside the conflicts list", async () => {
+  const { m, sent, box } = harness();
+  const e = failure(m.mutate(op(["x"], { offline: true })));
+  sent[0].reply.resolve(answer(404, { error: "gone" }));
+  await e;
+  assert.deepEqual(box.refused, []);
+});
+
+test("resume sends what a closed tab left, oldest first, with its key, bytes and If-Match; one already queued is skipped", async () => {
+  const { m, sent, box } = harness();
+  void m.mutate(op(["mark:2"], { key: "k-here" }));
+  const left: SavedOp[] = [
+    { key: "k-b", label: "save that note", lanes: ["mark:1"], method: "PATCH", path: "/api/boards/b/marks/1", body: JSON.stringify({ note: "two" }), base: 7, at: 2 },
+    { key: "k-a", label: "keep that highlight", lanes: ["mark:1"], method: "POST", path: "/api/boards/b/marks", body: JSON.stringify({ id: "1" }), at: 1 },
+    { key: "k-here", label: "save it", lanes: ["mark:2"], method: "POST", path: "/api/thing", at: 0 },
+  ];
+  for (const s of left) box.ops.set(s.key, s);
+  m.resume(left);
+  assert.deepEqual(sent.map((s) => s.req.headers["Idempotency-Key"]), ["k-here", "k-a"], "k-b waits behind k-a in its lane; k-here is not sent twice");
+  assert.equal(sent[1].req.body, JSON.stringify({ id: "1" }));
+  sent[1].reply.resolve(answer(200, {}));
+  await tick();
+  assert.equal(sent[2].req.headers["If-Match"], '"7"');
+  sent[2].reply.resolve(answer(404, { error: "no such mark" }));
+  await tick();
+  assert.deepEqual(box.refused.map((r) => r.key), ["k-b"], "a resumed op's refusal is listed, with no caller to hear it");
+  assert.deepEqual([...box.ops.keys()], ["k-here"]);
 });
 
 test("2xx confirms: the answer becomes the base and the layer goes in one notification (a replay too)", async () => {

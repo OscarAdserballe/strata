@@ -34,7 +34,7 @@ try {
   await context.setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.locator(".connection-banner").getByText(/saved copies from/).waitFor();
-  assert.match(await page.locator(".connection-banner").innerText(), /changes can’t be saved/);
+  assert.match(await page.locator(".connection-banner").innerText(), /reviews, highlights and notes are kept until you’re back/);
   await page.getByRole("navigation", { name: "Strata" }).getByRole("button", { name: "Today", exact: true }).click();
   assert.ok(await page.locator(".connection-banner").isVisible(), "library must retain the offline notice");
   await page.setViewportSize({ width: 390, height: 844 });
@@ -46,7 +46,7 @@ try {
   assert.ok(banner.x >= 0 && banner.width <= 390 && banner.height > 0);
   await page.getByRole("region", { name: "Downloaded for offline reading" }).getByRole("button", { name: board.title }).waitFor();
   if (process.env.STRATA_OFFLINE_SCREENSHOT) await page.screenshot({ path: process.env.STRATA_OFFLINE_SCREENSHOT });
-  console.log("✓ saved room reopens offline with a dated read-only banner, including the mobile library");
+  console.log("✓ saved room reopens offline with a dated offline banner, including the mobile library");
 
   await context.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));

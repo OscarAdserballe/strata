@@ -1,6 +1,7 @@
 import { PendingReads, WarmReads } from "./pending-reads.ts";
 import { Wire } from "../platform/wire.ts";
 import { call, mutator, type SendAnswer, type SendRequest } from "./mutate.ts";
+import { loadUnsynced, outbox, owed } from "./outbox.ts";
 import type { Fetched } from "./store.ts";
 
 import type {
@@ -39,7 +40,7 @@ export const StrataWhy = (e: unknown, said: string): string => `${said} — ${St
 export const StrataMB = (n: number): string =>
   n >= 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} MB` : `${Math.max(1, Math.round(n / 1024))} kB`;
 
-// Offline is read-only: while the wire is known down, every mutating call is refused here, before fetch.
+// Offline, a write outside the save path is refused here, before fetch; the save path keeps the ones that may wait.
 let savedAt: number | null = null;
 let unknownSavedAt = false;
 let serverBuild: string | null = null;
@@ -260,7 +261,10 @@ mutator.configure({
     subscribe: (fn) => { wireListeners.add(fn); return () => { wireListeners.delete(fn); }; },
   },
   clearReads,
+  outbox,
 });
+// what a closed tab left owed goes again under its own keys; refusals from earlier land in the conflicts list
+if (typeof indexedDB !== "undefined") { void owed().then((ops) => mutator.resume(ops)); void loadUnsynced(); }
 // a save waiting out a retry has nothing on the wire, but the room is not settled: count it as one request
 let saving = false;
 mutator.subscribePending(() => {

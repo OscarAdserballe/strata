@@ -1,5 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { StrataCheckConnection, StrataConnection } from "../../data/api.ts";
+import { pending, subscribePending } from "../../data/mutate.ts";
+import { clearUnsynced, subscribeUnsynced, unsynced, unsyncedText } from "../../data/outbox.ts";
 import { updateInterface } from "./offline.ts";
 
 export default function ConnectionBanner() {
@@ -7,6 +9,10 @@ export default function ConnectionBanner() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const banner = useRef<HTMLDivElement>(null);
+  const waiting = useSyncExternalStore(subscribePending, () => pending().length);
+  const refused = useSyncExternalStore(subscribeUnsynced, unsynced);
+  const [listOpen, setListOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
   useEffect(() => {
     // every API response announces itself; only a response that changed something may commit
     const changed = () => setConnection((was) => {
@@ -38,7 +44,7 @@ export default function ConnectionBanner() {
     const board = new URLSearchParams(location.search).get("board");
     if (board) savedAt = Number(localStorage.getItem(`strata.offline.${board}`)) || null;
   } catch { /* Old copies may not have a recorded date. */ }
-  const visible = connection.offline || connection.needsReload;
+  const visible = connection.offline || connection.needsReload || refused.length > 0;
   useLayoutEffect(() => {
     const measure = () => document.documentElement.style.setProperty("--connection-height", `${banner.current?.offsetHeight || 0}px`);
     measure();
@@ -52,9 +58,20 @@ export default function ConnectionBanner() {
     try { await updateInterface(); } catch (e) { setError(e instanceof Error ? e.message : "Could not update. Try again when connected."); }
     finally { setBusy(false); }
   };
+  const copy = async () => {
+    try { await navigator.clipboard.writeText(unsyncedText(refused)); setCopied(true); } catch { setListOpen(true); }
+  };
+  const changes = waiting ? `${waiting} change${waiting === 1 ? "" : "s"} waiting, sent when you’re back` : "reviews, highlights and notes are kept until you’re back";
   return <div ref={banner} className="connection-banner" role="status" aria-live="polite">
-    {connection.offline ? <span><strong>Offline</strong> · {savedAt ? `saved copies from ${new Date(savedAt).toLocaleString()}` : "saved date unavailable"} · changes can’t be saved</span>
-      : <><span>{connection.outdated ? "Strata was updated · this page is an older version." : "Back online · reload to refresh saved content."}</span>
+    {refused.length ? <div className="unsynced">
+      <span><strong>{refused.length} change{refused.length === 1 ? "" : "s"} made offline didn’t land</strong> · copy the list to sort them out</span>
+      <button onClick={copy}>{copied ? "Copied" : "Copy list"}</button>
+      <button onClick={() => setListOpen((o) => !o)} aria-expanded={listOpen}>{listOpen ? "Hide" : "Show"}</button>
+      <button onClick={() => { clearUnsynced(); setListOpen(false); setCopied(false); }}>Clear</button>
+      {listOpen ? <textarea readOnly aria-label="Changes that didn't land" value={unsyncedText(refused)} onFocus={(e) => e.currentTarget.select()} /> : null}
+    </div> : null}
+    {connection.offline ? <span><strong>Offline</strong> · {savedAt ? `saved copies from ${new Date(savedAt).toLocaleString()}` : "saved date unavailable"} · {changes}</span>
+      : !connection.needsReload ? null : <><span>{connection.outdated ? "Strata was updated · this page is an older version." : "Back online · reload to refresh saved content."}</span>
         <button onClick={update} disabled={busy}>{busy ? "Checking…" : connection.outdated ? "Reload" : "Refresh now"}</button></>}
     {error ? <span>{error}</span> : null}
   </div>;

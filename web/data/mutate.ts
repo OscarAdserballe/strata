@@ -2,7 +2,9 @@ import { store as roomStore, type Store } from "./store.ts";
 import { confirmByShape } from "./entities/confirm.ts";
 
 /* The one save path: every write is an Op handed to mutate().
-   - Enqueue refuses at once while the wire is known down; else it paints layers and marks queries stale.
+   - Enqueue refuses at once while the wire is known down, unless the op may wait (offline); else it paints layers and marks queries stale.
+   - An op that may wait is kept in the outbox while the wire is down, so a reload resends it under the same key.
+   - One that waited and is then refused is written to the outbox's conflicts list, for the person to read.
    - Lanes keep order: an op starts when it heads every lane it names; a failed head holds its lanes.
    - One key per op, minted once and reused on every retry and on the pagehide flush.
    - 2xx confirms; a lost answer, deadline, 408/425/429 or 5xx is retried with backoff, paused while offline.
@@ -39,6 +41,24 @@ export interface Op<Res = unknown> {
   keepalive?: boolean;
   /** Painted at once, sent no sooner than this: until then withdraw(key) takes it back. A pagehide flush sends it early. */
   holdMs?: number;
+  /** May wait out the wire: kept in the outbox while offline and sent on reconnect. */
+  offline?: boolean;
+}
+
+/** An op as the outbox keeps it: plain data, so a reload can send it again with the same key and bytes. */
+export interface SavedOp {
+  key: string; label: string; lanes: string[]; method: Op["method"]; path: string;
+  body?: string; base?: number | null; invalidates?: string[]; at: number;
+}
+/** A write that waited offline and was refused once sent: what was asked, and what the server said. */
+export interface Unsynced {
+  key: string; label: string; method: string; path: string; body?: string;
+  status?: number; said: string; server?: unknown; at: number;
+}
+export interface Outbox {
+  put(op: SavedOp): void;
+  drop(key: string): void;
+  refused(row: Unsynced): void;
 }
 
 export type PendingState = "held" | "queued" | "sending" | "retrying" | "failed";
@@ -92,6 +112,7 @@ export interface MutateDeps {
   now?(): number;
   clearReads?(): void;
   surface?(failure: Failure): void;
+  outbox?: Outbox;
 }
 
 export const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 16000, 16000];
@@ -137,6 +158,8 @@ interface Item {
   /** Still inside its hold: painted, not yet allowed on the wire. */
   holding: boolean;
   holdTimer: unknown;
+  /** The key the outbox holds it under; set once it has waited on the wire. */
+  saved: string | null;
 }
 
 export class Mutator {
@@ -149,10 +172,12 @@ export class Mutator {
   private snapshot: PendingOp[] = [];
   private idle: (() => void)[] = [];
   private seq = 0;
+  /** Strictly rising, so ops kept in the same millisecond resume in the order they were made. */
+  private keptAt = 0;
   /** Bytes of keepalive requests in flight; the browser's 64 KB budget is shared by all of them. */
   private aliveBytes = 0;
   private readonly leaving = new Set<() => void>();
-  private d!: Required<Omit<MutateDeps, "transport" | "surface" | "clearReads">> & Pick<MutateDeps, "transport" | "surface" | "clearReads">;
+  private d!: Required<Omit<MutateDeps, "transport" | "surface" | "clearReads" | "outbox">> & Pick<MutateDeps, "transport" | "surface" | "clearReads" | "outbox">;
   private offWire: (() => void) | null = null;
 
   constructor(deps: MutateDeps = {}) { this.configure(deps); }
@@ -174,8 +199,27 @@ export class Mutator {
   }
 
   mutate<Res>(op: Op<Res>): Promise<Res> {
-    if (this.d.wire.down()) return Promise.reject(offline());
+    if (this.d.wire.down() && !op.offline) return Promise.reject(offline());
     if (!this.d.transport) return Promise.reject(saveError("the save path is not wired to data/api.ts yet"));
+    return this.enqueue(op, null);
+  }
+
+  /** Sends again what a closed tab left in the outbox, under the same keys; one already queued here is skipped. */
+  resume(saved: SavedOp[]): void {
+    for (const s of [...saved].sort((a, b) => a.at - b.at)) {
+      if (this.items.some((i) => i.key === s.key || i.saved === s.key)) continue;
+      const op: Op = {
+        label: s.label, lanes: s.lanes, method: s.method, path: s.path, key: s.key, offline: true, flush: true,
+        ...(s.body === undefined ? {} : { body: JSON.parse(s.body) }),
+        ...(typeof s.base === "number" ? { base: () => s.base as number } : {}),
+        ...(s.invalidates ? { invalidates: s.invalidates } : {}),
+      };
+      // nobody is waiting on these: a refusal goes to the conflicts list, not to a caller
+      this.enqueue(op, s.key).catch(() => {});
+    }
+  }
+
+  private enqueue<Res>(op: Op<Res>, saved: string | null): Promise<Res> {
     return new Promise<Res>((resolve, reject) => {
       const waiter = { resolve: resolve as (v: unknown) => void, reject };
       const was = op.coalesce ? this.items.find((i) => i.op.coalesce === op.coalesce && i.state === "queued" && !i.sent) : undefined;
@@ -186,7 +230,7 @@ export class Mutator {
         const item: Item = {
           id: `op${++this.seq}`, seq: this.seq, op: op as Op<unknown>, key: op.key ?? mintKey(), body: undefined,
           state: "queued", attempts: 0, sent: false, error: null, removers: [], waiters: [waiter],
-          timer: null, due: null, remaining: null, conflicts: 0, carrying: 0, holding: false, holdTimer: null,
+          timer: null, due: null, remaining: null, conflicts: 0, carrying: 0, holding: false, holdTimer: null, saved,
         };
         if (op.holdMs && op.holdMs > 0) {
           item.holding = true;
@@ -195,6 +239,7 @@ export class Mutator {
         item.body = op.body === undefined ? undefined : JSON.stringify(op.body);
         this.paint(item);
         this.items.push(item);
+        if (this.d.wire.down()) this.keep(item);
         for (const lane of op.lanes) {
           let queue = this.lanes.get(lane);
           if (!queue) this.lanes.set(lane, queue = []);
@@ -384,8 +429,25 @@ export class Mutator {
     }, ms);
   }
 
+  /** Into the outbox, once: from here a reload can send it again. */
+  private keep(item: Item): void {
+    if (!item.op.offline || item.saved || !this.d.outbox) return;
+    item.saved = item.key;
+    const base = item.op.base?.();
+    this.keptAt = Math.max(this.d.now(), this.keptAt + 1);
+    try {
+      this.d.outbox.put({
+        key: item.key, label: item.op.label, lanes: item.op.lanes, method: item.op.method, path: item.op.path, at: this.keptAt,
+        ...(item.body === undefined ? {} : { body: item.body }),
+        ...(typeof base === "number" ? { base } : {}),
+        ...(item.op.invalidates?.length ? { invalidates: item.op.invalidates } : {}),
+      });
+    } catch (e) { console.error("[strata] outbox", e); }
+  }
+
   private wireChanged(): void {
     const down = this.d.wire.down();
+    if (down) for (const item of this.items) this.keep(item);
     for (const item of this.items) {
       if (down && item.timer !== null) {
         this.d.clearTimer(item.timer);
@@ -422,6 +484,14 @@ export class Mutator {
   }
 
   private fail(item: Item, error: SaveError): void {
+    if (item.saved) try {
+      this.d.outbox?.refused({
+        key: item.saved, label: item.op.label, method: item.op.method, path: item.op.path, at: this.d.now(),
+        ...(item.body === undefined ? {} : { body: item.body }),
+        ...(error.status ? { status: error.status } : {}),
+        said: error.message, ...(error.conflict ? { server: error.conflict.value } : {}),
+      });
+    } catch (e) { console.error("[strata] outbox", e); }
     this.unpaint(item);
     this.d.store.settle(item.id, null);
     for (const w of item.waiters) w.reject(error);
@@ -435,6 +505,7 @@ export class Mutator {
     if (item.holdTimer !== null) this.d.clearTimer(item.holdTimer);
     item.holdTimer = null;
     item.holding = false;
+    if (item.saved) try { this.d.outbox?.drop(item.saved); } catch (e) { console.error("[strata] outbox", e); }
     this.leaveLanes(item);
     this.items = this.items.filter((i) => i !== item);
     this.changed();

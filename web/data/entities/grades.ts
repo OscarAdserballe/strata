@@ -22,6 +22,7 @@ export function gradeOp(request: GradeRequest): Op<{ saved: true; at: number }> 
     // often the last act before the tab closes, so every attempt rides keepalive
     keepalive: true,
     flush: true,
+    offline: true,
     confirm: () => {},
   };
 }

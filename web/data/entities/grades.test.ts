@@ -128,15 +128,15 @@ test("a grade out of retries is sent again on its own, under its receipt, until 
   assert.deepEqual(g.getSnapshot(), { pending: 0, error: null });
 });
 
-test("offline is read-only: the grade is refused at once and said", async () => {
+test("offline the grade waits: nothing is said lost, and it goes under its receipt when the wire is back", async () => {
   const { g, sent, wire } = harness();
   wire.isDown = true;
-  const said: { status?: number }[] = [];
+  const said: unknown[] = [];
   g.grade(req("offline-01"), (e) => said.push(e));
   await tick();
   assert.equal(sent.length, 0);
-  assert.equal(said[0]?.status, 0);
-  assert.equal(g.getSnapshot().pending, 0);
+  assert.equal(said.length, 0);
+  assert.equal(g.getSnapshot().pending, 1);
 });
 
 test("signed out (401) is not a refusal: the grade is kept and sent again under its receipt", async () => {

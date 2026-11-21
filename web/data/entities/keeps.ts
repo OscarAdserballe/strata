@@ -23,6 +23,7 @@ export const keepOps = {
       path: `/api/decks/${slug}/keeps`,
       body: keep ? { add: [id] } : { remove: [id] },
       optimistic: [{ key: keepsKey(slug), apply: kept(id, keep) }],
+      offline: true,
     };
   },
   /** one of your questions becomes a card of this deck and a keep, in one act */

@@ -6,7 +6,7 @@ import { cardPrompt } from "../../capabilities/card/drill-order.ts";
 import { facesOf } from "../../../shared/cards/faces.ts";
 import { TOUCH, PHONE } from "../../platform/device.js";
 import { courseOf } from "../../shell/format.js";
-import { StrataAPI, StrataWhy, StrataWireDown } from "../../data/api.ts";
+import { StrataAPI, StrataWhy } from "../../data/api.ts";
 import { grades, reviewGradeRequest } from "../../data/entities/grades.ts";
 import { afterGrade, shuffled } from "../../data/entities/review.ts";
 import { end as arrived } from "../../platform/rum.ts";
@@ -222,8 +222,6 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
     if (!c || !ref.current.answered) return;
     // pause on an unsaved grade: later verdicts must not run ahead of a lost one
     if (grades.getSnapshot().error) return;
-    // offline the save path refuses writes, so the card stays on screen ungraded
-    if (StrataWireDown()) { setDropped("offline: this card waits for the connection"); return; }
     const request = reviewGradeRequest(c, got, Date.now() - shownAt.current);
     grades.grade(request, (e) => { if (live.current) setDropped(StrataWhy(e, "a grade wasn't saved")); });
     // advance at once while the ordered saves run behind; seal this encounter until the next one draws
