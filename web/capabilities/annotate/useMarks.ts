@@ -206,7 +206,11 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
     try {
       await markOps.note(id, mid, after);
       remember(id, { type: "note", id: mid, before: before || null, after });
-    } catch (e) { markGaveUp(e, id, mid); toastWhy(e, "couldn't save that note"); }
+    } catch (e) {
+      markGaveUp(e, id, mid);
+      // a note written offline over one changed elsewhere is listed by the offline banner instead
+      if (!(e as { clashed?: boolean } | null)?.clashed) toastWhy(e, "couldn't save that note");
+    }
   }
   async function replyNote(mid: string, text: string) {
     const id = reader.live().activeId; if (!id || !mid || !text.trim()) return;

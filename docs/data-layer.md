@@ -45,8 +45,9 @@ and every read must be ordered against the writes it may have missed.
   dropped once the server confirms or refuses it. On open, `restore()` puts back what an earlier tab
   never heard confirmed, in the order it was made, so each lane keeps its order and a replay is the
   same write. A notes save is a whole document: only the newest per board is replayed, its If-Match
-  frozen at the click. If a save that waited offline gets a 409 with a different text, it is not
-  written over. It becomes a clash (`strata.clash.<key>`: where, mine, theirs, rev), listed by the
+  frozen at the click. A highlight's note written offline carries `was`, the note it is written
+  over, and the server refuses it with a 409 if another note is there now. If a save that waited
+  offline gets a 409 with a different text, it is not written over. It becomes a clash (`strata.clash.<key>`: where, mine, theirs, rev), listed by the
   offline banner until you keep mine (sent over the new rev), keep theirs, or hand it to an agent.
 - **Undo.** An op may be held (`holdMs`): its layers paint at once, it leaves only when the hold is
   up, and until then `withdraw(key)` takes it back unsent. The pagehide flush sends a held op early.

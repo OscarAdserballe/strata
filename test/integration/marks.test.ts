@@ -117,3 +117,24 @@ test("marks travel with the pair that moves to another board", async () => {
   await api(`/api/boards/${from.board.id}`, { method: "DELETE" });
   await api(`/api/boards/${to.board.id}`, { method: "DELETE" });
 });
+
+test("a note sent with the note it was written over is refused, not written, when another note is there now", async () => {
+  const { body: made } = await api("/api/boards", { method: "POST", body: JSON.stringify({ title: "marks was" }) });
+  const id = made.board.id;
+  const { body: res } = await api(`/api/boards/${id}/resources`, { method: "POST", body: JSON.stringify({ filename: "a.md", text: "Alpha beta gamma delta epsilon." }) });
+  const { body: mk } = await api(`/api/boards/${id}/marks`, { method: "POST", body: JSON.stringify({ resourceId: res.id, start: 6, end: 16, quote: "beta gamma" }) });
+  const patch = (body: unknown) => api(`/api/boards/${id}/marks/${mk.id}`, { method: "PATCH", body: JSON.stringify(body) });
+
+  assert.equal((await patch({ note: "from the laptop" })).body.mark.note, "from the laptop");
+  const clash = await patch({ note: "from the plane", was: null });
+  assert.equal(clash.status, 409);
+  assert.equal(clash.body.conflict.value.note, "from the laptop");
+  assert.equal(typeof clash.body.conflict.rev, "number");
+  const { body: after } = await api(`/api/boards/${id}`);
+  assert.equal(after.marks[0].note, "from the laptop", "nothing was written");
+
+  assert.equal((await patch({ note: "over the laptop", was: "from the laptop" })).status, 200, "written over the note it names");
+  assert.equal((await patch({ note: "over the laptop", was: "something older" })).status, 200, "the same text already there is not a clash");
+  assert.equal((await patch({ note: "no guard" })).status, 200, "without was, the last word wins as before");
+  await api(`/api/boards/${id}`, { method: "DELETE" });
+});

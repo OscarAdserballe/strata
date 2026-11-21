@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { Store } from "./store.ts";
 import { Mutator, type SendAnswer, type SendRequest } from "./mutate.ts";
 import { Outbox, type Shelf } from "./outbox.ts";
-import { markActOp, type MarkAct } from "./entities/marks.ts";
+import { markKind, type MarkAct } from "./entities/marks.ts";
 import { keepActOp, type KeepAct } from "./entities/keeps.ts";
 import { notesKind, notesSender, type NotesAct } from "./entities/notes.ts";
 import { marksKey, notesKey, type NotesEntity } from "./entities/boards.ts";
@@ -29,7 +29,7 @@ function tab(shelf = mapShelf(), clashShelf = mapShelf(), down = true) {
     transport: (req) => { const reply = deferred<SendAnswer>(); sent.push({ req, reply }); return reply.promise; } });
   let clock = 100;
   const o = new Outbox(m, shelf, clashShelf, () => clock++);
-  o.kind<MarkAct>("mark", { build: markActOp });
+  o.kind<MarkAct>("mark", markKind(store));
   o.kind<KeepAct>("keep", { build: keepActOp, release: true });
   o.kind<NotesAct>("notes", notesKind(store));
   const up = () => { wire.isDown = false; for (const fn of [...listeners]) fn(); };
@@ -99,7 +99,7 @@ test("a write refused for good leaves the shelf, so a reopen does not send it fo
   const gone = t.o.send("mark", { do: "remove", board: "b1", id: "mk-00000004", undo: false } satisfies MarkAct).catch((e) => e);
   await tick();
   await t.reply(0, answer(404, { error: "no such mark" }));
-  assert.equal((await gone).status, 404);
+  assert.equal(((await gone) as { status?: number }).status, 404);
   assert.equal(t.shelf.map.size, 0);
 });
 
@@ -187,4 +187,37 @@ test("a screen holding the clashed text settles it itself", async () => {
   await t.o.resolve(t.o.getSnapshot().clashes[0].id, "mine");
   assert.deepEqual(heard, ["b1:mine"]);
   assert.equal(t.sent.length, 1, "the screen sends it, not the outbox");
+});
+
+test("a highlight's note written offline over one changed elsewhere is a clash on its passage; keep mine names theirs as what it overwrites", async () => {
+  const t = tab();
+  t.store.apply<Mark[]>(marksKey("b1"), 4, [{ ...draft("mk-00000005"), note: "first thought", createdAt: 1 }], "wire");
+  t.store.apply("board:b1", 4, { board: { id: "b1", title: "Plane reading" }, resources: [{ id: "r1", filename: "essay.md" }] }, "wire");
+  const save = t.o.send("mark", { do: "note", board: "b1", id: "mk-00000005", note: "on the plane", was: "first thought" } satisfies MarkAct).catch((e) => e);
+  assert.equal(markOn(t.store)[0].note, "on the plane", "painted at once");
+  t.up();
+  await tick();
+  assert.deepEqual(JSON.parse(t.sent[0].req.body!), { note: "on the plane", was: "first thought" });
+  await t.reply(0, answer(409, { error: "changed elsewhere", conflict: { rev: 9, value: { note: "on the laptop" } } }));
+  assert.equal(((await save) as { clashed?: boolean }).clashed, true);
+  assert.equal(markOn(t.store)[0].note, "on the laptop", "the page shows what the server holds, not mine over it");
+  const [clash] = t.o.getSnapshot().clashes;
+  assert.deepEqual([clash.where, clash.mine, clash.theirs, clash.rev],
+    [{ board: "b1", title: "Plane reading", source: "essay.md", passage: "words" }, "on the plane", "on the laptop", 9]);
+  void t.o.resolve(clash.id, "mine");
+  await tick();
+  assert.deepEqual(JSON.parse(t.sent[1].req.body!), { note: "on the plane", was: "on the laptop" });
+  await t.reply(1, answer(200, { mark: { ...draft("mk-00000005"), note: "on the plane", createdAt: 1 }, rev: 10 }));
+  assert.equal(markOn(t.store)[0].note, "on the plane");
+});
+
+test("an unguarded note (made online, or on a mark the server hasn't seen) is never read as a clash", async () => {
+  const t = tab();
+  const save = t.o.send("mark", { do: "note", board: "b1", id: "mk-00000006", note: "x" } satisfies MarkAct).catch((e) => e);
+  t.up();
+  await tick();
+  assert.deepEqual(JSON.parse(t.sent[0].req.body!), { note: "x" });
+  await t.reply(0, answer(409, { conflict: { rev: 2, value: { note: "y" } } }));
+  await save;
+  assert.equal(t.o.getSnapshot().clashes.length, 0);
 });

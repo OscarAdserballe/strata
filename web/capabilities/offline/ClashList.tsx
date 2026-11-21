@@ -5,7 +5,9 @@ import { dash } from "../../data/entities/dashboard.ts";
 import { outbox, type Clash } from "../../data/outbox.ts";
 
 const QUOTE_MAX = 8000;
-const placeOf = (c: Clash) => [c.where.title ?? "this board", c.where.source ? c.where.source : "notes", c.where.passage].filter(Boolean).join(" · ");
+const cutAt = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
+const placeOf = (c: Clash) => [c.where.title ?? "this board", c.where.source ?? "board notes",
+  c.where.passage ? `“${cutAt(c.where.passage, 90)}”` : null].filter(Boolean).join(" · ");
 const linkOf = (c: Clash) => {
   const q = new URLSearchParams({ board: c.where.board, ...(c.where.source ? { resource: c.where.source } : {}) });
   return `${location.origin}${StrataPath(`/?${q}`)}`;

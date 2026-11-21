@@ -1,8 +1,8 @@
 import type { Mark, MarkReply } from "../../../shared/types/index.ts";
 import { store as roomStore, type Store } from "../store.ts";
-import { discard, pending, type Op } from "../mutate.ts";
-import { outbox } from "../outbox.ts";
-import { marksKey, revOf } from "./boards.ts";
+import { discard, mutator, pending, type Conflict, type Op, type SaveError } from "../mutate.ts";
+import { outbox, type Clash, type ClashDraft } from "../outbox.ts";
+import { boardKey, marksKey, revOf, type BoardEntity } from "./boards.ts";
 
 // A mark's id is its identity, never the op's key: a redo of an undone create is a new act with a new key.
 
@@ -34,14 +34,17 @@ export const markOps = {
     };
   },
 
-  note(board: string, id: string, note: string | null): Op<{ mark: Mark; rev?: number }> {
+  /** `was` names the note this one is written over: the server refuses it with a 409 if another is there now */
+  note(board: string, id: string, note: string | null, was?: string | null): Op<{ mark: Mark; rev?: number }> {
+    const noted = (n: string | null) => (list: Mark[] | undefined) => (list ?? []).map((m) => (m.id === id ? { ...m, note: n } : m));
     return {
       label: "save that note",
       lanes: [markLane(id)],
       method: "PATCH",
       path: `/api/boards/${board}/marks/${id}`,
-      body: { note },
-      optimistic: [{ key: marksKey(board), apply: (list: Mark[] | undefined) => (list ?? []).map((m) => (m.id === id ? { ...m, note } : m)) }],
+      body: was === undefined ? { note } : { note, was },
+      optimistic: [{ key: marksKey(board), apply: noted(note) }],
+      ...(was === undefined ? {} : { takeConflict: { key: marksKey(board), fold: (list: Mark[] | undefined, c: Conflict) => noted(noteIn(c))(list) } }),
       flush: true,
     };
   },
@@ -80,25 +83,56 @@ export const markOps = {
 /** What a reopened tab rebuilds a shelved mark act from. */
 export type MarkAct =
   | { do: "create"; board: string; draft: MarkDraft & { id: string }; at: number }
-  | { do: "note"; board: string; id: string; note: string | null }
+  | { do: "note"; board: string; id: string; note: string | null; was?: string | null }
   | { do: "reply"; board: string; mid: string; id: string; text: string; at: number }
   | { do: "remove"; board: string; id: string; undo: boolean };
 
 export function markActOp(a: MarkAct): Op<any> {
   switch (a.do) {
     case "create": return markOps.create(a.board, a.draft, () => a.at);
-    case "note": return markOps.note(a.board, a.id, a.note);
+    case "note": return markOps.note(a.board, a.id, a.note, a.was);
     case "reply": return markOps.reply(a.board, a.mid, a.id, a.text, () => a.at);
     case "remove": return markOps.remove(a.board, a.id, a.undo);
   }
 }
-outbox.kind<MarkAct>("mark", { build: markActOp });
+const noteIn = (c: Conflict | undefined): string | null => {
+  const n = (c?.value as { note?: unknown } | null)?.note;
+  return typeof n === "string" ? n : null;
+};
+const said = (n: string | null | undefined) => (n?.trim() ? n : null);
+
+export function markKind(s: Store) {
+  return {
+    build: markActOp,
+    clash: (e: SaveError, a: MarkAct): ClashDraft | null => {
+      if (a.do !== "note" || a.was === undefined) return null;
+      const theirs = noteIn(e.conflict);
+      if (said(theirs) === said(a.note)) return null;
+      const mark = s.get<Mark[]>(marksKey(a.board))?.find((m) => m.id === a.id);
+      const board = s.get<BoardEntity>(boardKey(a.board));
+      const source = mark ? board?.resources?.find((r) => r.id === mark.resourceId)?.filename ?? mark.resourceId : null;
+      const title = board?.board?.title;
+      return { where: { board: a.board, ...(title ? { title } : {}), source, passage: mark?.quote ?? null }, mine: a.note ?? "", theirs: theirs ?? "", rev: revOf(e.conflict?.rev), args: a };
+    },
+    over: (c: Clash): MarkAct => ({ ...(c.args as MarkAct & { do: "note" }), was: said(c.theirs) }),
+  };
+}
+outbox.kind<MarkAct>("mark", markKind(roomStore));
 const act = <Res>(a: MarkAct): Promise<Res> => outbox.send<Res>("mark", a, markActOp(a) as Op<Res>);
+
+/** Offline, the note this one is written over: the server's with my own earlier edits folded in; none for a mark the server hasn't seen. */
+function wasOf(board: string, id: string, s: Store = roomStore): string | null | undefined {
+  if (!mutator.offline() || !s.entry<Mark[]>(marksKey(board))?.base?.some((m) => m.id === id)) return undefined;
+  return said(s.get<Mark[]>(marksKey(board))?.find((m) => m.id === id)?.note);
+}
 
 // offline every act waits on the device in its mark's lane, so a create still reaches the server before its note
 export const marks = {
   create: (board: string, draft: MarkDraft) => act<MarkAnswer>({ do: "create", board, draft: { ...draft, id: draft.id ?? newMarkId() }, at: Date.now() }),
-  note: (board: string, id: string, note: string | null) => act<{ mark: Mark; rev?: number }>({ do: "note", board, id, note }),
+  note: (board: string, id: string, note: string | null) => {
+    const was = wasOf(board, id);
+    return act<{ mark: Mark; rev?: number }>(was === undefined ? { do: "note", board, id, note } : { do: "note", board, id, note, was });
+  },
   reply: (board: string, mid: string, text: string) => act<{ reply: MarkReply; rev?: number }>({ do: "reply", board, mid, id: newReplyId(), text, at: Date.now() }),
   remove: (board: string, id: string, undo = false) => act<{ ok: boolean; id: string; rev?: number }>({ do: "remove", board, id, undo }),
   /** Gives up on a failed create and what waits behind it, so the page shows what the server has. */
