@@ -117,3 +117,25 @@ test("marks travel with the pair that moves to another board", async () => {
   await api(`/api/boards/${from.board.id}`, { method: "DELETE" });
   await api(`/api/boards/${to.board.id}`, { method: "DELETE" });
 });
+
+test("a note written offline names the one it replaced, and is refused if that changed meanwhile", async () => {
+  const { body: made } = await api("/api/boards", { method: "POST", body: JSON.stringify({ title: "offline notes" }) });
+  const id = made.board.id;
+  const { body: res } = await api(`/api/boards/${id}/resources`, { method: "POST", body: JSON.stringify({ filename: "a.md", text: "Alpha beta gamma delta epsilon." }) });
+  const { body: mk } = await api(`/api/boards/${id}/marks`, { method: "POST", body: JSON.stringify({ resourceId: res.id, start: 6, end: 16, quote: "beta gamma", note: "first" }) });
+  const path = `/api/boards/${id}/marks/${mk.id}`;
+
+  const { status: fits, body: kept } = await api(path, { method: "PATCH", body: JSON.stringify({ note: "second", was: "first" }) });
+  assert.equal(fits, 200, "written over what is there");
+  assert.equal(kept.mark.note, "second");
+
+  const { status: clash, body: refused } = await api(path, { method: "PATCH", body: JSON.stringify({ note: "from the plane", was: "first" }) });
+  assert.equal(clash, 409, "the note changed since it was read");
+  assert.equal(refused.conflict.value.note, "second", "and the refusal carries what is there now");
+
+  const { status: same } = await api(path, { method: "PATCH", body: JSON.stringify({ note: "second", was: "first" }) });
+  assert.equal(same, 200, "the same words on both sides are no clash");
+  const { status: plain } = await api(path, { method: "PATCH", body: JSON.stringify({ note: "last write" }) });
+  assert.equal(plain, 200, "a note sent online still writes over");
+  await api(`/api/boards/${id}`, { method: "DELETE" });
+});

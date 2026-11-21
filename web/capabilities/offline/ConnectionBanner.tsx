@@ -2,13 +2,17 @@ import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } fr
 import { StrataCheckConnection, StrataConnection } from "../../data/api.ts";
 import { updateInterface } from "./offline.ts";
 import { grades } from "../../data/entities/grades.ts";
+import { ClashList, useClashes, useMarksWaiting } from "./Clashes.tsx";
 
 export default function ConnectionBanner() {
   const [connection, setConnection] = useState(StrataConnection);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const banner = useRef<HTMLDivElement>(null);
-  const waiting = useSyncExternalStore(grades.subscribe, () => grades.getSnapshot().pending);
+  const reviews = useSyncExternalStore(grades.subscribe, () => grades.getSnapshot().pending);
+  const marking = useMarksWaiting();
+  const clashes = useClashes().length;
+  const [open, setOpen] = useState(false);
   useEffect(() => {
     // every API response announces itself; only a response that changed something may commit
     const changed = () => setConnection((was) => {
@@ -40,7 +44,7 @@ export default function ConnectionBanner() {
     const board = new URLSearchParams(location.search).get("board");
     if (board) savedAt = Number(localStorage.getItem(`strata.offline.${board}`)) || null;
   } catch { /* Old copies may not have a recorded date. */ }
-  const visible = connection.offline || connection.needsReload;
+  const visible = connection.offline || connection.needsReload || clashes > 0;
   useLayoutEffect(() => {
     const measure = () => document.documentElement.style.setProperty("--connection-height", `${banner.current?.offsetHeight || 0}px`);
     measure();
@@ -54,10 +58,14 @@ export default function ConnectionBanner() {
     try { await updateInterface(); } catch (e) { setError(e instanceof Error ? e.message : "Could not update. Try again when connected."); }
     finally { setBusy(false); }
   };
+  const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? "" : "s"}`;
+  const waiting = [reviews ? plural(reviews, "review") : "", marking ? plural(marking, "highlight or note") : ""].filter(Boolean).join(" and ");
   return <div ref={banner} className="connection-banner" role="status" aria-live="polite">
-    {connection.offline ? <span><strong>Offline</strong> · {savedAt ? `saved copies from ${new Date(savedAt).toLocaleString()}` : "saved date unavailable"} · {waiting ? `${waiting} review${waiting === 1 ? "" : "s"} waiting to sync` : "reviews save and sync later"} · other changes can’t be saved</span>
-      : <><span>{connection.outdated ? "Strata was updated · this page is an older version." : "Back online · reload to refresh saved content."}</span>
-        <button onClick={update} disabled={busy}>{busy ? "Checking…" : connection.outdated ? "Reload" : "Refresh now"}</button></>}
+    {connection.offline ? <span><strong>Offline</strong> · {savedAt ? `saved copies from ${new Date(savedAt).toLocaleString()}` : "saved date unavailable"} · {waiting ? `${waiting} waiting to sync` : "reviews, highlights and notes save and sync later"} · other changes can’t be saved</span>
+      : connection.needsReload ? <><span>{connection.outdated ? "Strata was updated · this page is an older version." : "Back online · reload to refresh saved content."}</span>
+        <button onClick={update} disabled={busy}>{busy ? "Checking…" : connection.outdated ? "Reload" : "Refresh now"}</button></> : null}
+    {clashes ? <><span>{plural(clashes, "offline change")} didn’t fit</span><button onClick={() => setOpen(true)}>Resolve</button></> : null}
     {error ? <span>{error}</span> : null}
+    {open ? <ClashList onClose={() => setOpen(false)} /> : null}
   </div>;
 }

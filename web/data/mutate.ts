@@ -443,6 +443,8 @@ export class Mutator {
     this.pump();
   }
 
+  wireDown(): boolean { return this.d.wire.down(); }
+
   /** A stable array, new only when something in it changed (for useSyncExternalStore). */
   pending(): PendingOp[] { return this.snapshot; }
 

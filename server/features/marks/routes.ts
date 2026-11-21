@@ -71,8 +71,13 @@ export const markRoutes: Route[] = [
     const [boardId, mid] = params;
     const cur = q.mark.get(boardId, mid) as MarkRow | undefined;
     if (!cur) { sendJson(res, 404, { error: "no such mark" }); return; }
-    const b = await body<{ note?: string | null }>();
+    const b = await body<{ note?: string | null; was?: string | null }>();
     const note = b.note == null || !String(b.note).trim() ? null : String(b.note).slice(0, 4000);
+    // a note written offline names the one it was written over, so a change made elsewhere meanwhile is not overwritten
+    const was = b.was == null || !String(b.was).trim() ? null : String(b.was).slice(0, 4000);
+    if ("was" in b && was !== cur.note && note !== cur.note) {
+      sendJson(res, 409, { error: "that note changed on another device", conflict: { rev: boardRev(boardId), value: markOut(cur) } }); return;
+    }
     commit(() => {
       q.setMarkNote.run(note, now(), boardId, mid);
       logEvent(db, APP, "mark_note", { board: boardId, said: !!note }, ssn);

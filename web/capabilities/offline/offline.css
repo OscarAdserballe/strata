@@ -4,3 +4,14 @@
 .offline-boards h2{font:500 12px/1.5 var(--sans);color:var(--ink-soft);}
 .offline-boards button{display:block;width:100%;padding:14px 0;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;color:var(--ink);font:18px/1.4 var(--serif);cursor:pointer;}
 .veil.launcher,.app .bench-lib{top:var(--connection-height,0px);}
+.clashes{position:fixed;top:calc(var(--connection-height,0px) + 8px);left:50%;transform:translateX(-50%);width:min(560px,calc(100vw - 32px));max-height:70vh;overflow:auto;background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:10px;box-shadow:0 8px 28px #0002;text-align:left;font:14px/1.5 var(--sans);}
+.clashes header{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);}
+.clashes ul{list-style:none;margin:0;padding:0;}
+.clash{padding:12px 14px;border-bottom:1px solid var(--line);}
+.clash p{margin:0 0 6px;}
+.clash-quote{font:15px/1.5 var(--serif);}
+.clash-why{color:var(--ink-soft);font-size:13px;}
+.clash-sides{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:8px 0;}
+.clash-sides p{white-space:pre-wrap;}
+.clash-acts{display:flex;gap:8px;flex-wrap:wrap;align-items:center;}
+.clash-error{color:#b0452f;font-size:13px;}
