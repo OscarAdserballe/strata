@@ -2167,5 +2167,124 @@ const padTwoTabs = {
   },
 };
 
+// the wire is cut under the page: every /api request fails until it is joined again, as on a plane
+async function cuttable(page) {
+  const wire = { cut: false };
+  // registered after the shim, so it runs first
+  await page.route((url) => url.pathname.includes("/api/"), (route) => (wire.cut ? route.abort("internetdisconnected") : route.fallback()));
+  return {
+    async cut() { wire.cut = true; await page.evaluate(() => window.dispatchEvent(new Event("offline"))); },
+    async join() { wire.cut = false; await page.evaluate(() => window.dispatchEvent(new Event("online"))); },
+  };
+}
+async function highlightWithNote(page, phrase, note) {
+  const at = await phraseAt(page, phrase);
+  await page.mouse.move(at.x0, at.y0);
+  await page.mouse.down();
+  await page.mouse.move(at.x1, at.y1, { steps: 4 });
+  await page.mouse.up();
+  await page.locator(".selmenu").getByRole("button", { name: "Note", exact: true }).click();
+  await page.locator(".fold .fi-edit").waitFor();
+  await page.keyboard.type(note);
+  await page.keyboard.press("Escape");
+}
+const markIdOn = (page, phrase) => page.evaluate((words) => [...document.querySelectorAll(".page-col.prose .mk[data-mark]")]
+  .find((el) => words.includes(el.textContent.trim()) || el.textContent.includes(words))?.dataset.mark ?? null, phrase);
+
+const OFFLINE_GRADES = 3;
+const offlineThenSync = {
+  name: "offline-then-sync",
+  what: "offline, grade three cards, highlight a passage with a note, and rewrite the note of a highlight another device rewrites meanwhile; reconnect over a lossy wire; nothing is lost or doubled and the other device's note is not written over",
+  checks: {
+    graded: "the server holds exactly one grade per card graded offline",
+    marked: "the server holds the offline highlight exactly once, with its note",
+    kept: "the other device's note is still the server's: the offline one did not overwrite it",
+    listed: "the page lists that note as one clash, showing both texts",
+    drained: "nothing is left owed on the device once it has synced",
+  },
+  async run(t) {
+    const b = await board(t, "Race offline");
+    const unique = "Whatever is written on the plane is still owed to the server when it lands.";
+    const fresh = "still owed to the server when it lands";
+    const shared = "only ever as fresh as the answer that told it";
+    const s = await prose(t, b.id, "race-offline.md", essay("Writing offline", unique));
+    const fronts = Array.from({ length: OFFLINE_GRADES + 2 }, (_, i) => `Offline card ${i + 1}: what waits on the device ${i + 1}?`);
+    const slug = await deck(t, b.id, s.rid, fronts);
+    const cards = (await t.api(`/api/decks/${slug}`)).cards;
+    const ids = new Set(cards.map((c) => c.id));
+    const receipt = (e) => e.headers?.["idempotency-key"] ?? e.body?.requestId ?? null;
+    const lossy = (e) => e.write && (e.path.startsWith(`/api/boards/${b.id}/marks`) || /\/grade$/.test(e.path.split("?")[0]));
+    // the reconnect is lossy: a third of the replays are dropped and a third lose their answer, once per receipt
+    const page = await t.open({ latency: true, drop: { match: lossy, rate: 0.3, key: receipt }, lostAck: { match: lossy, rate: 0.3, key: receipt } });
+    const wire = await cuttable(page);
+    await page.goto(readerUrl(t, b.id, s));
+    await proseShown(page, unique);
+    await t.net.idle(400);
+    // online first: a highlight with a note both devices know
+    await highlightWithNote(page, shared, "First thought, on both devices.");
+    await page.evaluate(() => window.__strataSettled?.());
+    const sharedId = await markIdOn(page, shared);
+    if (!sharedId || t.sql("SELECT note FROM marks WHERE id = ?", sharedId)[0]?.note !== "First thought, on both devices.") throw new Error("the shared highlight never saved online");
+    await handUp(page);
+    const q = page.locator(".q").first();
+    await q.waitFor();
+    await t.net.idle(400);
+
+    await wire.cut();
+    await page.locator(".connection-banner").getByText("Offline", { exact: true }).waitFor({ timeout: 30_000 });
+    const graded = [];
+    for (let i = 0; i < OFFLINE_GRADES; i++) {
+      const was = await q.innerText();
+      const card = cards.find((c) => squash(was).includes(squash(c.front)));
+      if (!card) throw new Error(`the drill shows a card its deck does not have: ${JSON.stringify(squash(was).slice(0, 60))}`);
+      graded.push(card.id);
+      await page.keyboard.press("2");
+      await page.locator(".a").first().waitFor();
+      await page.keyboard.press("2");
+      await page.waitForFunction((w) => document.querySelector(".q")?.innerText !== w, was);
+    }
+    const offlineNote = `Written on the plane, seed ${t.seed}.`;
+    await highlightWithNote(page, fresh, offlineNote);
+    const freshId = await markIdOn(page, fresh);
+    if (!freshId) throw new Error("the offline highlight was never painted");
+    // the other device rewrites the shared note while this one is away
+    const theirs = `Rewritten on the laptop, seed ${t.seed}.`;
+    await t.api(`/api/boards/${b.id}/marks/${sharedId}`, "PATCH", { note: theirs });
+    await page.locator(`.page-col.prose .mk[data-mark="${sharedId}"]`).first().click();
+    await page.locator(".fold .fi-note").filter({ hasText: "First thought" }).click();
+    const mine = `Second thought, on the plane, seed ${t.seed}.`;
+    await page.locator(".fold .fi-edit").fill(mine);
+    await page.keyboard.press("Escape");
+    const owed = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("strata.outbox.")).length);
+    t.say(`${owed} writes kept on the device while offline`);
+
+    await wire.join();
+    const until = performance.now() + 60_000;
+    const left = () => page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("strata.outbox.")).length);
+    while (performance.now() < until && (await left())) await sleep(250);
+    await page.evaluate(() => window.__strataSettled?.());
+    await t.net.idle(800);
+
+    const held = new Map(t.sql(`SELECT json_extract(props,'$.card') card, COUNT(*) n FROM events
+      WHERE event = 'card_grade' AND json_extract(props,'$.card') IN (${[...ids].map(() => "?").join(",")}) GROUP BY 1`, ...ids)
+      .map((r) => [r.card, Number(r.n)]));
+    const short = (card) => card.split("/").pop().slice(0, 28);
+    const wrong = [...ids].map((c) => ({ c, want: graded.filter((g) => g === c).length, got: held.get(c) || 0 })).filter((x) => x.want !== x.got);
+    t.check("graded", !wrong.length, wrong.map((x) => `${short(x.c)}: ${x.got} held, ${x.want} given`).join("; ") || `${graded.length} graded`);
+    const rows = t.sql("SELECT id, note FROM marks WHERE board_id = ? AND quote LIKE ?", b.id, `%${fresh}%`);
+    t.check("marked", rows.length === 1 && rows[0].id === freshId && rows[0].note === offlineNote, `${rows.length} row(s): ${JSON.stringify(rows)}`);
+    const now = t.sql("SELECT note FROM marks WHERE id = ?", sharedId)[0]?.note;
+    t.check("kept", now === theirs, `the server holds ${JSON.stringify(now)}`);
+    const banner = page.locator(".connection-banner");
+    await banner.getByRole("button", { name: "Show clashes", exact: true }).click({ timeout: 15_000 }).catch(() => {});
+    const list = page.locator(".clash-list .clash");
+    const listed = await list.count();
+    const text = listed ? await list.first().innerText() : "";
+    t.check("listed", listed === 1 && text.includes(mine) && text.includes(theirs), `${listed} clash(es) listed${listed ? `: ${JSON.stringify(squash(text).slice(0, 160))}` : ""}`);
+    const still = await left();
+    t.check("drained", still === 0, `${still} of ${owed} still on the device`);
+  },
+};
+
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, offlineThenSync];
