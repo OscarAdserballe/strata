@@ -48,6 +48,8 @@ export interface FoldHost {
   marks(): readonly FoldMark[];
   /** the mark whose note is open for writing, with or without a note yet */
   writing(): string | null;
+  /** what the note being written starts with: the letter typed at its mark's chips */
+  prefill?(): string;
   write(id: string | null): void;
   save(id: string, text: string): void;
   remove(id: string): void;
@@ -63,11 +65,11 @@ export function paintFolds(h: FoldHost): void {
   const a = h.adapter();
   if (!a) return;
   ensureFoldStyle(document);
-  const writing = h.writing(), notes = switches.on("notes"), cards = switches.on("cards");
+  const writing = h.writing(), prefill = h.prefill?.() ?? "", notes = switches.on("notes"), cards = switches.on("cards");
   const all = h.marks();
   switches.count("notes", all.filter(said).length);
   const items: LayerItem[] = all.filter((m) => m.id === writing || (notes && said(m))).map((m) => ({
-    id: m.id, kind: "note", quote: m.quote, text: m.note || "", editing: m.id === writing,
+    id: m.id, kind: "note", quote: m.quote, text: m.note || (m.id === writing ? prefill : ""), editing: m.id === writing,
     replies: (m.replies ?? []).map((r) => ({ who: r.author, text: r.text })),
     anchor: { start: m.start, end: m.end, quote: m.quote, box: m.box ?? null, page: m.page ?? null, rects: m.rects ?? [] },
   }));
