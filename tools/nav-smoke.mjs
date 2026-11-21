@@ -37,6 +37,18 @@ try {
   await page.keyboard.press("Escape");
   await gone(".keys-sheet");
 
+  const dashLink = page.locator(".topnav a.tn-tab", { hasText: "Dashboard" });
+  const tabs = await page.locator(".topnav .tn-tabs > *").allTextContents();
+  check("the top bar links to the dashboard, after Review", await dashLink.getAttribute("href") === "/dashboard" && /^Review/.test(tabs[tabs.length - 2] ?? ""), tabs.join(" | "));
+  await dashLink.click();
+  await page.waitForSelector(".dh", { timeout: 10000 });
+  const readerLink = page.locator(".dh a.dh-reader");
+  check("…which opens the dashboard, and its header links back before Focus/Dispatch",
+    new URL(page.url()).pathname === "/dashboard" && await readerLink.getAttribute("href") === "/"
+      && await page.locator(".dh-side").first().evaluate((el) => el.firstElementChild?.classList.contains("dh-reader")), page.url());
+  await readerLink.click();
+  check("…and ← Reader lands on Today", await shown(".launcher") && new URL(page.url()).pathname === "/" && await page.locator('.tn-tab[aria-current="page"]').textContent() === "Today", page.url());
+
   await page.goto(`${APP}/?board=${book.id}`, { waitUntil: "networkidle" });
   await page.waitForSelector(".topnav, .rbar", { timeout: 10000 });
   await page.keyboard.press("x");
