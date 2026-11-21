@@ -148,7 +148,7 @@ try {
   await page.evaluate(() => [...document.querySelectorAll(".tlayer [data-i]")]
     .find((e) => e.textContent.length >= 16 && e.getBoundingClientRect().width > 80)?.scrollIntoView({ block: "center" }));
   await atRest(page);
-  const run = await page.evaluate(() => {
+  const wordsAt = () => page.evaluate(() => {
     const R = document.querySelector(".page").getBoundingClientRect();
     const el = [...document.querySelectorAll(".tlayer [data-i]")].find((e) => {
       const r = e.getBoundingClientRect();
@@ -158,13 +158,18 @@ try {
     const r = el.getBoundingClientRect();
     return { x0: r.left + 2, x1: r.left + r.width * 0.8, y: r.top + r.height / 2 };
   });
+  let run = await wordsAt();
   // offline, a highlight is painted, kept on the device, and lands once on reconnect
   if (run) {
+    const errorsBefore = errors.length;
     await ctx.setOffline(true);
     await page.evaluate(() => window.dispatchEvent(new Event("offline")));
     await page.locator(".connection-banner").getByText("Offline", { exact: true }).waitFor({ timeout: 30000 }).catch(() => {});
-    await page.mouse.move(run.x0, run.y); await page.mouse.down();
-    await page.mouse.move(run.x1, run.y, { steps: 8 }); await page.mouse.up();
+    // the banner moves the page down
+    await atRest(page);
+    const off = await wordsAt() ?? run;
+    await page.mouse.move(off.x0, off.y); await page.mouse.down();
+    await page.mouse.move(off.x1, off.y, { steps: 8 }); await page.mouse.up();
     const before = (await (await fetch(`${APP}/api/boards/${book.id}`)).json()).marks.length;
     const marked = await page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click({ timeout: 3000 }).then(() => true, () => false);
     const waits = await page.locator(".connection-banner").getByText(/1 highlight or note waiting to sync/).waitFor({ timeout: 3000 }).then(() => true, () => false);
@@ -172,6 +177,8 @@ try {
     await page.keyboard.press("Escape");
     const landed = page.waitForResponse((x) => /\/marks$/.test(x.url()) && x.request().method() === "POST", { timeout: 10000 }).catch(() => null);
     await ctx.setOffline(false);
+    // the browser says so for every request the cut wire refused; those are the point, not a page error
+    errors.splice(errorsBefore, errors.length - errorsBefore, ...errors.slice(errorsBefore).filter((e) => !/ERR_INTERNET_DISCONNECTED/.test(e)));
     await page.evaluate(() => window.dispatchEvent(new Event("online")));
     const made = await landed;
     const left = await page.waitForFunction(() => !Object.keys(localStorage).some((k) => k.startsWith("strata.outbox.mark.")), null, { timeout: 5000 }).then(() => true, () => false);
@@ -180,7 +187,9 @@ try {
       `marked ${marked} · banner ${waits} · kept ${kept} · landed ${!!made} · ${after - before} new`);
     const id = made && (await made.json().catch(() => ({}))).id;
     if (id) await fetch(`${APP}/api/boards/${book.id}/marks/${id}`, { method: "DELETE" }).catch(() => {});
+    await page.locator(".connection-banner").waitFor({ state: "detached", timeout: 10000 }).catch(() => {});
     await atRest(page);
+    run = await wordsAt() ?? run;
   }
   if (run) {
     await page.mouse.move(run.x0, run.y); await page.mouse.down();
