@@ -1,12 +1,14 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { StrataCheckConnection, StrataConnection } from "../../data/api.ts";
 import { updateInterface } from "./offline.ts";
+import { grades } from "../../data/entities/grades.ts";
 
 export default function ConnectionBanner() {
   const [connection, setConnection] = useState(StrataConnection);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const banner = useRef<HTMLDivElement>(null);
+  const waiting = useSyncExternalStore(grades.subscribe, () => grades.getSnapshot().pending);
   useEffect(() => {
     // every API response announces itself; only a response that changed something may commit
     const changed = () => setConnection((was) => {
@@ -53,7 +55,7 @@ export default function ConnectionBanner() {
     finally { setBusy(false); }
   };
   return <div ref={banner} className="connection-banner" role="status" aria-live="polite">
-    {connection.offline ? <span><strong>Offline</strong> · {savedAt ? `saved copies from ${new Date(savedAt).toLocaleString()}` : "saved date unavailable"} · changes can’t be saved</span>
+    {connection.offline ? <span><strong>Offline</strong> · {savedAt ? `saved copies from ${new Date(savedAt).toLocaleString()}` : "saved date unavailable"} · {waiting ? `${waiting} review${waiting === 1 ? "" : "s"} waiting to sync` : "reviews save and sync later"} · other changes can’t be saved</span>
       : <><span>{connection.outdated ? "Strata was updated · this page is an older version." : "Back online · reload to refresh saved content."}</span>
         <button onClick={update} disabled={busy}>{busy ? "Checking…" : connection.outdated ? "Reload" : "Refresh now"}</button></>}
     {error ? <span>{error}</span> : null}

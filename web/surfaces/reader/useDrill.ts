@@ -250,7 +250,7 @@ export function useDrill(room: DrillRoom, { stateRef, nav, activeId, board }: { 
   // grades are saved on the save path's grades lane; the deck moves on without waiting
   const gradeDropped = (e: unknown) => {
     const status = e ? (e as { status?: unknown }).status : undefined;
-    return status === 0 ? room.toast("offline — grades aren't saved (read only)", 2400)
+    return status === 0 ? room.toast("a grade couldn't reach the server — it will retry when you reopen Strata", 2400)
       : status === 404 ? room.toast("that card is no longer in its deck — its grade wasn't saved", 4200)
       : room.toastWhy(e, "a grade wasn't saved");
   };

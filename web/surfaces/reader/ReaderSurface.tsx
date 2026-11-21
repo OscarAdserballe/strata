@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, MutableRefObject, ReactNode } from "react";
-import { StrataWhy } from "../../data/api.ts";
+import { StrataWhy, StrataWireDown } from "../../data/api.ts";
 import { grades } from "../../data/entities/grades.ts";
 import CardFrame, { type FrameCard } from "../../capabilities/card/CardFrame.tsx";
 import type { FaceCard } from "../../capabilities/card/CardFace.tsx";
@@ -73,7 +73,8 @@ export interface ReaderSurfaceProps {
 }
 function DrillGradeAlert() {
   const s = useSyncExternalStore(grades.subscribe, grades.getSnapshot);
-  if (!s.error) return null;
+  // offline the grades wait for the wire on their own; there is nothing to retry yet
+  if (!s.error || StrataWireDown()) return null;
   return <p role="alert" className="drill-grade-alert">
     {StrataWhy(s.error, s.pending > 1 ? `${s.pending} grades haven't saved` : "a grade hasn't saved")}{" "}
     <button className="seg" onClick={() => grades.retry()}>Retry saving grades</button></p>;
