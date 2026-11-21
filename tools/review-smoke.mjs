@@ -147,7 +147,7 @@ try {
     await flight.page.keyboard.press("1");
     await flight.review.locator(".q").filter({ hasText: "Question left" }).waitFor();
     assert.equal(await flight.review.getByRole("alert").count(), 0, "offline grading raises no save alert");
-    await flight.page.locator(".connection-banner").getByText(/2 reviews waiting to sync/).waitFor();
+    await flight.page.locator(".connection-banner").getByText(/2 changes waiting, sent when you’re back/).waitFor();
     const shelved = await flight.page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith("strata.outbox.grade.")).length);
     assert.equal(shelved, 2, "both offline grades are kept on the device");
     assert.equal(flight.attempts.length, 0);

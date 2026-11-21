@@ -2172,5 +2172,67 @@ const padTwoTabs = {
   },
 };
 
+// a highlight and its note made with no wire, in a tab that then closes: the next tab sends both, once each
+const offlineReopen = {
+  name: "offline-reopen",
+  what: "go offline, highlight a passage with a note, close the tab; online again, a new tab sends what the outbox kept: the server holds the highlight once, with its note",
+  checks: {
+    painted: "the highlight was painted while offline",
+    unsent: "nothing reached the server while offline",
+    once: "the server holds the highlight exactly once",
+    note: "it carries the note written offline",
+    shown: "the new tab shows it",
+  },
+  async run(t) {
+    const b = await board(t, "Race offline");
+    const unique = "A note written on a plane still lands once the wire comes back.";
+    const phrase = "still lands once the wire comes back";
+    const s = await prose(t, b.id, "race-offline.md", essay("Offline writes", unique));
+    const page = await t.open({ latency: 40 });
+    await page.goto(readerUrl(t, b.id, s));
+    await proseShown(page, unique);
+    await t.net.idle(400);
+    await t.context.setOffline(true);
+    await page.evaluate(() => window.dispatchEvent(new Event("offline")));
+    await page.locator(".connection-banner").filter({ hasText: "Offline" }).waitFor();
+    const at = await phraseAt(page, phrase);
+    await page.mouse.move(at.x0, at.y0);
+    await page.mouse.down();
+    await page.mouse.move(at.x1, at.y1, { steps: 4 });
+    await page.mouse.up();
+    await markThen(page, "Note");
+    await page.locator(".fold .fi-edit").waitFor();
+    const note = `Written offline, seed ${t.seed}.`;
+    await page.keyboard.type(note);
+    await page.keyboard.press("Escape");
+    const id = await page.evaluate(() => document.querySelector(".page-col.prose .mk[data-mark]")?.dataset.mark ?? null);
+    t.check("painted", !!id, id ? "" : "never painted");
+    if (!id) return;
+    await page.locator(".connection-banner").filter({ hasText: "waiting" }).waitFor();
+    // IndexedDB writes are async: give the outbox a beat before the tab goes
+    await sleep(300);
+    const during = Number(t.sql("SELECT COUNT(*) n FROM marks WHERE id = ?", id)[0]?.n ?? 0);
+    t.check("unsent", during === 0, `${during} row(s) while offline`);
+    await page.close();
+    await t.context.setOffline(false);
+    const { page: next } = await t.tab({ latency: 40 });
+    await next.goto(readerUrl(t, b.id, s));
+    await proseShown(next, unique);
+    const until = performance.now() + GRACE_MS * 2;
+    let rows = [];
+    for (;;) {
+      rows = t.sql("SELECT id, note FROM marks WHERE resource_id = ? AND quote LIKE ?", s.rid, `%${phrase}%`);
+      if ((rows.length && rows[0].note) || performance.now() > until) break;
+      await sleep(250);
+    }
+    await next.evaluate(() => window.__strataSettled?.());
+    rows = t.sql("SELECT id, note FROM marks WHERE resource_id = ? AND quote LIKE ?", s.rid, `%${phrase}%`);
+    t.check("once", rows.length === 1 && rows[0].id === id, `${rows.length} on the server`);
+    t.check("note", rows[0]?.note === note, `the server holds ${JSON.stringify(rows[0]?.note ?? null)}`);
+    const shown = await next.locator(`.page-col.prose .mk[data-mark="${id}"]`).first().waitFor({ timeout: GRACE_MS }).then(() => true, () => false);
+    t.check("shown", shown);
+  },
+};
+
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, offlineReopen];

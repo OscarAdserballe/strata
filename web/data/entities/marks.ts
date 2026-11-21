@@ -30,6 +30,7 @@ export const markOps = {
       body: { ...draft, id },
       optimistic: [{ key: marksKey(board), apply: (list: Mark[] | undefined) => [...without(id)(list), mark] }],
       flush: true,
+      offline: true,
     };
   },
 
@@ -42,6 +43,7 @@ export const markOps = {
       body: { note },
       optimistic: [{ key: marksKey(board), apply: (list: Mark[] | undefined) => (list ?? []).map((m) => (m.id === id ? { ...m, note } : m)) }],
       flush: true,
+      offline: true,
     };
   },
 
@@ -59,6 +61,7 @@ export const markOps = {
       // the answer carries no mark, so the reply is written into its mark here or it would vanish with the optimistic copy
       confirm: (res, meta) => { s.patch<Mark[]>(marksKey(board), revOf(res?.rev), withReply(res?.reply ?? reply), { epoch: meta.epoch, stamp: meta.rev }); },
       flush: true,
+      offline: true,
     };
   },
 
@@ -72,6 +75,7 @@ export const markOps = {
       optimistic: [{ key: marksKey(board), apply: without(id) }],
       confirm: (res, meta) => { s.patch<Mark[]>(marksKey(board), revOf(res?.rev), without(id), { epoch: meta.epoch, stamp: meta.rev }); },
       flush: true,
+      offline: true,
     };
   },
 };
