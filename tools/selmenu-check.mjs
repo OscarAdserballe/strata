@@ -166,12 +166,12 @@ try {
     check(m.opened && m.alive, `a drag across pages ${pts.n}–${pts.n + 1} gets the menu (opened=${m.opened}, up=${m.alive})`);
     if (m.opened && m.alive) {
       const saved = page.waitForResponse((x) => x.url().endsWith(`/api/boards/${t.board}/marks`) && x.request().method() === "POST");
-      await page.locator(".selmenu button", { hasText: "Note" }).click();
+      await page.locator(".selmenu button", { hasText: "Mark" }).click();
       const body = await (await saved).json();
       await page.keyboard.press("Escape");
       const mark = body.mark || {};
       check(mark.page === pts.n && !!String(mark.quote || "").trim() && (mark.rects || []).length > 0,
-        `…and Note marks page ${pts.n}, where the drag started (page=${mark.page}, ${String(mark.quote || "").length} chars, ${(mark.rects || []).length} boxes)`);
+        `…and Mark marks page ${pts.n}, where the drag started (page=${mark.page}, ${String(mark.quote || "").length} chars, ${(mark.rects || []).length} boxes)`);
       if (body.id || mark.id) await fetch(`${base}/api/boards/${t.board}/marks/${body.id || mark.id}`, { method: "DELETE" }).catch(() => {});
     }
   }

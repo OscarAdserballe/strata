@@ -14,6 +14,8 @@ export interface LiveMarks {
   offerLive(sel: LiveSelection | null, at: { left: number; top: number; width: number } | null): void;
   setOpenMark(m: OpenMark | null): void;
   openMarkRef: { current: OpenMark | null };
+  offerMark(id: string, line: { left: number; width: number; bottom: number } | null): void;
+  dropChips(): void;
   saveNote(id: string, text: string): Promise<unknown> | unknown;
   replyNote(id: string, text: string): Promise<unknown> | unknown;
   dropMark(id: string): Promise<unknown> | unknown;
@@ -31,13 +33,16 @@ export function liveEngine(at: () => LiveAt, marks: () => LiveMarks | null, onHe
   };
   return new HtmlEngine({
     onSelect: (sel, box) => marks()?.offerLive(sel, box),
-    onMark: (id) => {
+    onMark: (id, box) => {
       const a = at(), m = marksOn(a.bid, a.src).find((x) => x.id === id);
-      // a said note opens from its words to be read, in the fold; only a bare highlight opens to write
+      // a said note opens from its words to be read, in the fold; a said box opens to write; a bare highlight offers its chips
       if (m && m.note && !m.box) return;
-      marks()?.setOpenMark({ id, draft: (m && m.note) || "" });
+      if (m && m.note) { marks()?.setOpenMark({ id, draft: m.note }); return; }
+      if (marks()?.openMarkRef.current?.id === id) return;
+      marks()?.offerMark(id, box && { left: box.left, width: box.width, bottom: box.top + box.height });
     },
-    onPress: () => marks()?.offerLive(null, null),
+    // a press inside the frame never reaches the room's document, so it drops the chips from here
+    onPress: () => { marks()?.offerLive(null, null); marks()?.dropChips(); },
     onLoad: (url) => { const p = page(url); return p ? pageState.load(p.bid, p.rid) : Promise.reject(new Error("the page was closed")); },
     onSave: (url, value) => { const p = page(url); return p ? pageState.save(p.bid, p.rid, value) : Promise.reject(new Error("the page was closed")); },
     onHeight,
@@ -51,11 +56,12 @@ export function paintLiveMarks(engine: HtmlEngine, at: LiveAt, open: string | nu
 }
 
 /** The notes half of a fold host: the reader's marks on the open source, and writing, replying and removing them. */
-export function noteFolds(at: () => LiveAt, marks: () => LiveMarks | null): Pick<FoldHost, "marks" | "writing" | "write" | "save" | "remove" | "reply"> {
+export function noteFolds(at: () => LiveAt, marks: () => LiveMarks | null): Pick<FoldHost, "marks" | "writing" | "prefill" | "write" | "save" | "remove" | "reply"> {
   const on = () => { const a = at(); return marksOn(a.bid, a.src); };
   return {
     marks: on,
     writing: () => marks()?.openMarkRef.current?.id ?? null,
+    prefill: () => marks()?.openMarkRef.current?.prefill ?? "",
     write: (id) => {
       const m = id ? on().find((x) => x.id === id) : null;
       marks()?.setOpenMark(id ? { id, draft: (m && m.note) || "" } : null);

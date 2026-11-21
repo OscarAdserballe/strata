@@ -16,3 +16,12 @@
 .selmenu button + button{border-left:1px solid oklch(1 0 0 / 0.14);}
 .selmenu button:hover{background:oklch(1 0 0 / 0.13);}
 .selmenu:after{content:"";position:absolute;left:50%;bottom:-5px;width:10px;height:10px;background:var(--ink);transform:translateX(-50%) rotate(45deg);border-radius:1px;z-index:-1;}
+/* on touch the native copy menu takes the space over the words */
+.selmenu.under{transform:translate(-50%,9px);overflow:visible;}
+.selmenu.under button{border-radius:8px;}
+.selmenu.under:after{bottom:auto;top:-5px;}
+.markchips{position:fixed;z-index:var(--layer-selmenu);transform:translate(-50%,6px);display:flex;gap:4px;}
+.markchips .chip{font:500 11px/1 var(--sans);letter-spacing:.02em;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:5px 10px;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px oklch(0.2 0.02 60 / 0.14);}
+.markchips .chip:hover{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+.markchips .chip.rm{padding:5px 8px;color:var(--ink-soft,var(--ink));}
+@media (pointer:coarse){.markchips{gap:8px;transform:translate(-50%,10px);}.markchips .chip{padding:9px 14px;font-size:13px;}}

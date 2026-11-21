@@ -673,3 +673,21 @@ test("a held flush op goes with the pagehide flush, keeps its key when the hold 
   sent[1].reply.resolve(answer(200));
   await goes;
 });
+
+test("an op that may wait offline is taken while the wire is down and sent when it comes back; others are still refused", async () => {
+  const listeners = new Set<() => void>();
+  const wire = { isDown: true, down: () => wire.isDown, subscribe: (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; } };
+  const sent: SendRequest[] = [];
+  const m = new Mutator({ store: new Store(), wire, setTimer: () => 0, clearTimer: () => {}, now: () => 0,
+    transport: async (req) => { sent.push(req); return { status: 200, body: {}, rev: 0, epoch: "" }; } });
+  await assert.rejects(m.mutate({ label: "x", lanes: ["a"], method: "POST", path: "/api/x" }), /offline/);
+  const waiting = m.mutate({ label: "grade", lanes: ["g"], method: "POST", path: "/api/g", body: { n: 1 }, offline: true });
+  await new Promise((r) => setImmediate(r));
+  assert.equal(sent.length, 0);
+  assert.equal(m.pending().length, 1);
+  wire.isDown = false;
+  for (const fn of [...listeners]) fn();
+  await waiting;
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].path, "/api/g");
+});

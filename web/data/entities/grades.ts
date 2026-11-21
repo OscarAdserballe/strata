@@ -70,6 +70,21 @@ const realTimers: Timers = {
 
 const mine = (ops: PendingOp[]) => ops.filter((p) => p.lanes.includes(GRADES_LANE));
 
+/** Where unconfirmed grades wait, so a tab closed on the plane still owes them on the next open. */
+export interface Shelf { put(id: string, value: string): void; drop(id: string): void; all(): string[] }
+const OUTBOX = "strata.outbox.grade.";
+const localShelf: Shelf = {
+  put: (id, value) => { try { localStorage.setItem(OUTBOX + id, value); } catch { /* private window or full: the grade still rides the tab */ } },
+  drop: (id) => { try { localStorage.removeItem(OUTBOX + id); } catch { /* no storage */ } },
+  all: () => {
+    const out: string[] = [];
+    try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k?.startsWith(OUTBOX)) out.push(localStorage.getItem(k) ?? ""); } }
+    catch { /* no storage */ }
+    return out;
+  },
+};
+const noShelf: Shelf = { put: () => {}, drop: () => {}, all: () => [] };
+
 export class Grades {
   private state: GradeState = { pending: 0, error: null };
   private readonly listeners = new Set<() => void>();
@@ -78,25 +93,48 @@ export class Grades {
   private timer: unknown = null;
   private readonly m: Mutator;
   private readonly timers: Timers;
+  private readonly shelf: Shelf;
 
-  constructor(m: Mutator = roomMutator, timers: Timers = realTimers) {
+  constructor(m: Mutator = roomMutator, timers: Timers = realTimers, shelf: Shelf = typeof localStorage === "undefined" ? noShelf : localShelf) {
     this.m = m;
     this.timers = timers;
+    this.shelf = shelf;
     m.subscribePending(() => this.recompute());
   }
 
   grade(request: GradeRequest, dropped: (error: SaveError) => void = () => {}): void {
+    this.shelf.put(request.requestId, JSON.stringify(request));
+    this.send(request, dropped);
+  }
+
+  private send(request: GradeRequest, dropped: (error: SaveError) => void): void {
     this.cards.set(request.requestId, request.card);
     const who = request.surface ?? "review";
     this.m.mutate(gradeOp(request)).then(
-      () => { this.droppedSaid.delete(who); },
+      () => { this.shelf.drop(request.requestId); this.droppedSaid.delete(who); },
       (e: SaveError) => {
         if (e?.retryable) return;
         this.cards.delete(request.requestId);
+        // a 0 is the wire, not a verdict: the next open sends it again
+        if (e?.status !== 0) this.shelf.drop(request.requestId);
         if (!this.droppedSaid.has(who)) { this.droppedSaid.add(who); dropped(e); }
       },
     );
     this.recompute();
+  }
+
+  /** Puts back on the lane the grades an earlier tab took but never heard confirmed; the receipt makes a second send harmless. */
+  restore(): number {
+    let n = 0;
+    for (const raw of this.shelf.all()) {
+      let request: GradeRequest | null = null;
+      try { request = JSON.parse(raw); } catch { /* torn write */ }
+      if (!request || typeof request.requestId !== "string") continue;
+      if (this.cards.has(request.requestId)) continue;
+      this.send(request, () => {});
+      n++;
+    }
+    return n;
   }
 
   retry(): void {

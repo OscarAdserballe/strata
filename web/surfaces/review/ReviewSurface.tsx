@@ -6,7 +6,7 @@ import { cardPrompt } from "../../capabilities/card/drill-order.ts";
 import { facesOf } from "../../../shared/cards/faces.ts";
 import { TOUCH, PHONE } from "../../platform/device.js";
 import { courseOf } from "../../shell/format.js";
-import { StrataAPI, StrataWhy } from "../../data/api.ts";
+import { StrataAPI, StrataWhy, StrataWireDown } from "../../data/api.ts";
 import { grades, reviewGradeRequest } from "../../data/entities/grades.ts";
 import { afterGrade, shuffled } from "../../data/entities/review.ts";
 import { end as arrived } from "../../platform/rum.ts";
@@ -113,7 +113,7 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
   const [skip, setSkip] = useState<string[]>([]);
   const skipRef = useRef(skip); skipRef.current = skip;
   // `initial` is home's fresh queue, so the first card draws with no round trip
-  const [queue, setQueue] = useState<ReviewItem[] | null>(() => (initial ? (initial.cards.length ? shuffled(initial.cards) : []) : null));
+  const [queue, setQueue] = useState<ReviewItem[] | null>(() => (initial ? (initial.cards.length ? shuffled(initial.cards.filter((c) => !grades.hasCard(c.id))) : []) : null));
   const [doneN, setDoneN] = useState(0);
   const [ending, setEnding] = useState(false);
   const [endsAt, setEndsAt] = useState<number | null>(() => (!OVERVIEW && initial && initial.cards.length ? Date.now() + SESSION_MS : null));
@@ -126,8 +126,9 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
   const [dropped, setDropped] = useState("");
   const saveState = useSyncExternalStore(grades.subscribe, grades.getSnapshot);
   const live = useRef(true);
-  const savingGrade = saveState.pending > 0;
-  const gradeError = saveState.error ? StrataWhy(saveState.error, "Some reviews haven't saved yet. Retry before leaving.") : "";
+  // offline the grades wait on this device, so leaving does not wait on them
+  const savingGrade = saveState.pending > 0 && !StrataWireDown();
+  const gradeError = saveState.error && !StrataWireDown() ? StrataWhy(saveState.error, "Some reviews haven't saved yet. Retry before leaving.") : "";
   useEffect(() => { live.current = true; return () => { live.current = false; }; }, []);
   // an id, not a boolean: the queue can advance while an async save is in flight
   const [editing, setEditing] = useState<string | null>(null);
@@ -151,7 +152,7 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
 
   function endSession() {
     if (ref.current.ending || !ref.current.judged) {
-      if (!grades.getSnapshot().pending) onClose();
+      if (!grades.getSnapshot().pending || StrataWireDown()) onClose();
       return;
     }
     setEnding(true);
@@ -171,7 +172,8 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
       if (!live.current) return;
       setState(r);
       // a project left for tomorrow stays out of this sitting's refetches too
-      const cards = r.cards.filter((c) => !skipRef.current.includes(projectOf(c)));
+      // a grade still waiting to sync was already given: the saved strip doesn't know it yet
+      const cards = r.cards.filter((c) => !skipRef.current.includes(projectOf(c)) && !grades.hasCard(c.id));
       if (cards.length) {
         setQueue(shuffled(cards));
         if (first && !OVERVIEW) { setEndsAt(Date.now() + SESSION_MS); started(r); }
@@ -221,7 +223,8 @@ function ReviewSurface({ initial, onClose, onOpen, composer, onNewCard, onCompos
     const c = ref.current.card;
     if (!c || !ref.current.answered) return;
     // pause on an unsaved grade: later verdicts must not run ahead of a lost one
-    if (grades.getSnapshot().error) return;
+    if (grades.getSnapshot().error && !StrataWireDown()) return;
+    if (StrataWireDown()) setDropped("offline · grades save on this device and sync when you reconnect");
     const request = reviewGradeRequest(c, got, Date.now() - shownAt.current);
     grades.grade(request, (e) => { if (live.current) setDropped(StrataWhy(e, "a grade wasn't saved")); });
     // advance at once while the ordered saves run behind; seal this encounter until the next one draws

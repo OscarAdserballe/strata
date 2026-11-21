@@ -128,7 +128,7 @@ test("a grade out of retries is sent again on its own, under its receipt, until 
   assert.deepEqual(g.getSnapshot(), { pending: 0, error: null });
 });
 
-test("offline the grade waits: nothing is said lost, and it goes under its receipt when the wire is back", async () => {
+test("offline the grade is not refused: it waits on the lane, unsent and unsaid", async () => {
   const { g, sent, wire } = harness();
   wire.isDown = true;
   const said: unknown[] = [];
@@ -166,4 +166,60 @@ test("a drop said in the drill does not silence the review's own line", async ()
   await tick();
   assert.equal(drill.length, 1);
   assert.equal(review.length, 1, "each surface says its own first drop");
+});
+
+function offlineHarness(shelf = new Map<string, string>()) {
+  const listeners = new Set<() => void>();
+  const wire = { isDown: true, down: () => wire.isDown, subscribe: (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; } };
+  const sent: { req: SendRequest; reply: ReturnType<typeof deferred<SendAnswer>> }[] = [];
+  const m = new Mutator({
+    store: new Store(), wire, setTimer: () => 0, clearTimer: () => {}, now: () => 0,
+    transport: (req) => { const reply = deferred<SendAnswer>(); sent.push({ req, reply }); return reply.promise; },
+  });
+  const timers = { set: () => 0, clear: () => {} };
+  const store = { put: (id: string, v: string) => { shelf.set(id, v); }, drop: (id: string) => { shelf.delete(id); }, all: () => [...shelf.values()] };
+  const g = new Grades(m, timers, store);
+  const up = () => { wire.isDown = false; for (const fn of [...listeners]) fn(); };
+  return { m, g, sent, shelf, up };
+}
+
+test("offline, a grade is taken and shelved, nothing is sent, and it goes out on reconnect", async () => {
+  const h = offlineHarness();
+  let dropped = false;
+  h.g.grade(req("offline-0001"), () => { dropped = true; });
+  await tick();
+  assert.equal(dropped, false);
+  assert.equal(h.sent.length, 0);
+  assert.equal(h.g.getSnapshot().pending, 1);
+  assert.ok(h.shelf.has("offline-0001"));
+  h.up();
+  await tick();
+  assert.equal(h.sent.length, 1);
+  assert.equal(h.sent[0].req.headers["Idempotency-Key"], "offline-0001");
+  h.sent[0].reply.resolve(answer(200, { saved: true, at: 1 }));
+  await tick();
+  assert.equal(h.g.getSnapshot().pending, 0);
+  assert.equal(h.shelf.size, 0, "a confirmed grade leaves the shelf");
+});
+
+test("a new tab restores shelved grades under their own receipts, once", async () => {
+  const shelf = new Map([["offline-0002", JSON.stringify(req("offline-0002", "c2", false))], ["torn", "{"]]);
+  const h = offlineHarness(shelf);
+  assert.equal(h.g.restore(), 1);
+  assert.equal(h.g.restore(), 0, "a grade already on the lane is not put back twice");
+  assert.ok(h.g.hasCard("c2"));
+  h.up();
+  await tick();
+  assert.equal(h.sent.length, 1);
+  assert.deepEqual(JSON.parse(h.sent[0].req.body!), req("offline-0002", "c2", false));
+});
+
+test("a refused grade leaves the shelf, so a reopen doesn't send it forever", async () => {
+  const h = offlineHarness();
+  h.g.grade(req("offline-0003"));
+  h.up();
+  await tick();
+  h.sent[0].reply.resolve(answer(404, { error: "No such card." }));
+  await tick();
+  assert.equal(h.shelf.size, 0);
 });

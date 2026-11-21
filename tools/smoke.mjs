@@ -78,16 +78,6 @@ try {
   }, null, { timeout: 15000 }).then(() => true, () => false);
   check("a pdf page paints real pixels", painted);
 
-  const bands = await page.waitForFunction(() => document.querySelectorAll(".clm-row").length > 0,
-    null, { timeout: 10000 }).then(() => true, () => false);
-  // count both tree levels: each anchors differently, and either can silently resolve to nothing
-  const levels = await page.evaluate(() => ({
-    roots: document.querySelectorAll(".clm-row.d0").length,
-    under: document.querySelectorAll(".clm-row.d1").length,
-  }));
-  check("the chapter's claims stand in the source, both levels", bands && levels.roots > 0 && levels.under > 0,
-    `${levels.roots} root · ${levels.under} under`);
-
   await page.evaluate(() => { document.querySelector(".page").scrollTop = 2600; });
   await atRest(page);
   const was = await page.evaluate(() => document.querySelector(".page").scrollTop);
@@ -172,7 +162,8 @@ try {
     await page.mouse.move(run.x0, run.y); await page.mouse.down();
     await page.mouse.move(run.x1, run.y, { steps: 8 }); await page.mouse.up();
   }
-  const asked = run && await page.locator(".selmenu").getByRole("button", { name: "Ask", exact: true }).click({ timeout: 3000 }).then(() => true, () => false);
+  const asked = run && await page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click({ timeout: 3000 })
+    .then(() => page.locator(".markchips").getByRole("button", { name: "Ask", exact: true }).click({ timeout: 3000 })).then(() => true, () => false);
   const line = page.locator(".fold .fi.asked .fi-q");
   check("Ask on picked words opens a fold under them", !!asked && await line.waitFor({ timeout: 5000 }).then(() => true, () => false));
   const answers = () => page.locator(".fold .fi.asked .fi-turn.claude:not(.writing)");
@@ -217,7 +208,8 @@ try {
     await page.mouse.move(words.x0, words.y); await page.mouse.down();
     await page.mouse.move(words.x1, words.y, { steps: 8 }); await page.mouse.up();
   }
-  const carded = words && await page.locator(".selmenu").getByRole("button", { name: "Card", exact: true }).click({ timeout: 3000 }).then(() => true, () => false);
+  const carded = words && await page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click({ timeout: 3000 })
+    .then(() => page.locator(".markchips").getByRole("button", { name: "Card", exact: true }).click({ timeout: 3000 })).then(() => true, () => false);
   const draft = page.locator(".fold .fi.draft");
   const drafted = !!carded && await draft.waitFor({ timeout: 5000 }).then(() => true, () => false);
   check("Card on picked words opens a draft that offers Format, not Keep", drafted

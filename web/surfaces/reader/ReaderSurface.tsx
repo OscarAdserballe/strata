@@ -1,7 +1,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import type { CSSProperties, MutableRefObject, ReactNode } from "react";
-import { StrataWhy } from "../../data/api.ts";
+import { StrataWhy, StrataWireDown } from "../../data/api.ts";
 import { grades } from "../../data/entities/grades.ts";
 import CardFrame, { type FrameCard } from "../../capabilities/card/CardFrame.tsx";
 import type { FaceCard } from "../../capabilities/card/CardFace.tsx";
@@ -12,7 +12,8 @@ import type { Navigation } from "../../shell/routes.ts";
 import CardProgress, { type DistilBusy } from "../../capabilities/progress/DistilProgress.tsx";
 import { TreeView } from "../../engines/tree/TreeView.tsx";
 import { FIND_CAP } from "../../engines/find/find.ts";
-import SelectionMenu from "../../capabilities/annotate/SelectionMenu.tsx";
+import SelectionMenu, { MarkChips } from "../../capabilities/annotate/SelectionMenu.tsx";
+import { TOUCH } from "../../platform/device.js";
 import { drillView, useCardInHand, useDrill } from "./useDrill.ts";
 import type { DrillCard, DrillLive, DrillRoom, HeldPair } from "./useDrill.ts";
 import { useSplit } from "./split.ts";
@@ -73,7 +74,8 @@ export interface ReaderSurfaceProps {
 }
 function DrillGradeAlert() {
   const s = useSyncExternalStore(grades.subscribe, grades.getSnapshot);
-  if (!s.error) return null;
+  // offline the grades wait for the wire on their own; there is nothing to retry yet
+  if (!s.error || StrataWireDown()) return null;
   return <p role="alert" className="drill-grade-alert">
     {StrataWhy(s.error, s.pending > 1 ? `${s.pending} grades haven't saved` : "a grade hasn't saved")}{" "}
     <button className="seg" onClick={() => grades.retry()}>Retry saving grades</button></p>;
@@ -200,7 +202,8 @@ export default function ReaderSurface(props: ReaderSurfaceProps) {
           {/* React never renders children here, so pdf.js canvases survive re-renders */}
           <div ref={pdfHostRef} style={{ display: !onHome && !showTree && src && src.kind === "pdf" ? "block" : "none" }} />
           {!onHome && !src ? <div className="page-col prose"><p className="empty">A blank pair — no source. The cards are on the left; drop a PDF or markdown file here, or press <kbd>h</kbd> to capture one from a link.</p></div> : null}
-          {marks.selMenu && !solo ? <SelectionMenu at={marks.selMenu} onNote={() => void marks.markSelection(true)} onAsk={marks.askSelection} onCard={marks.cardSelection} /> : null}
+          {marks.selMenu && !solo ? <SelectionMenu at={marks.selMenu} under={TOUCH} onMark={() => void marks.markSelection()} /> : null}
+          {marks.chips && marks.chipOffer && !solo ? <MarkChips at={marks.chips} offer={marks.chipOffer} onAct={marks.chipAct} /> : null}
         </div>
         {onGenerate && bare && !find && !showTree ? <GenerateCards onGenerate={onGenerate} /> : null}
         {/* the cards being made for this source: over the page they will fold into, not in a column of their own */}

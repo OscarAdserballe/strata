@@ -4,7 +4,8 @@ import type { LayerIntents, LayerItem } from "../fold/layers.ts";
 export interface HtmlHooks {
   /** a selection of words, or a labelled box picked whole (`box` names it) */
   onSelect(sel: { start: number; end: number; quote: string; box?: string | null; own?: string | null } | null, at: Box | null): void;
-  onMark(id: string): void;
+  /** `at` is the line of the mark that was tapped, for the chips to sit under */
+  onMark(id: string, at: Box | null): void;
   onPress(): void;
   /** The saved state (JSON text) of the page opened at `url`, or null if it has none; rejects when it can't be read. */
   onLoad(url: string): Promise<string | null>;
@@ -106,7 +107,7 @@ export class HtmlEngine {
       case "ready": { this.ready = true; const q = this.queued; this.queued = []; q.forEach((x) => this.post(x)); break; }
       case "sel": this.hooks.onSelect({ start: m.start, end: m.end, quote: m.quote, box: m.at ?? null, own: m.own }, at(m.box)); break;
       case "unsel": this.hooks.onSelect(null, null); break;
-      case "mark": this.hooks.onMark(m.id); break;
+      case "mark": this.hooks.onMark(m.id, m.box ? at(m.box) : null); break;
       case "layer": {
         const on = this.layerOn;
         if (!on) break;

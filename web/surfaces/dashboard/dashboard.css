@@ -30,6 +30,8 @@ kbd{font:500 10.5px/1 var(--sans);border:1px solid var(--d-line-2);border-radius
 .dh-main{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:16px;min-width:0}
 .dh-side{display:flex;align-items:center;gap:14px;min-width:0}
 .dh-side.end{justify-content:flex-end}
+.dh-reader{flex:none;white-space:nowrap;padding:8px 4px;font-size:13px;font-weight:500;color:var(--d-ink-3);text-decoration:none}
+.dh-reader:hover{color:var(--d-ink)}
 .dh-modes{display:flex;gap:2px;padding:3px;background:rgba(40,30,60,.05);border:1px solid transparent;border-radius:11px}
 .dh-modes button{padding:7px 15px;border-radius:8px;font-size:13px;font-weight:600;color:#6b6873;transition:background .15s,color .15s}
 .dh-modes button:hover:not([aria-selected="true"]){background:rgba(255,255,255,.9);color:var(--d-ink)}
@@ -248,6 +250,10 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
   .dh{grid-template-columns:1fr;row-gap:10px;padding:12px 16px 0}
   .dh-main{grid-template-columns:auto 1fr}
   .dh-main > span:first-child{display:none}
+}
+@media (max-width:520px){
+  .dh-side{display:grid;grid-template-columns:repeat(3,auto);justify-content:start;row-gap:4px}
+  .dh-reader{grid-column:1/-1;justify-self:start;padding:2px 4px}
 }
 @media (max-width:900px){
   .dh-rail{overflow-x:auto;max-width:100%}
