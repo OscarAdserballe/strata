@@ -72,8 +72,8 @@ export function noteFolds(at: () => LiveAt, marks: () => LiveMarks | null): Pick
 }
 
 /** A fold host with no deck, no conversations and no card being written: a page read for its notes alone. */
-export const NOTES_ONLY: Pick<FoldHost, "asks" | "ask" | "capture" | "cards" | "show" | "later" | "grade" | "again" | "draft" | "keep" | "discard"> = {
-  asks: () => [], ask: () => {}, capture: () => {},
+export const NOTES_ONLY: Pick<FoldHost, "asks" | "ask" | "cards" | "show" | "later" | "grade" | "again" | "draft" | "format" | "keep" | "discard"> = {
+  asks: () => [], ask: () => {},
   cards: () => [], show: () => {}, later: () => {}, grade: () => {}, again: () => {},
-  draft: () => null, keep: () => {}, discard: () => {},
+  draft: () => null, format: () => {}, keep: () => {}, discard: () => {},
 };

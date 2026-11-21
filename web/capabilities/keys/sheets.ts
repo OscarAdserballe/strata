@@ -10,7 +10,6 @@ export const ROOM: readonly KeyGroup[] = [
     ["1 / 2", "missed / got it — the grade is what moves you on (unrevealed, they reveal)"],
     ["↵", "the card in hand, opened on its words (shuffled: its page, once answered)"],
     ["e", "rewrite this card in your own words (⌘↵ formats · esc leaves)"],
-    ["c", "make a card of the thread's last answer (the card button makes one from scratch)"],
     ["r", "the keeps — choose what to keep of this deck (on home: the whole board; in the library: every board · r or esc leaves)"],
   ]],
   ["the page", [
@@ -54,7 +53,7 @@ export const REVIEW: readonly KeyGroup[] = [
     ["1 / 2", "missed / got it (unrevealed, they reveal)"],
     ["↵", "show me where this card lives, once answered"],
     ["e", "rewrite this card (⌘↵ formats · esc leaves)"],
-    ["esc", "the editor, then the thread, then the sitting: once into the map, once out of it"],
+    ["esc", "the editor, then the sitting: once into the map, once out of it"],
   ]],
 ];
 

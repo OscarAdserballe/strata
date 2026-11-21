@@ -5,6 +5,7 @@ import { htmlTwin } from "../../../shared/reading/html-twin.ts";
 const CLASSIC = /^(|text\/javascript|application\/javascript|text\/ecmascript|application\/ecmascript|module)$/;
 const NEEDS_BUILD = /babel|jsx|tsx|typescript/;
 const DRAWN = /<(script|canvas|svg|img|video|iframe|object|embed|picture)\b/i;
+const STUB = /^[\s\p{P}]*(placeholder|todo|tbd|tk|lorem ipsum.*|coming soon|page|content|draft|wip|\.\.\.|…)?[\s\p{P}]*$/iu;
 
 const attr = (attrs: string, name: string): string | null => {
   const m = new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i").exec(attrs);
@@ -15,11 +16,14 @@ const lineOf = (e: unknown): string => {
   return m ? `, line ${m[1]}` : "";
 };
 
-/** What is wrong with a page, each a sentence an agent can act on; empty when it would open. `remoteOnly` asks scripts to load from https. */
-export function htmlProblems(html: string, opts: { remoteOnly?: boolean } = {}): string[] {
+/** What is wrong with a page, each a sentence an agent can act on; empty when it would open. `remoteOnly` asks scripts to load from https; `document` asks for a whole HTML page with real words or a drawing. */
+export function htmlProblems(html: string, opts: { remoteOnly?: boolean; document?: boolean } = {}): string[] {
   const problems: string[] = [];
   const bare = html.replace(/<!--[\s\S]*?-->/g, "");
-  if (!htmlTwin(bare.replace(/<title\b[\s\S]*?<\/title\s*>/gi, "")).trim() && !DRAWN.test(bare)) problems.push("the page shows nothing: no text, and no script or drawing");
+  const text = htmlTwin(bare.replace(/<title\b[\s\S]*?<\/title\s*>/gi, "")).trim();
+  if (opts.document && !/<(html|body)\b/i.test(bare)) problems.push("the page isn't an HTML document: send the whole page, with <html> and <body>");
+  if (!text && !DRAWN.test(bare)) problems.push("the page shows nothing: no text, and no script or drawing");
+  else if (opts.document && STUB.test(text) && !DRAWN.test(bare)) problems.push(`the page is only "${text.slice(0, 40)}", a placeholder: post the finished page`);
   const opened = (bare.match(/<script\b/gi) ?? []).length, closed = (bare.match(/<\/script\s*>/gi) ?? []).length;
   if (opened > closed) problems.push("a <script> is never closed, so the page looks cut off");
   if ((bare.match(/<style\b/gi) ?? []).length > (bare.match(/<\/style\s*>/gi) ?? []).length) problems.push("a <style> is never closed, so the page looks cut off");
