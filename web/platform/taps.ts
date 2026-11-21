@@ -4,6 +4,7 @@ import { sample } from "./rum.ts";
 /** Parts of the room, most specific first. A new surface worth its own line gets one here. */
 export const REGIONS: readonly [string, string][] = [
   [".selmenu", "selmenu"],
+  [".markchips", "markchips"],
   [".ftick", "fold.tick"],
   [".fold", "fold"],
   [".cram-card", "cram.card"],

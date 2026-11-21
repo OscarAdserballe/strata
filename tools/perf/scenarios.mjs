@@ -351,8 +351,8 @@ export async function highlight(env, t, pageN) {
       const clickTs = await nextEventTs(s, "click");
       const resp = s.page.waitForResponse((x) => x.url().endsWith(`/api/boards/${t.board}/marks`) && x.request().method() === "POST");
       const ra = await rooms();
-      // a highlight is a note left empty: the mark paints on the click, before the note is written
-      await s.page.locator(".selmenu button", { hasText: "Note" }).click();
+      // a highlight is one press of Mark: it paints on the click, before it is saved
+      await s.page.locator(".selmenu button", { hasText: "Mark" }).click();
       const body = await (await resp).json();
       made = body.id;
       await s.page.waitForFunction((id) => window.__perf.mk.some((m) => m.id === id), made);
@@ -432,6 +432,11 @@ async function pickWords(s) {
   await s.page.mouse.move(run.x1, run.y, { steps: 8 }); await s.page.mouse.up();
   await s.page.locator(".selmenu").waitFor({ timeout: 5000 });
 }
+// the picked words marked, and their chips up
+async function markPicked(s) {
+  await s.page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click();
+  await s.page.locator(".markchips").waitFor({ timeout: 5000 });
+}
 
 export async function chat(env, t, text = "how does the variance of this estimator behave") {
   const s = await session(env, ["view", "firstCanvas"]);
@@ -442,13 +447,14 @@ export async function chat(env, t, text = "how does the variance of this estimat
     await netIdle(s);
     await quiet(s);
     await s.page.waitForTimeout(SETTLE_MS);
-    // a source is asked under its words: Ask on picked words opens the fold's line
+    // a source is asked under its words: Ask, among the chips of the picked words' mark, opens the fold's line
     await pickWords(s);
+    await markPicked(s);
     const input = s.page.locator(".fold .fi.asked .fi-q");
     const a0 = await snapshot(s);
     const clickTs = await nextEventTs(s, "click");
     await arm(s, ["askLine"]);
-    await s.page.locator(".selmenu").getByRole("button", { name: "Ask", exact: true }).click();
+    await s.page.locator(".markchips").getByRole("button", { name: "Ask", exact: true }).click();
     await waitMarks(s, ["askLine"], 30_000).catch(() => {});
     await s.page.waitForTimeout(400);
     const b0 = await snapshot(s);
@@ -495,8 +501,9 @@ export async function idle(env, where, t) {
     await s.page.waitForTimeout(SETTLE_MS);
     if (where === "pdf-chat") {
       await pickWords(s);
+      await markPicked(s);
       await arm(s, ["askLine"]);
-      await s.page.locator(".selmenu").getByRole("button", { name: "Ask", exact: true }).click();
+      await s.page.locator(".markchips").getByRole("button", { name: "Ask", exact: true }).click();
       await waitMarks(s, ["askLine"], 30_000);
       await s.page.waitForTimeout(3000);
     }

@@ -6,7 +6,8 @@ import type { HtmlEngine } from "../../engines/html/HtmlEngine.ts";
 import { sourceAdapters } from "../../engines/source/adapter.ts";
 import { toast } from "../../shell/layers.ts";
 import { marksOn, useMarks } from "../annotate/useMarks.ts";
-import SelectionMenu from "../annotate/SelectionMenu.tsx";
+import SelectionMenu, { MarkChips } from "../annotate/SelectionMenu.tsx";
+import { TOUCH } from "../../platform/device.js";
 import { paintFolds, type FoldHost } from "../fold/folds.ts";
 import { switches } from "../fold/switches.ts";
 import HtmlSource from "./HtmlSource.tsx";
@@ -52,7 +53,7 @@ export default function LivePage({ board, resource, scale = 1, onHeight }: LiveP
     toast, toastWhy: (e, said) => toast(StrataWhy(e, said), 4200),
     reread: (b) => { StrataAPI.getBoard(b).then((st) => { applyBoardState(st, StrataAnswer(st) ?? {}); }).catch(() => {}); },
     clearLive: () => engine.clearSelection(),
-  }, { pairIdx: 0, loading: !src });
+  }, { pairIdx: 0, loading: !src, notesOnly: true });
   marksRef.current = marks;
 
   const hostRef = useRef<FoldHost | null>(null);
@@ -81,7 +82,8 @@ export default function LivePage({ board, resource, scale = 1, onHeight }: LiveP
   return (
     <div className="livepage" ref={pageRef} onMouseDown={marks.onReaderDown} onClick={marks.onReaderClick}>
       {url && src ? <HtmlSource engine={engine} url={url} scale={scale} /> : <p className="livepage-wait">Loading the page…</p>}
-      {marks.selMenu ? <SelectionMenu at={marks.selMenu} onNote={() => void marks.markSelection(true)} /> : null}
+      {marks.selMenu ? <SelectionMenu at={marks.selMenu} under={TOUCH} onMark={() => void marks.markSelection()} /> : null}
+      {marks.chips && marks.chipOffer ? <MarkChips at={marks.chips} offer={marks.chipOffer} onAct={marks.chipAct} /> : null}
     </div>
   );
 }
