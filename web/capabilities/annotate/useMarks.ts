@@ -11,14 +11,21 @@ import { zoomOf } from "../../engines/zoom/zoom.ts";
 import { NUDGE_PX } from "../../engines/pdf/window.ts";
 import { TOUCH } from "../../platform/device.js";
 import { begin as journey, end as arrived } from "../../platform/rum.ts";
+import { drawnAs } from "../../engines/html/drawn.ts";
+import { typing } from "../keys/registry.ts";
+import { chipKey, isMarkKey, type ChipAct, type ChipOffer } from "./chips.ts";
 import { asking, newAskId } from "../fold/asking.ts";
 import { openFoldCard } from "../card/doors.ts";
 import { pdfSelection, type PageTextIndex, type PdfRange } from "./selection.ts";
 
 type Ref<T> = MutableRefObject<T>;
 export interface MarkSource { id: string; kind: string }
-export interface OpenMark { id: string; draft: string }
-export interface SelMenu { x: number; y: number }
+export interface OpenMark { id: string; draft: string; prefill?: string }
+/** over the picked words, and the line under them where the chips will sit */
+export interface SelMenu { x: number; y: number; under: number }
+type Place = { start: number; end: number; quote: string; page: number | null; rects: number[][]; box: string | null; block: number | null };
+/** the chips under a mark; one just made carries its words as picked, and a live page's own words for a card */
+export interface Chips { id: string; x: number; y: number; fresh: boolean; at: Place | null; own: string | null }
 
 export interface MarksReader {
   pageRef: Ref<HTMLElement | null>;
@@ -46,9 +53,12 @@ type Act = { type: "create" | "delete"; id: string; payload: MarkDraft & { note?
   | { type: "note"; id: string; before: string | null; after: string | null };
 type Failure = any;
 
-export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: number; loading: boolean }) {
+export function useMarks(reader: MarksReader, { pairIdx, loading, notesOnly = false }: { pairIdx: number; loading: boolean; notesOnly?: boolean }) {
   const { pageRef, proseRef, pdfHostRef, docRef } = reader;
   const [selMenu, setSelMenu] = useState<SelMenu | null>(null);
+  const [chips, setChips] = useState<Chips | null>(null);
+  const selMenuRef = useRef(selMenu);
+  selMenuRef.current = selMenu;
   const [openMark, setOpenMark] = useState<OpenMark | null>(null);
   // the PDF draw loop reads this long after the render that started it
   const openMarkRef = useRef(openMark);
@@ -108,7 +118,7 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
   }
   const selectionNow = () => pdfSelRef.current || liveSelRef.current || proseSelection(proseRef.current, docRef.current.maps, docRef.current.text);
 
-  async function markSelection(withNote: boolean) {
+  async function markSelection() {
     journey("highlight");
     const st = reader.live();
     const id = st.activeId, s = st.src;
@@ -121,16 +131,16 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
       start: sel.start, end: sel.end, quote: String(sel.quote).trim().slice(0, 4000), rects: sel.rects || [],
       ...((sel as LiveSelection).box ? { box: (sel as LiveSelection).box } : {}),
     } as MarkDraft;
+    // read before the selection goes: an ask or a card hangs on the words as picked
+    const at = pickedPlace(), own = liveSelRef.current?.own ?? null, menu = selMenuRef.current;
     // painted before it is saved, so the highlight never waits on a round trip
     const mid = newMarkId();
     const saving = markOps.create(id, { ...payload, id: mid });
     arrived("highlight");
-    window.getSelection()?.removeAllRanges();
-    if (liveSelRef.current) { liveSelRef.current = null; reader.clearLive?.(); }
-    pdfSelRef.current = null; setSelMenu(null);
+    dropSelection();
     const act: Act = { type: "create", id: mid, payload };
     remember(id, act);
-    if (withNote) setOpenMark({ id: mid, draft: "" });
+    if (menu) setChips({ id: mid, x: menu.x, y: menu.under, fresh: true, at, own });
     try { await saving; }
     catch (e) {
       // out of retries it may still have landed: re-read rather than make it twice
@@ -138,26 +148,39 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
       const u = undoOf(id);
       u.past = u.past.filter((a) => a !== act);
       setOpenMark((o) => (o && o.id === mid ? null : o));
+      setChips((c) => (c && c.id === mid ? null : c));
       toastWhy(e, "couldn't mark that");
     }
   }
 
-  // the words picked now, as a place a card or a question can hang on; prose snaps to whole words
-  function pickedPlace(): { start: number; end: number; quote: string; page: number | null; rects: number[][]; box: string | null; block: number | null } | null {
-    const sel = selectionNow() as (PdfRange | (ReturnType<typeof proseSelection> & { page?: number; rects?: number[][] })) | null;
-    if (!sel || !sel.quote.trim()) return null;
-    let { start, end } = sel, quote = String(sel.quote).trim(), block: number | null = null;
-    if (!pdfSelRef.current && !liveSelRef.current) {
-      // a card's words are found again only as whole words
+  // prose snaps to whole words: a card's words are found again only as whole words
+  function placeOf(sel: { start: number; end: number; quote: string; page?: number | null; rects?: readonly (readonly number[])[]; box?: string | null }, prose: boolean, block: number | null): Place | null {
+    let { start, end } = sel, quote = String(sel.quote).trim();
+    if (!quote) return null;
+    if (prose) {
       const text = docRef.current.text, word = /[\p{L}\p{N}]/u;
       while (start > 0 && word.test(text[start - 1])) start--;
       while (end < text.length && word.test(text[end])) end++;
       quote = text.slice(start, end).trim();
-      const at = window.getSelection()?.rangeCount ? window.getSelection()!.getRangeAt(0).startContainer : null;
-      const b = (at?.nodeType === 3 ? at.parentElement : at as Element | null)?.closest<HTMLElement>("[data-b]");
-      block = b ? Number(b.dataset.b) : null;
     }
-    return { start, end, quote: quote.slice(0, 4000), page: sel.page ?? null, rects: (sel.rects || []) as number[][], box: (sel as LiveSelection).box ?? null, block };
+    return { start, end, quote: quote.slice(0, 4000), page: sel.page ?? null, rects: (sel.rects || []).map((r) => [...r]), box: sel.box ?? null, block };
+  }
+  // the words picked now, as a place a card or a question can hang on
+  function pickedPlace(): Place | null {
+    const sel = selectionNow() as (PdfRange | (ReturnType<typeof proseSelection> & { page?: number; rects?: number[][] })) | null;
+    if (!sel) return null;
+    const prose = !pdfSelRef.current && !liveSelRef.current;
+    const pick = window.getSelection()?.rangeCount ? window.getSelection()!.getRangeAt(0).startContainer : null;
+    return placeOf(sel, prose, prose ? blockOf(pick) : null);
+  }
+  // a mark made earlier, as the same place: its block is where its words are painted
+  function markPlace(m: Mark): Place | null {
+    const kind = drawnAs(reader.live().src?.kind || ""), prose = kind !== "pdf" && kind !== "html";
+    return placeOf(m, prose, prose ? blockOf(proseRef.current?.querySelector(`[data-mark="${CSS.escape(m.id)}"]`) ?? null) : null);
+  }
+  function blockOf(at: Node | null): number | null {
+    const b = (at?.nodeType === 3 ? at.parentElement : at as Element | null)?.closest<HTMLElement>("[data-b]");
+    return b ? Number(b.dataset.b) : null;
   }
   function dropSelection() {
     window.getSelection()?.removeAllRanges();
@@ -166,31 +189,50 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
   }
 
   // the question is asked in the fold under these words; the ask is made with its first question
-  function askSelection() {
+  function askAt(at: Place) {
     const st = reader.live();
     if (!st.activeId || !st.src || st.onHome || st.treeOpen) return;
-    const at = pickedPlace();
-    if (!at) { toast("select a passage first"); return; }
     asking.set({ id: newAskId(), resourceId: st.src.id, ...at });
-    dropSelection();
     StrataAPI.log("ask_selection", { board: st.activeId, chars: at.quote.length });
   }
 
   // the card is written in the fold under these words; nothing is saved until it is kept
-  function cardSelection() {
+  function cardAt(at: Place, own: string | null) {
     const st = reader.live();
     if (!st.activeId || !st.src || st.onHome || st.treeOpen) return;
-    const at = pickedPlace();
-    if (!at) { toast("select a passage first"); return; }
+    const kind = drawnAs(st.src.kind);
     // a card sits on its words: too few, or words that occur elsewhere too, grow until they are its alone
-    const text = pdfSelRef.current && at.page ? reader.pageIndex(at.page)?.text ?? null : !liveSelRef.current ? docRef.current.text : null;
-    const live = liveSelRef.current && !at.box ? liveSelRef.current : null;
-    const own = text ? widenQuote(text, at.start, at.end) : null;
-    const quote = text ? own?.quote ?? null : live ? live.own : at.quote;
+    const text = kind === "pdf" ? (at.page ? reader.pageIndex(at.page)?.text ?? null : null) : kind !== "html" ? docRef.current.text : null;
+    const quote = text ? widenQuote(text, at.start, at.end)?.quote ?? null : kind === "html" && !at.box ? own : at.quote;
     if (!quote) { toast("these words don't make a place of their own: pick a passage of at most 40 words that occurs once"); return; }
-    openFoldCard({ resourceId: st.src.id, ...at, quote }, st.src.kind);
-    dropSelection();
+    openFoldCard({ ...at, resourceId: st.src.id, quote }, st.src.kind);
   }
+
+  // a live page's own words for a card are known only while picked, so a mark made there earlier offers no card
+  const offerOf = (c: Chips): ChipOffer => {
+    const live = drawnAs(reader.live().src?.kind || "") === "html";
+    return { note: true, ask: !notesOnly, card: !notesOnly && (!live || c.fresh || !!markNow(c.id)?.box), remove: !c.fresh };
+  };
+  function chipAct(act: ChipAct, prefill = "") {
+    const c = chips;
+    if (!c) return;
+    setChips(null);
+    const m = markNow(c.id);
+    if (act === "remove") { void dropMark(c.id); return; }
+    if (act === "note") { setOpenMark({ id: c.id, draft: m?.note || "", ...(prefill && !m?.note ? { prefill } : {}) }); return; }
+    const at = c.at ?? (m ? markPlace(m) : null);
+    if (!at) return;
+    if (act === "ask") askAt(at); else cardAt(at, c.own);
+  }
+  // a mark tapped again: its chips under the line that was tapped, unzoomed like the menu
+  function offerMark(id: string, line: { left: number; width: number; bottom: number } | null, x?: number) {
+    if (!line || !pageRef.current) return;
+    const z = zoomOf(pageRef.current) || 1;
+    const cx = x == null ? line.left + line.width / 2 : Math.min(Math.max(x, line.left), line.left + line.width);
+    setSelMenu(null);
+    setChips({ id, x: cx / z, y: line.bottom / z, fresh: false, at: null, own: null });
+  }
+  const dropChips = () => setChips(null);
 
   // a mark act out of retries would block its lane: give the lane up and re-read
   function markGaveUp(e: Failure, bid: string, mid: string) {
@@ -262,18 +304,18 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
   function onReaderClick(e: { target: EventTarget | null; clientX: number; clientY: number }) {
     const t = e.target as Element | null;
     // the menu's own clicks land here too; do not read them as a click elsewhere
-    if (t && t.closest && t.closest(".selmenu")) return;
+    if (t && t.closest && t.closest(".selmenu, .markchips")) return;
     // a live selection means this was a drag, so the menu owns it
     // PDF boxes are hit-tested by rect: elementsFromPoint skips pointer-events:none
     const live = window.getSelection();
     if (live && !live.isCollapsed && live.toString().trim()) return;
-    let hit: { dataset: DOMStringMap } | null = t && t.closest ? t.closest<HTMLElement>("[data-mark]") : null;
+    let hit: { dataset: DOMStringMap; line?: DOMRect } | null = t && t.closest ? t.closest<HTMLElement>("[data-mark]") : null;
     const slide = !hit && t && t.closest ? t.closest(".slide") : null;
     if (slide) {
       for (const b of slide.querySelectorAll<HTMLElement>(".mkbox")) {
         const r = b.getBoundingClientRect();
         if (e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom) {
-          hit = { dataset: { mark: b.dataset.mark || b.dataset.markPart } };
+          hit = { dataset: { mark: b.dataset.mark || b.dataset.markPart }, line: r };
           break;
         }
       }
@@ -281,9 +323,13 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
     if (hit && hit.dataset.mark) {
       const mid = hit.dataset.mark;
       const m = markNow(mid);
-      // a said note on prose opens from its words to be read, in the fold; only a bare highlight opens to write
+      // a said note on prose opens from its words to be read, in the fold; only a bare highlight offers its chips
       if (!slide && m && m.note) return;
-      setOpenMark((cur) => (cur && cur.id === mid ? cur : { id: mid, draft: (m && m.note) || "" }));
+      if (m && m.note) { setOpenMark((cur) => (cur && cur.id === mid ? cur : { id: mid, draft: m.note || "" })); return; }
+      if (openMarkRef.current?.id === mid) return;
+      const rects = hit.line ? [hit.line] : [...(hit as HTMLElement).getClientRects()];
+      const line = rects.find((r) => e.clientY >= r.top && e.clientY <= r.bottom) || rects[rects.length - 1] || null;
+      offerMark(mid, line, e.clientX);
       return;
     }
     if (t && t.closest && t.closest(".fold, .ftick")) return;
@@ -304,7 +350,7 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
     const z = zoomOf(pageRef.current) || 1;
     // never above the reader: a drag past the edge may have scrolled the start out of view
     const R = (pageRef.current as HTMLElement).getBoundingClientRect();
-    setSelMenu({ x: (r.left + r.width / 2) / z, y: Math.min(Math.max(r.top, R.top + 44), R.bottom) / z });
+    setSelMenu({ x: (r.left + r.width / 2) / z, y: Math.min(Math.max(r.top, R.top + 44), R.bottom) / z, under: Math.min(Math.max(r.bottom, R.top), R.bottom - 44) / z });
   }
 
   // the release can land anywhere, so the reader notes the press and the document hears the release
@@ -329,17 +375,50 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
     const onDown = (e: Event) => { const t = e.target as Element | null; if (!(t && t.closest && t.closest(".selmenu"))) off(); };
     const from = sc ? sc.scrollTop : 0;
     const onScroll = () => { if (sc && Math.abs(sc.scrollTop - from) >= NUDGE_PX) off(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (isMarkKey(e) && !typing(e.target)) { e.preventDefault(); e.stopPropagation(); void markSelection(); return; }
+      off();
+    };
     document.addEventListener("mousedown", onDown, true);
-    document.addEventListener("keydown", off, true);
+    document.addEventListener("keydown", onKey, true);
     if (sc) sc.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", off);
     return () => {
       document.removeEventListener("mousedown", onDown, true);
-      document.removeEventListener("keydown", off, true);
+      document.removeEventListener("keydown", onKey, true);
       if (sc) sc.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", off);
     };
   }, [selMenu, pairIdx]);
+
+  // the chips go on a press elsewhere, a scroll, a resize or a key that isn't theirs; the mark stays
+  useEffect(() => {
+    if (!chips) return;
+    const sc = pageRef.current;
+    const off = () => setChips(null);
+    const onDown = (e: Event) => { const t = e.target as Element | null; if (!(t && t.closest && t.closest(".markchips"))) off(); };
+    const from = sc ? sc.scrollTop : 0;
+    const onScroll = () => { if (sc && Math.abs(sc.scrollTop - from) >= NUDGE_PX) off(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (typing(e.target)) { off(); return; }
+      const k = chipKey(e, offerOf(chips));
+      if (!k) return;
+      if ("drop" in k) { off(); if (!k.pass) { e.preventDefault(); e.stopPropagation(); } return; }
+      e.preventDefault(); e.stopPropagation();
+      chipAct(k.act, k.prefill);
+    };
+    document.addEventListener("mousedown", onDown, true);
+    document.addEventListener("keydown", onKey, true);
+    if (sc) sc.addEventListener("scroll", onScroll, { passive: true });
+    window.addEventListener("resize", off);
+    return () => {
+      document.removeEventListener("mousedown", onDown, true);
+      document.removeEventListener("keydown", onKey, true);
+      if (sc) sc.removeEventListener("scroll", onScroll);
+      window.removeEventListener("resize", off);
+    };
+  }, [chips]);
+  useEffect(() => { setChips(null); }, [pairIdx]);
 
   // touch has no mouseup: follow selectionchange, debounced while the handles move
   useEffect(() => {
@@ -361,18 +440,19 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
 
   const onReaderDown = () => { pressedInReader.current = true; };
 
-  function offerLive(sel: LiveSelection | null, at: { left: number; top: number; width: number } | null) {
+  function offerLive(sel: LiveSelection | null, at: { left: number; top: number; width: number; height?: number } | null) {
     liveSelRef.current = sel;
     if (!sel || !at || !pageRef.current) { setSelMenu(null); return; }
     const z = zoomOf(pageRef.current) || 1;
     const R = pageRef.current.getBoundingClientRect();
-    setSelMenu({ x: (at.left + at.width / 2) / z, y: Math.min(Math.max(at.top, R.top + 44), R.bottom) / z });
+    const bottom = at.top + (at.height ?? 0);
+    setSelMenu({ x: (at.left + at.width / 2) / z, y: Math.min(Math.max(at.top, R.top + 44), R.bottom) / z, under: Math.min(Math.max(bottom, R.top), R.bottom - 44) / z });
   }
 
   return {
-    selMenu, openMark, setOpenMark, openMarkRef,
+    selMenu, chips, chipOffer: chips ? offerOf(chips) : null, chipAct, openMark, setOpenMark, openMarkRef,
     paintPdfMarks, lightPdfMarks,
-    markSelection, askSelection, cardSelection, stepHistory,
-    onReaderDown, onReaderClick, offerLive, saveNote, replyNote, dropMark,
+    markSelection, stepHistory,
+    onReaderDown, onReaderClick, offerLive, offerMark, dropChips, saveNote, replyNote, dropMark,
   };
 }

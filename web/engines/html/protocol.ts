@@ -19,7 +19,7 @@ export type FromPage =
   | { t: "ready"; words: number }
   | { t: "sel"; start: number; end: number; quote: string; box: Box; at?: string | null; own?: string | null }
   | { t: "unsel" }
-  | { t: "mark"; id: string }
+  | { t: "mark"; id: string; box?: Box }
   | { t: "layer"; intent: LayerIntent; id: string; text?: string; back?: string; got?: boolean }
   | { t: "revealed"; n: number; found: boolean }
   | { t: "press" }

@@ -54,6 +54,11 @@ A save that has not been acknowledged is a save the page must not call done. A r
 async function proseShown(page, sentence) {
   await page.locator(".page-col.prose").filter({ hasText: sentence.slice(0, 40) }).waitFor({ timeout: 60_000 });
 }
+// marks the picked words, then picks one of the chips under the mark
+async function markThen(page, chip) {
+  await page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click({ timeout: 10_000 });
+  await page.locator(".markchips").getByRole("button", { name: chip, exact: true }).click({ timeout: 10_000 });
+}
 // picks the words on the page and opens a question under them: the fold's line, ready to type in
 async function askAt(page, words) {
   const at = await phraseAt(page, words);
@@ -61,7 +66,7 @@ async function askAt(page, words) {
   await page.mouse.down();
   await page.mouse.move(at.x1, at.y1, { steps: 4 });
   await page.mouse.up();
-  await page.locator(".selmenu").getByRole("button", { name: "Ask", exact: true }).click();
+  await markThen(page, "Ask");
   const line = page.locator(".fold .fi.asked .fi-q").first();
   await line.waitFor();
   return line;
@@ -160,8 +165,8 @@ const highlightDuringRefresh = {
     await page.mouse.down();
     await page.mouse.move(at.x1, at.y1, { steps: 8 });
     await page.mouse.up();
-    // a highlight is a note left empty
-    await page.locator(".selmenu").getByRole("button", { name: "Note", exact: true }).click();
+    // a highlight is a mark with nothing hung on it: Esc drops its chips
+    await page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click();
     await page.keyboard.press("Escape");
     const save = await posted;
     await save.done;
@@ -838,7 +843,7 @@ const markNoteDelete = {
     await page.mouse.down();
     await page.mouse.move(at.x1, at.y1, { steps: 4 });
     await page.mouse.up();
-    await page.locator(".selmenu").getByRole("button", { name: "Note", exact: true }).click();
+    await markThen(page, "Note");
     const editor = page.locator(".fold .fi-edit");
     await editor.waitFor();
     const note = `Why it matters, seed ${t.seed}.`;
@@ -1000,12 +1005,12 @@ const liveNotes = {
 
     await frame.locator("#cost").selectText();
     await frame.locator("#cost").dispatchEvent("mouseup");
-    await page.locator(".selmenu button", { hasText: "Note" }).click({ timeout: 10_000 });
+    await markThen(page, "Note");
     await frame.locator(".fi-edit").fill(said[0], { timeout: 10_000 });
     await frame.locator(".fi-edit").press("Escape");
 
     await frame.locator("#lean").click();
-    await page.locator(".selmenu button", { hasText: "Note" }).click({ timeout: 10_000 });
+    await markThen(page, "Note");
     await frame.locator(".fi-edit").fill(said[1], { timeout: 10_000 });
     await sleep(Math.floor(t.rng("pause")() * 300));
     await frame.locator(".fi-edit").press("Escape");
@@ -2032,7 +2037,7 @@ const selectionCard = {
     await page.mouse.down();
     await page.mouse.move(at.x1, at.y1, { steps: 4 });
     await page.mouse.up();
-    await page.locator(".selmenu").getByRole("button", { name: "Card", exact: true }).click();
+    await markThen(page, "Card");
     const draft = page.locator(".fold .fi.draft");
     await draft.waitFor();
     const front = `Race card from words, seed ${t.seed}: where is it asked?`;

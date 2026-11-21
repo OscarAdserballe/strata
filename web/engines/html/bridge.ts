@@ -139,14 +139,14 @@ function reportSelection() {
   send({ t: "sel", start, end, quote: wk.text.slice(start, end), box: boxOf(r.getBoundingClientRect()), own: own?.quote ?? null });
 }
 
-function markAt(x: number, y: number): string | null {
+function markAt(x: number, y: number): { id: string; box: Box } | null {
   for (const [id, r] of resolved) {
-    for (const b of r.getClientRects()) if (x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) return id;
+    for (const b of r.getClientRects()) if (x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) return { id, box: boxOf(b) };
   }
   for (const m of marks) {
     if (!m.box || !m.note) continue;
     const b = boxNamed(m.box)?.getBoundingClientRect();
-    if (b && x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) return m.id;
+    if (b && x >= b.left && x <= b.right && y >= b.top && y <= b.bottom) return { id: m.id, box: boxOf(b) };
   }
   return null;
 }
@@ -437,8 +437,8 @@ addEventListener("click", (e) => {
   if (e.target instanceof Element && e.target.closest(OURS)) return;
   const sel = getSelection();
   if (sel && !sel.isCollapsed) return;
-  const id = markAt(e.clientX, e.clientY);
-  if (id) send({ t: "mark", id });
+  const hit = markAt(e.clientX, e.clientY);
+  if (hit) send({ t: "mark", id: hit.id, box: hit.box });
 });
 // a redraw after input can move the words a mark sits on
 let redraw: ReturnType<typeof setTimeout> | undefined;
