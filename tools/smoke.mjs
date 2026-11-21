@@ -226,7 +226,9 @@ try {
     await page.mouse.move(words.x0, words.y); await page.mouse.down();
     await page.mouse.move(words.x1, words.y, { steps: 8 }); await page.mouse.up();
   }
-  const carded = words && await page.locator(".selmenu").getByRole("button", { name: "Card", exact: true }).click({ timeout: 3000 }).then(() => true, () => false);
+  const sel = page.locator(".selmenu");
+  const carded = words && await sel.getByRole("button", { name: "Mark", exact: true }).click({ timeout: 3000 })
+    .then(() => sel.getByRole("button", { name: /^Card/ }).click({ timeout: 3000 })).then(() => true, () => false);
   const draft = page.locator(".fold .fi.draft");
   const drafted = !!carded && await draft.waitFor({ timeout: 5000 }).then(() => true, () => false);
   check("Card on picked words opens a draft that offers Format, not Keep", drafted
