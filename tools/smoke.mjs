@@ -172,7 +172,7 @@ try {
     await page.mouse.move(run.x0, run.y); await page.mouse.down();
     await page.mouse.move(run.x1, run.y, { steps: 8 }); await page.mouse.up();
   }
-  const asked = run && await page.locator(".selmenu").getByRole("button", { name: "Ask", exact: true }).click({ timeout: 3000 }).then(() => true, () => false);
+  const asked = run && await page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click({ timeout: 3000 }).then(() => page.locator(".markchips").getByRole("button", { name: "Ask", exact: true }).click({ timeout: 3000 })).then(() => true, () => false);
   const line = page.locator(".fold .fi.asked .fi-q");
   check("Ask on picked words opens a fold under them", !!asked && await line.waitFor({ timeout: 5000 }).then(() => true, () => false));
   const answers = () => page.locator(".fold .fi.asked .fi-turn.claude:not(.writing)");
@@ -217,7 +217,7 @@ try {
     await page.mouse.move(words.x0, words.y); await page.mouse.down();
     await page.mouse.move(words.x1, words.y, { steps: 8 }); await page.mouse.up();
   }
-  const carded = words && await page.locator(".selmenu").getByRole("button", { name: "Card", exact: true }).click({ timeout: 3000 }).then(() => true, () => false);
+  const carded = words && await page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click({ timeout: 3000 }).then(() => page.locator(".markchips").getByRole("button", { name: "Card", exact: true }).click({ timeout: 3000 })).then(() => true, () => false);
   const draft = page.locator(".fold .fi.draft");
   const drafted = !!carded && await draft.waitFor({ timeout: 5000 }).then(() => true, () => false);
   check("Card on picked words opens a draft that offers Format, not Keep", drafted

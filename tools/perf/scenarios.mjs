@@ -351,8 +351,10 @@ export async function highlight(env, t, pageN) {
       const clickTs = await nextEventTs(s, "click");
       const resp = s.page.waitForResponse((x) => x.url().endsWith(`/api/boards/${t.board}/marks`) && x.request().method() === "POST");
       const ra = await rooms();
-      // a highlight is a note left empty: the mark paints on the click, before the note is written
-      await s.page.locator(".selmenu button", { hasText: "Note" }).click();
+      // the mark paints on the click; it is sent once its chips go
+      await s.page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click();
+      await s.page.waitForFunction(() => window.__perf.mk.length > 0);
+      await s.page.keyboard.press("Escape");
       const body = await (await resp).json();
       made = body.id;
       await s.page.waitForFunction((id) => window.__perf.mk.some((m) => m.id === id), made);
@@ -448,7 +450,8 @@ export async function chat(env, t, text = "how does the variance of this estimat
     const a0 = await snapshot(s);
     const clickTs = await nextEventTs(s, "click");
     await arm(s, ["askLine"]);
-    await s.page.locator(".selmenu").getByRole("button", { name: "Ask", exact: true }).click();
+    await s.page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click();
+    await s.page.locator(".markchips").getByRole("button", { name: "Ask", exact: true }).click();
     await waitMarks(s, ["askLine"], 30_000).catch(() => {});
     await s.page.waitForTimeout(400);
     const b0 = await snapshot(s);
@@ -496,7 +499,8 @@ export async function idle(env, where, t) {
     if (where === "pdf-chat") {
       await pickWords(s);
       await arm(s, ["askLine"]);
-      await s.page.locator(".selmenu").getByRole("button", { name: "Ask", exact: true }).click();
+      await s.page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click();
+      await s.page.locator(".markchips").getByRole("button", { name: "Ask", exact: true }).click();
       await waitMarks(s, ["askLine"], 30_000);
       await s.page.waitForTimeout(3000);
     }

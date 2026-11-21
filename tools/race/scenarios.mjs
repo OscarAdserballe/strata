@@ -61,7 +61,7 @@ async function askAt(page, words) {
   await page.mouse.down();
   await page.mouse.move(at.x1, at.y1, { steps: 4 });
   await page.mouse.up();
-  await page.locator(".selmenu").getByRole("button", { name: "Ask", exact: true }).click();
+  await markThen(page, "Ask");
   const line = page.locator(".fold .fi.asked .fi-q").first();
   await line.waitFor();
   return line;
@@ -81,6 +81,12 @@ async function clickWords(target, mouse, name) {
 async function askFold(page) {
   if (!(await page.locator(".fold .fi.asked").count())) await clickWords(page, page.mouse, "strata-ask");
   await page.locator(".fold .fi.asked").first().waitFor({ timeout: 5000 });
+}
+
+// the selection menu offers Mark; the chips under the new mark offer the rest
+async function markThen(page, chip) {
+  await page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click({ timeout: 10_000 });
+  if (chip) await page.locator(".markchips").getByRole("button", { name: chip, exact: true }).click({ timeout: 10_000 });
 }
 
 async function phraseAt(page, words) {
@@ -160,8 +166,8 @@ const highlightDuringRefresh = {
     await page.mouse.down();
     await page.mouse.move(at.x1, at.y1, { steps: 8 });
     await page.mouse.up();
-    // a highlight is a note left empty
-    await page.locator(".selmenu").getByRole("button", { name: "Note", exact: true }).click();
+    // a highlight is Mark and nothing more: Esc drops the chips and the mark goes
+    await markThen(page, null);
     await page.keyboard.press("Escape");
     const save = await posted;
     await save.done;
@@ -838,7 +844,7 @@ const markNoteDelete = {
     await page.mouse.down();
     await page.mouse.move(at.x1, at.y1, { steps: 4 });
     await page.mouse.up();
-    await page.locator(".selmenu").getByRole("button", { name: "Note", exact: true }).click();
+    await markThen(page, "Note");
     const editor = page.locator(".fold .fi-edit");
     await editor.waitFor();
     const note = `Why it matters, seed ${t.seed}.`;
@@ -1000,12 +1006,12 @@ const liveNotes = {
 
     await frame.locator("#cost").selectText();
     await frame.locator("#cost").dispatchEvent("mouseup");
-    await page.locator(".selmenu button", { hasText: "Note" }).click({ timeout: 10_000 });
+    await markThen(page, "Note");
     await frame.locator(".fi-edit").fill(said[0], { timeout: 10_000 });
     await frame.locator(".fi-edit").press("Escape");
 
     await frame.locator("#lean").click();
-    await page.locator(".selmenu button", { hasText: "Note" }).click({ timeout: 10_000 });
+    await markThen(page, "Note");
     await frame.locator(".fi-edit").fill(said[1], { timeout: 10_000 });
     await sleep(Math.floor(t.rng("pause")() * 300));
     await frame.locator(".fi-edit").press("Escape");
@@ -2016,6 +2022,7 @@ const selectionCard = {
     one: "the server holds one card from the draft",
     anchored: "its source is the picked words, as a quote",
     gone: "the draft left the fold once it was kept",
+    unmarked: "Card from the chips took the mark Mark made back unsent: no highlight on the server or the page",
   },
   async run(t) {
     const b = await board(t, "Race selection card");
@@ -2032,7 +2039,7 @@ const selectionCard = {
     await page.mouse.down();
     await page.mouse.move(at.x1, at.y1, { steps: 4 });
     await page.mouse.up();
-    await page.locator(".selmenu").getByRole("button", { name: "Card", exact: true }).click();
+    await markThen(page, "Card");
     const draft = page.locator(".fold .fi.draft");
     await draft.waitFor();
     const front = `Race card from words, seed ${t.seed}: where is it asked?`;
@@ -2051,6 +2058,67 @@ const selectionCard = {
     const quote = (() => { try { return JSON.parse(String(rows[0]?.source ?? "").replace(/^.*?quote:\s*/, "")); } catch { return ""; } })();
     t.check("anchored", squash(quote) === squash(phrase), `source ${JSON.stringify(rows[0]?.source ?? null)}`);
     t.check("gone", gone, gone ? undefined : "the draft is still in the fold");
+    const marks = t.sql("SELECT COUNT(*) n FROM marks WHERE resource_id = ?", s.rid)[0]?.n ?? 0;
+    const posts = t.net.entries.filter((e) => e.method === "POST" && e.path === `/api/boards/${b.id}/marks`).length;
+    const painted = await page.locator(".page-col.prose .mk").count();
+    t.check("unmarked", marks === 0 && posts === 0 && painted === 0, `${marks} on the server, ${posts} mark POST(s), ${painted} painted`);
+  },
+};
+
+// Mark paints and holds the create while the chips are up: Esc sends it once, Ask takes it back unsent
+const markChips = {
+  name: "mark-chips",
+  what: "Mark two passages on a slow wire that loses the first create's answer: Esc after one sends it, Ask after the other takes it back; the server holds exactly the first, once",
+  checks: {
+    once: "the server holds the passage marked then left with Esc, exactly once",
+    unsent: "the passage asked about from the chips has no highlight, and its create never went out",
+    shown: "the page shows the one highlight, and the question's fold under the other words",
+  },
+  async run(t) {
+    const b = await board(t, "Race mark chips");
+    const unique = "A mark made under its chips is saved once, or not at all.";
+    const kept = "is saved once, or not at all", asked = "must not call done";
+    const s = await prose(t, b.id, "race-mark-chips.md", essay("Marks and their chips", unique));
+    const isCreate = (e) => e.method === "POST" && e.path === `/api/boards/${b.id}/marks`;
+    const page = await t.open({ latency: true, lostAck: { match: isCreate, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    await page.goto(readerUrl(t, b.id, s));
+    await proseShown(page, unique);
+    await t.net.idle(400);
+    const pick = async (words) => {
+      const at = await phraseAt(page, words);
+      await page.mouse.move(at.x0, at.y0);
+      await page.mouse.down();
+      await page.mouse.move(at.x1, at.y1, { steps: 4 });
+      await page.mouse.up();
+    };
+    await pick(kept);
+    await markThen(page, null);
+    await page.locator(".markchips").waitFor();
+    await page.keyboard.press("Escape");
+    await pick(asked);
+    await page.keyboard.press("m");
+    await page.locator(".markchips").waitFor();
+    await page.keyboard.press("a");
+    await page.locator(".fold .fi.asked .fi-q").first().waitFor({ timeout: 10_000 });
+    await page.evaluate(() => window.__strataSettled?.());
+    const until = performance.now() + GRACE_MS;
+    let rows = [];
+    for (;;) {
+      rows = t.sql("SELECT quote FROM marks WHERE resource_id = ?", s.rid);
+      if (rows.length >= 1 || performance.now() > until) break;
+      await sleep(200);
+    }
+    await t.net.idle(500);
+    rows = t.sql("SELECT quote FROM marks WHERE resource_id = ?", s.rid);
+    const sent = t.net.entries.filter(isCreate);
+    const keys = new Set(sent.map((e) => e.headers?.["idempotency-key"] ?? e.key));
+    t.say(`${sent.length} create POST(s) under ${keys.size} key(s): ${sent.map((e) => `${e.outcome} ${e.status}`).join(", ")}`);
+    if (!sent.some((e) => e.outcome === "lost-ack")) throw new Error("no create's answer was lost: the race this scenario is about did not happen");
+    t.check("once", rows.length === 1 && squash(rows[0].quote).includes(kept), `server: ${rows.map((r) => squash(r.quote)).join(" · ") || "none"}`);
+    t.check("unsent", !rows.some((r) => squash(r.quote).includes(asked)) && keys.size === 1, `${keys.size} key(s) on the wire`);
+    const shown = await page.evaluate(() => [...new Set([...document.querySelectorAll(".page-col.prose .mk[data-mark]")].map((el) => el.dataset.mark))].length);
+    const fold = await page.locator(".fold .fi.asked").count();
+    t.check("shown", shown === 1 && fold >= 1, `${shown} highlight(s), ${fold} question fold(s)`);
   },
 };
 
@@ -2168,4 +2236,4 @@ const padTwoTabs = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, markChips, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs];

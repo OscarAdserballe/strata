@@ -198,9 +198,10 @@ function surfaceSteps({ page, open, shot, phone, R }) {
       ["text with marks", async () => { await open(R.essayReader); await shot("reader--text"); }],
       ["a note's fold open", async () => { await open(R.essayReader); await page.locator(".ftick:has(.fmk.note)").first().click(); await shot("reader--note-fold"); }],
       ["selection menu", async () => { await open(R.essayReader); await pick(); await shot("reader--selection-menu"); }],
+      ["the chips under a new mark", async () => { await button("Mark").click(); await page.locator(".markchips").waitFor(); await shot("reader--mark-chips"); }],
       ["a card written under words", async () => { await button("Card").click(); await page.locator(".fold .fi.draft").waitFor(); await shot("reader--card-draft"); }],
       ["a question under words", async () => {
-        await open(R.essayReader); await pick(); await button("Ask").click();
+        await open(R.essayReader); await pick(); await button("Mark").click(); await button("Ask").click();
         const line = page.locator(".fold .fi.asked .fi-q");
         await line.fill("Why is this suggestive and not proof?"); await line.press("Enter");
         await page.locator(".fold .fi.asked .fi-turn.claude:not(.writing)").waitFor({ timeout: 30000 });

@@ -45,7 +45,7 @@ const LEGEND = {
   "flip-prose/key-n": "`n` (next card) on the large prose source: keydown → next frame (pooled)",
   "flip-pdf/key-n": "`n` (next card) on the 240-mark PDF: keydown → next frame (pooled)",
   "cards-only/toggle": "`o` (cards only) a second time, its decks kept: keydown → the pooled deck's line drawn",
-  "highlight/p13": "click Highlight in the selection menu → the new mark's box in the DOM",
+  "highlight/p13": "click Mark in the selection menu → the new mark's box in the DOM",
   "idle/home": "commits in 10 s idle",
   "idle/pdf": "commits in 10 s idle",
   "idle/pdf-chat": "commits in 10 s idle, chat thread open",
