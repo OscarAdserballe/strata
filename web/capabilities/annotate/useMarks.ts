@@ -18,7 +18,11 @@ import { pdfSelection, type PageTextIndex, type PdfRange } from "./selection.ts"
 type Ref<T> = MutableRefObject<T>;
 export interface MarkSource { id: string; kind: string }
 export interface OpenMark { id: string; draft: string }
-export interface SelMenu { x: number; y: number }
+/** where the menu sits; once the words are marked, the mark and what its chips do */
+export interface SelMenu { x: number; y: number; marked?: Marked }
+export interface Marked { id: string; ask: Go | null; card: Go | null }
+/** a verb on the words picked, readied while they are still selected; a string says why it can't */
+type Go = (() => void) | string;
 
 export interface MarksReader {
   pageRef: Ref<HTMLElement | null>;
@@ -46,9 +50,13 @@ type Act = { type: "create" | "delete"; id: string; payload: MarkDraft & { note?
   | { type: "note"; id: string; before: string | null; after: string | null };
 type Failure = any;
 
-export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: number; loading: boolean }) {
+/** notesOnly: a page read for its notes alone, where a mark offers no ask or card */
+export function useMarks(reader: MarksReader, { pairIdx, loading, notesOnly = false }: { pairIdx: number; loading: boolean; notesOnly?: boolean }) {
   const { pageRef, proseRef, pdfHostRef, docRef } = reader;
   const [selMenu, setSelMenu] = useState<SelMenu | null>(null);
+  // the touch handler reads this after the mark has dropped the selection
+  const selMenuRef = useRef(selMenu);
+  selMenuRef.current = selMenu;
   const [openMark, setOpenMark] = useState<OpenMark | null>(null);
   // the PDF draw loop reads this long after the render that started it
   const openMarkRef = useRef(openMark);
@@ -108,7 +116,7 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
   }
   const selectionNow = () => pdfSelRef.current || liveSelRef.current || proseSelection(proseRef.current, docRef.current.maps, docRef.current.text);
 
-  async function markSelection(withNote: boolean) {
+  async function markSelection(offer: (mid: string) => void) {
     journey("highlight");
     const st = reader.live();
     const id = st.activeId, s = st.src;
@@ -132,7 +140,7 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
     pdfSelRef.current = null; setSelMenu(null);
     const act: Act = { type: "create", id: mid, payload };
     remember(id, act);
-    if (withNote) setOpenMark({ id: mid, draft: "" });
+    offer(mid);
     try { await saving; }
     catch (e) {
       // out of retries it may still have landed: re-read rather than make it twice
@@ -140,6 +148,7 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
       const u = undoOf(id);
       u.past = u.past.filter((a) => a !== act);
       setOpenMark((o) => (o && o.id === mid ? null : o));
+      setSelMenu((m) => (m && m.marked?.id === mid ? null : m));
       toastWhy(e, "couldn't mark that");
     }
   }
@@ -161,37 +170,52 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
     }
     return { start, end, quote: quote.slice(0, 4000), page: sel.page ?? null, rects: (sel.rects || []) as number[][], box: (sel as LiveSelection).box ?? null, block };
   }
-  function dropSelection() {
-    window.getSelection()?.removeAllRanges();
-    if (liveSelRef.current) { liveSelRef.current = null; reader.clearLive?.(); }
-    pdfSelRef.current = null; setSelMenu(null);
-  }
 
   // the question is asked in the fold under these words; the ask is made with its first question
-  function askSelection() {
+  function askFrom(): Go {
     const st = reader.live();
-    if (!st.activeId || !st.src || st.onHome || st.treeOpen) return;
+    if (!st.activeId || !st.src || st.onHome || st.treeOpen) return "";
     const at = pickedPlace();
-    if (!at) { toast("select a passage first"); return; }
-    asking.set({ id: newAskId(), resourceId: st.src.id, ...at });
-    dropSelection();
-    StrataAPI.log("ask_selection", { board: st.activeId, chars: at.quote.length });
+    if (!at) return "select a passage first";
+    const board = st.activeId, rid = st.src.id;
+    return () => {
+      if (reader.live().src?.id !== rid) return;
+      asking.set({ id: newAskId(), resourceId: rid, ...at });
+      StrataAPI.log("ask_selection", { board, chars: at.quote.length });
+    };
   }
+  const run = (go: Go) => { if (typeof go === "string") { if (go) toast(go); return false; } go(); return true; };
 
   // the card is written in the fold under these words; nothing is saved until it is kept
-  function cardSelection() {
+  function cardFrom(): Go {
     const st = reader.live();
-    if (!st.activeId || !st.src || st.onHome || st.treeOpen) return;
+    if (!st.activeId || !st.src || st.onHome || st.treeOpen) return "";
     const at = pickedPlace();
-    if (!at) { toast("select a passage first"); return; }
+    if (!at) return "select a passage first";
     // a card sits on its words: too few, or words that occur elsewhere too, grow until they are its alone
     const text = pdfSelRef.current && at.page ? reader.pageIndex(at.page)?.text ?? null : !liveSelRef.current ? docRef.current.text : null;
     const live = liveSelRef.current && !at.box ? liveSelRef.current : null;
     const own = text ? widenQuote(text, at.start, at.end) : null;
     const quote = text ? own?.quote ?? null : live ? live.own : at.quote;
-    if (!quote) { toast("these words don't make a place of their own: pick a passage of at most 40 words that occurs once"); return; }
-    openFoldCard({ resourceId: st.src.id, ...at, quote }, st.src.kind);
-    dropSelection();
+    if (!quote) return "these words don't make a place of their own: pick a passage of at most 40 words that occurs once";
+    const rid = st.src.id, kind = st.src.kind;
+    return () => { if (reader.live().src?.id === rid) openFoldCard({ resourceId: rid, ...at, quote }, kind); };
+  }
+
+  // one press highlights; the chips that take its place turn the mark into a note, an ask or a card
+  function markAndOffer() {
+    const pos = selMenuRef.current;
+    if (!pos || pos.marked) return;
+    // readied now: the mark drops the selection they are made from
+    const ask = notesOnly ? null : askFrom(), card = notesOnly ? null : cardFrom();
+    void markSelection((id) => setSelMenu({ x: pos.x, y: pos.y, marked: { id, ask, card } }));
+  }
+  function chip(verb: "note" | "ask" | "card", draft = "") {
+    const m = selMenuRef.current?.marked;
+    if (!m) return;
+    setSelMenu(null);
+    if (verb === "note") setOpenMark({ id: m.id, draft });
+    else { const go = verb === "ask" ? m.ask : m.card; if (go) run(go); }
   }
 
   // a mark act out of retries would block its lane: give the lane up and re-read
@@ -328,16 +352,24 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
     if (!selMenu) return;
     const sc = pageRef.current;
     const off = () => setSelMenu(null);
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      const typing = !!t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName));
+      const act = typing || e.metaKey || e.ctrlKey || e.altKey ? null : keyActRef.current(e.key);
+      if (!act) { off(); return; }
+      e.preventDefault(); e.stopPropagation(); act();
+    };
     const onDown = (e: Event) => { const t = e.target as Element | null; if (!(t && t.closest && t.closest(".selmenu"))) off(); };
     const from = sc ? sc.scrollTop : 0;
     const onScroll = () => { if (sc && Math.abs(sc.scrollTop - from) >= NUDGE_PX) off(); };
     document.addEventListener("mousedown", onDown, true);
-    document.addEventListener("keydown", off, true);
+    // on the window, so the room's own letters (c captures, n turns) never see a key meant for the menu
+    window.addEventListener("keydown", onKey, true);
     if (sc) sc.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("resize", off);
     return () => {
       document.removeEventListener("mousedown", onDown, true);
-      document.removeEventListener("keydown", off, true);
+      window.removeEventListener("keydown", onKey, true);
       if (sc) sc.removeEventListener("scroll", onScroll);
       window.removeEventListener("resize", off);
     };
@@ -351,7 +383,11 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
       clearTimeout(t);
       t = setTimeout(() => {
         const sel = window.getSelection();
-        if (!sel || !sel.rangeCount || sel.isCollapsed || !sel.toString().trim()) { setSelMenu(null); return; }
+        if (!sel || !sel.rangeCount || sel.isCollapsed || !sel.toString().trim()) {
+          // marking drops the selection on purpose; the chips stay
+          if (!selMenuRef.current?.marked) setSelMenu(null);
+          return;
+        }
         let n: Node | null = sel.anchorNode; if (n && n.nodeType === 3) n = n.parentElement;
         if (!n || !pageRef.current || !pageRef.current.contains(n)) return;
         onReaderUp();
@@ -362,6 +398,20 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
   }, [loading]);
 
   const onReaderDown = () => { pressedInReader.current = true; };
+
+  // the menu's letters: m marks; then n, a and c pick a chip, and any other letter starts the note with it
+  const keyActRef = useRef<(key: string) => (() => void) | null>(() => null);
+  keyActRef.current = (key) => {
+    const m = selMenuRef.current, k = key.toLowerCase();
+    if (!m) return null;
+    if (!m.marked) return k === "m" ? markAndOffer : null;
+    if (k === "escape") return () => setSelMenu(null);
+    if (k === "n") return () => chip("note");
+    if (k === "a" && m.marked.ask) return () => chip("ask");
+    if (k === "c" && m.marked.card) return () => chip("card");
+    if (key.length === 1 && /\p{L}|\p{N}/u.test(key)) return () => chip("note", key);
+    return null;
+  };
 
   function offerLive(sel: LiveSelection | null, at: { left: number; top: number; width: number } | null) {
     liveSelRef.current = sel;
@@ -374,7 +424,7 @@ export function useMarks(reader: MarksReader, { pairIdx, loading }: { pairIdx: n
   return {
     selMenu, openMark, setOpenMark, openMarkRef,
     paintPdfMarks, lightPdfMarks,
-    markSelection, askSelection, cardSelection, stepHistory,
+    markAndOffer, chip, stepHistory,
     onReaderDown, onReaderClick, offerLive, saveNote, replyNote, dropMark,
   };
 }

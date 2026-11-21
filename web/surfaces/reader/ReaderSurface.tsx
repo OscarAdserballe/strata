@@ -200,7 +200,8 @@ export default function ReaderSurface(props: ReaderSurfaceProps) {
           {/* React never renders children here, so pdf.js canvases survive re-renders */}
           <div ref={pdfHostRef} style={{ display: !onHome && !showTree && src && src.kind === "pdf" ? "block" : "none" }} />
           {!onHome && !src ? <div className="page-col prose"><p className="empty">A blank pair — no source. The cards are on the left; drop a PDF or markdown file here, or press <kbd>h</kbd> to capture one from a link.</p></div> : null}
-          {marks.selMenu && !solo ? <SelectionMenu at={marks.selMenu} onNote={() => void marks.markSelection(true)} onAsk={marks.askSelection} onCard={marks.cardSelection} /> : null}
+          {marks.selMenu && !solo ? <SelectionMenu at={marks.selMenu} marked={!!marks.selMenu.marked} onMark={marks.markAndOffer} onNote={() => marks.chip("note")}
+            onAsk={marks.selMenu.marked?.ask ? () => marks.chip("ask") : undefined} onCard={marks.selMenu.marked?.card ? () => marks.chip("card") : undefined} /> : null}
         </div>
         {onGenerate && bare && !find && !showTree ? <GenerateCards onGenerate={onGenerate} /> : null}
         {/* the cards being made for this source: over the page they will fold into, not in a column of their own */}

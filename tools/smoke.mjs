@@ -168,11 +168,30 @@ try {
     const r = el.getBoundingClientRect();
     return { x0: r.left + 2, x1: r.left + r.width * 0.8, y: r.top + r.height / 2 };
   });
-  if (run) {
+  const drag = async () => {
     await page.mouse.move(run.x0, run.y); await page.mouse.down();
     await page.mouse.move(run.x1, run.y, { steps: 8 }); await page.mouse.up();
+  };
+  // one press marks: m highlights at once, the chips take Mark's place, and a typed letter starts the note
+  if (run) {
+    await drag();
+    await page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).waitFor({ timeout: 3000 }).catch(() => {});
+    const saved = page.waitForResponse((x) => /\/marks$/.test(x.url()) && x.request().method() === "POST", { timeout: 5000 }).catch(() => null);
+    await page.keyboard.press("m");
+    const made = await saved;
+    const chips = await page.locator(".selmenu.chips button").allTextContents().catch(() => []);
+    check("m marks the words, and Note · Ask · Card take its place", !!made && chips.join(" ") === "NoteN AskA CardC", chips.join(" "));
+    await page.keyboard.press("W");
+    const note = await page.locator(".fold .fi-edit").first().inputValue({ timeout: 3000 }).catch(() => null);
+    check("…and typing starts the note with that letter", note === "W", String(note));
+    await page.keyboard.press("Escape");
+    const id = made && (await made.json().catch(() => ({}))).id;
+    if (id) await fetch(`${APP}/api/boards/${book.id}/marks/${id}`, { method: "DELETE" }).catch(() => {});
+    await atRest(page);
+    await drag();
   }
-  const asked = run && await page.locator(".selmenu").getByRole("button", { name: "Ask", exact: true }).click({ timeout: 3000 }).then(() => true, () => false);
+  const menu = (name) => page.locator(".selmenu").getByRole("button", { name, exact: true }).click({ timeout: 3000 }).then(() => true, () => false);
+  const asked = run && await menu("Mark") && await menu("Ask");
   const line = page.locator(".fold .fi.asked .fi-q");
   check("Ask on picked words opens a fold under them", !!asked && await line.waitFor({ timeout: 5000 }).then(() => true, () => false));
   const answers = () => page.locator(".fold .fi.asked .fi-turn.claude:not(.writing)");

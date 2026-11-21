@@ -24,7 +24,9 @@ export const ROOM: readonly KeyGroup[] = [
     ["i", "the primer's plan — what the routine drew it from (on a source with a primer, or the primer)"],
   ]],
   ["marking", [
-    ["select", "drag over a passage — highlight / note comes up over it"],
+    ["select", "drag over a passage — Mark comes up over it"],
+    ["m", "with words selected: mark them (the highlight saves at once)"],
+    ["n / a / c", "just marked: write a note, ask about it, or make a card (or just type: the note starts with it)"],
     ["click", "a highlight — open its note; a card's words — open the card"],
     ["esc", "close the note (it saves)"],
     ["⌘Z / ⌘Y", "take back the last mark / put it back (⇧⌘Z too)"],

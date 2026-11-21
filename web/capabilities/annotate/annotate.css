@@ -16,3 +16,9 @@
 .selmenu button + button{border-left:1px solid oklch(1 0 0 / 0.14);}
 .selmenu button:hover{background:oklch(1 0 0 / 0.13);}
 .selmenu:after{content:"";position:absolute;left:50%;bottom:-5px;width:10px;height:10px;background:var(--ink);transform:translateX(-50%) rotate(45deg);border-radius:1px;z-index:-1;}
+.selmenu kbd{font:inherit;opacity:.5;margin-left:7px;}
+.selmenu.chips{background:var(--paper);border:1px solid var(--line);}
+.selmenu.chips:after{background:var(--paper);border-right:1px solid var(--line);border-bottom:1px solid var(--line);}
+.selmenu.chips button{color:var(--ink);}
+.selmenu.chips button + button{border-left-color:var(--line);}
+.selmenu.chips button:hover{background:oklch(0.2 0.02 60 / 0.06);}

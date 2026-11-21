@@ -52,7 +52,7 @@ export default function LivePage({ board, resource, scale = 1, onHeight }: LiveP
     toast, toastWhy: (e, said) => toast(StrataWhy(e, said), 4200),
     reread: (b) => { StrataAPI.getBoard(b).then((st) => { applyBoardState(st, StrataAnswer(st) ?? {}); }).catch(() => {}); },
     clearLive: () => engine.clearSelection(),
-  }, { pairIdx: 0, loading: !src });
+  }, { pairIdx: 0, loading: !src, notesOnly: true });
   marksRef.current = marks;
 
   const hostRef = useRef<FoldHost | null>(null);
@@ -81,7 +81,7 @@ export default function LivePage({ board, resource, scale = 1, onHeight }: LiveP
   return (
     <div className="livepage" ref={pageRef} onMouseDown={marks.onReaderDown} onClick={marks.onReaderClick}>
       {url && src ? <HtmlSource engine={engine} url={url} scale={scale} /> : <p className="livepage-wait">Loading the page…</p>}
-      {marks.selMenu ? <SelectionMenu at={marks.selMenu} onNote={() => void marks.markSelection(true)} /> : null}
+      {marks.selMenu ? <SelectionMenu at={marks.selMenu} marked={!!marks.selMenu.marked} onMark={marks.markAndOffer} onNote={() => marks.chip("note")} /> : null}
     </div>
   );
 }
