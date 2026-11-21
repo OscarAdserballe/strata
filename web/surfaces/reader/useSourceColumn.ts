@@ -11,8 +11,6 @@ import { drawnAs } from "../../engines/html/drawn.ts";
 import { mdRender } from "../../engines/prose/render.ts";
 import { drawDiagrams } from "../../engines/prose/diagrams.ts";
 import { paintProseMarks, reconcileProseMarks } from "../../engines/prose/paint.ts";
-import { claimsIn } from "../../engines/tree/claims.ts";
-import { litClaims as litBands, paintClaims as paintBands } from "../../engines/tree/claimBands.ts";
 import { sourceAdapters } from "../../engines/source/adapter.ts";
 import { paintFolds } from "../../capabilities/fold/folds.ts";
 import { switches } from "../../capabilities/fold/switches.ts";
@@ -88,7 +86,7 @@ export const readAt = (id: string): AtMemory => { try { return JSON.parse(localS
 const EMPTY_DOC = () => ({ html: "", maps: [] as number[][], text: "" });
 
 export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef, pendingScroll, landOnPage, readerTop }: HeldPlace) {
-  const { activeId, board, src, onHome, pairIdx, pair, card, cardsAll: cards, pos, solo, qDeck, splitW, ui, loading, sectionsHere, openSection } = v;
+  const { activeId, board, src, onHome, pairIdx, pair, card, cardsAll: cards, solo, qDeck, splitW, ui, loading, sectionsHere, openSection } = v;
   const pdfHostRef = useRef<HTMLDivElement | null>(null);
   // the prose column is written by hand, not React: marks split its text nodes
   const proseRef = useRef<HTMLDivElement | null>(null);
@@ -275,7 +273,7 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
 
   pdfPaint.current = {
     // a page drawing repaints its own marks; the layers lie over the pages, so they draw once the pages are laid out
-    laid: () => { paintClaims(); paintLayer(); },
+    laid: () => paintLayer(),
     drawn: (n) => {
       if (pendingScroll.current != null && readerShown.current) settleRestore();
       paintPdfMarks(n);
@@ -285,33 +283,12 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
   };
 
   const showTree = treeOpen && !onHome && !!src;
-  // paintClaims also runs from the PDF render loop, whose closure is stale
-  const treeDataRef = useRef<{ trees: Trees; sections: Section[] }>({ trees: {}, sections: [] });
-  treeDataRef.current = { trees, sections: sectionsHere };
   // from the store, not the board: a stale board read can't drop a fresh highlight; not subscribed here
   const marksHere = marksOn(activeId, src);
 
   function renderPdf() {
     const host = pdfHostRef.current; if (!host || !src || !activeId) return;
     void engine().open(host, { key: activeId + ":" + src.id, rid: src.id, filename: src.filename, url: StrataAPI.resourceRawUrl(activeId, src.id) });
-  }
-
-  // read live state: this also runs from the async PDF render loop, whose closure is stale
-  // cards sit in their passages' folds now: an old pin is only taken down
-
-  function claimsOfSource() {
-    const { trees: tr, sections } = treeDataRef.current;
-    return claimsIn(tr, sections);
-  }
-  function goToClaimCard(id: string) {
-    const i = room.live().cards.findIndex((x) => x.id === id);
-    if (i >= 0) room.standOn(i);
-  }
-  const litNode = () => { const cur = room.live().card; return (cur && cur.node) || null; };
-  function litClaims() { litBands(pageRef.current, litNode()); }
-  function paintClaims() {
-    const { src: s, cards: deck } = room.live();
-    paintBands(pageRef.current, s ? drawnAs(s.kind) : null, s ? claimsOfSource() : [], deck, goToClaimCard, litNode());
   }
 
   useEffect(() => {
@@ -344,13 +321,12 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
     const layout = [splitW, ui, pz].join();
     if (fresh) {
       col.innerHTML = docHtml;
-      if (docHtml) { paintProseMarks(col, docRef.current.maps, proseMarks(src, marksHere), openMark && openMark.id); arrived("prose.open"); drawDiagrams(col, () => { paintClaims(); paintLayer(); }); }
+      if (docHtml) { paintProseMarks(col, docRef.current.maps, proseMarks(src, marksHere), openMark && openMark.id); arrived("prose.open"); drawDiagrams(col, paintLayer); }
     }
-    paintClaims();
     if (fresh || was.layout !== layout) paintLayer();
     proseWritten.current = { col, src: src && src.id, html: docHtml, layout };
     // treeOpen is a dep because flipping back from the tree remounts this div empty
-  }, [docHtml, src && src.id, pos, cards, pairIdx, splitW, ui, pz, treeOpen]);
+  }, [docHtml, src && src.id, splitW, ui, pz, treeOpen]);
 
   // marks repaint from a store subscription, without rendering the room
   useEffect(() => {
@@ -424,13 +400,6 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
     marks.lightPdfMarks(openMark ? openMark.id : null);
     paintLayer();
   }, [openMark && openMark.id]);
-
-  useLayoutEffect(() => {
-    if (!src || showTree || solo) return;
-    paintClaims();
-  }, [trees, src && src.id, pairIdx, cards, splitW, ui, pz, showTree, solo]);
-
-  useLayoutEffect(() => { if (src && !showTree && !solo) litClaims(); }, [card && card.id, showTree, solo]);
 
   // re-rasterise only once the pinch settles; CSS zoom already shows each step
   useEffect(() => {

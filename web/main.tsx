@@ -15,7 +15,6 @@ import "./surfaces/board/board-home.css";
 import "./capabilities/annotate/annotate.css";
 import "./engines/find/find.css";
 import "./engines/pdf/pdf.css";
-import "./engines/tree/claims.css";
 import "./surfaces/board/shelf.css";
 import "./surfaces/board/desk.css";
 import "./capabilities/progress/kept-chart.css";
