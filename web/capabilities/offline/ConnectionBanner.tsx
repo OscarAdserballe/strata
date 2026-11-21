@@ -88,6 +88,6 @@ export default function ConnectionBanner() {
           <button onClick={update} disabled={busy}>{busy ? "Checking…" : connection.outdated ? "Reload" : "Refresh now"}</button></> : null}
       </>}
     {error ? <span>{error}</span> : null}
-    {listOpen && clashes && !connection.offline ? <ClashList clashes={box.clashes} onClose={() => setListOpen(false)} /> : null}
+    {listOpen && clashes && !connection.offline ? <div className="clash-row"><ClashList clashes={box.clashes} onClose={() => setListOpen(false)} /></div> : null}
   </div>;
 }
