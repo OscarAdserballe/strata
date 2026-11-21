@@ -16,3 +16,12 @@
 .selmenu button + button{border-left:1px solid oklch(1 0 0 / 0.14);}
 .selmenu button:hover{background:oklch(1 0 0 / 0.13);}
 .selmenu:after{content:"";position:absolute;left:50%;bottom:-5px;width:10px;height:10px;background:var(--ink);transform:translateX(-50%) rotate(45deg);border-radius:1px;z-index:-1;}
+.selmenu.under{transform:translate(-50%,14px);}
+.selmenu.under:after{bottom:auto;top:-5px;}
+/* under the words, light, so the reading goes on past them */
+.markchips{position:fixed;z-index:var(--layer-selmenu);transform:translate(-50%,7px);display:flex;gap:4px;}
+.markchips button{font:500 11px/1 var(--sans);letter-spacing:.02em;color:var(--ink);background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:6px 10px;cursor:pointer;white-space:nowrap;box-shadow:0 2px 8px oklch(0.2 0.02 60 / 0.12);}
+.markchips button:hover{border-color:var(--ink-soft);}
+.markchips .mc-rm{color:var(--ink-soft);padding:6px 8px;}
+/* clear of the selection handles a phone draws under the words */
+@media (pointer: coarse){.markchips{transform:translate(-50%,20px);gap:6px;}.markchips button{font-size:12.5px;padding:9px 13px;}}

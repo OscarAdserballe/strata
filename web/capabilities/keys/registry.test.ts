@@ -49,7 +49,10 @@ test("every key a screen binds is in its ? sheet", () => {
     const missing = [...bound(file, from)].filter((k) => !docs.has(k));
     assert.deepEqual(missing, [], `${screen}: bound in ${file} but not in sheets.ts`);
   }
-  assert.ok(!documented(ROOM).has("c"), "a card is written, not grabbed from a thread");
+  const chips = [...bound("web/capabilities/annotate/useMarks.ts")];
+  assert.deepEqual(chips.filter((k) => !documented(ROOM).has(k)), [], "the selection menu's and the chips' keys are on the room's sheet");
+  for (const k of ["m", "n", "a", "c", "escape"]) assert.ok(chips.includes(k), `the menu or the chips bind ${k}`);
+  assert.ok(!bound("web/capabilities/keys/room-keys.ts").has("c"), "a card is written, not grabbed from a thread: c is the chips' alone");
 });
 
 test("every screen registers its key layout with the registry, and nothing else listens for them", () => {
