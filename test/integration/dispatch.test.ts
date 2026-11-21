@@ -66,6 +66,8 @@ test("the three tools: board lists implementing first; open gives no page yet; p
     ["<!doctype html><html><body><p>Hi</p><script>let a = 1", /never closed/],
     ["<!doctype html><html><body><p>Hi</p><script type=\"text/babel\">x</script></body></html>", /compile it/],
     ["<!doctype html><html><body><p>Hi</p><script src=\"app.js\"></script></body></html>", /https CDN/],
+    ["PLACEHOLDER", /isn't an HTML document/],
+    ["<!doctype html><html><body><p>PLACEHOLDER</p></body></html>", /placeholder/],
   ] as const) {
     const refused = await post(a, { page: bad });
     assert.ok(refused.isError && /wasn't posted/.test(refused.text) && why.test(refused.text), refused.text);
