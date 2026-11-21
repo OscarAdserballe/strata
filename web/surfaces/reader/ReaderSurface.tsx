@@ -12,7 +12,8 @@ import type { Navigation } from "../../shell/routes.ts";
 import CardProgress, { type DistilBusy } from "../../capabilities/progress/DistilProgress.tsx";
 import { TreeView } from "../../engines/tree/TreeView.tsx";
 import { FIND_CAP } from "../../engines/find/find.ts";
-import SelectionMenu from "../../capabilities/annotate/SelectionMenu.tsx";
+import SelectionMenu, { MarkChips } from "../../capabilities/annotate/SelectionMenu.tsx";
+import { TOUCH } from "../../platform/device.js";
 import { drillView, useCardInHand, useDrill } from "./useDrill.ts";
 import type { DrillCard, DrillLive, DrillRoom, HeldPair } from "./useDrill.ts";
 import { useSplit } from "./split.ts";
@@ -201,7 +202,8 @@ export default function ReaderSurface(props: ReaderSurfaceProps) {
           {/* React never renders children here, so pdf.js canvases survive re-renders */}
           <div ref={pdfHostRef} style={{ display: !onHome && !showTree && src && src.kind === "pdf" ? "block" : "none" }} />
           {!onHome && !src ? <div className="page-col prose"><p className="empty">A blank pair — no source. The cards are on the left; drop a PDF or markdown file here, or press <kbd>h</kbd> to capture one from a link.</p></div> : null}
-          {marks.selMenu && !solo ? <SelectionMenu at={marks.selMenu} onNote={() => void marks.markSelection(true)} onAsk={marks.askSelection} onCard={marks.cardSelection} /> : null}
+          {marks.selMenu && !solo ? <SelectionMenu at={marks.selMenu} under={TOUCH} onMark={() => void marks.markSelection()} /> : null}
+          {marks.chips && marks.chipOffer && !solo ? <MarkChips at={marks.chips} offer={marks.chipOffer} onAct={marks.chipAct} /> : null}
         </div>
         {onGenerate && bare && !find && !showTree ? <GenerateCards onGenerate={onGenerate} /> : null}
         {/* the cards being made for this source: over the page they will fold into, not in a column of their own */}
