@@ -4,3 +4,16 @@
 .offline-boards h2{font:500 12px/1.5 var(--sans);color:var(--ink-soft);}
 .offline-boards button{display:block;width:100%;padding:14px 0;border:0;border-bottom:1px solid var(--line);background:none;text-align:left;color:var(--ink);font:18px/1.4 var(--serif);cursor:pointer;}
 .veil.launcher,.app .bench-lib{top:var(--connection-height,0px);}
+.connection-banner .sync-line{font-weight:500;}
+.clash-list{flex-basis:100%;max-width:880px;max-height:min(70vh,560px);overflow:auto;margin:4px auto 0;padding:12px 14px;background:#fffaf0;border:1px solid #d6b974;border-radius:8px;text-align:left;color:var(--ink,#2b2418);}
+.clash-list header{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;}
+.clash-list ul{list-style:none;margin:0;padding:0;}
+.clash{padding:10px 0;border-top:1px solid #ecdcb4;}
+.clash-where{margin:0 0 6px;font-weight:500;}
+.clash-texts{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+.clash-texts figure{margin:0;min-width:0;}
+.clash-texts figcaption{font-size:12px;color:#7a6236;margin-bottom:2px;}
+.clash-texts pre{margin:0;max-height:180px;overflow:auto;padding:8px;background:#fff;border:1px solid #ecdcb4;border-radius:5px;white-space:pre-wrap;word-break:break-word;font:13px/1.45 var(--serif,serif);}
+.clash-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
+.clash-error{margin:6px 0 0;color:#8a2b12;}
+@media (max-width:640px){.clash-texts{grid-template-columns:1fr;}}

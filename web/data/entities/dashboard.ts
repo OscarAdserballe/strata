@@ -109,6 +109,11 @@ export const dashOps = {
       optimistic: [{ key: DASH_KEY, apply: onTasks(id, (t) => ({ ...t, stage: "implementing", dispatched: true })) }],
       confirm: (res, meta) => takeState(res, meta, s) };
   },
+  /** An item you file yourself lands in the same inbox an agent's does; the server names it. */
+  file(item: { title: string; body: string; context?: string; area?: string; from: DashFrom; links?: DashLink[] }, s: Store = roomStore): Op<DashAnswer & { id: string }> {
+    return { label: "hand that to an agent", lanes: ["dash:inbox"], method: "POST", path: "/api/dashboard/inbox", body: item,
+      confirm: (res, meta) => takeState(res, meta, s) };
+  },
   routine(body: Record<string, unknown>, s: Store = roomStore): Op<RoutineView> {
     return { label: "save the routine", lanes: [ROUTINE_KEY], method: "PUT", path: "/api/dashboard/routine", body,
       confirm: (res) => { s.apply(ROUTINE_KEY, Date.now(), res, "wire", {}); } };
@@ -144,6 +149,7 @@ export const dash = {
   send: (id: string) => mutate(dashOps.send(id)),
   end: (id: string, stage: "dropped" | "done" = "dropped") => mutate(dashOps.end(id, stage)),
   aside: (id: string, stage: "todo" | "thinking") => mutate(dashOps.aside(id, stage)),
+  file: (item: Parameters<typeof dashOps.file>[0]) => mutate(dashOps.file(item)),
   routine: (body: Record<string, unknown>) => mutate(dashOps.routine(body)),
   runRoutine: () => mutate(dashOps.runRoutine()),
   press: (id: string) => mutate(dashOps.press(id)),
