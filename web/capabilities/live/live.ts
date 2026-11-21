@@ -51,11 +51,12 @@ export function paintLiveMarks(engine: HtmlEngine, at: LiveAt, open: string | nu
 }
 
 /** The notes half of a fold host: the reader's marks on the open source, and writing, replying and removing them. */
-export function noteFolds(at: () => LiveAt, marks: () => LiveMarks | null): Pick<FoldHost, "marks" | "writing" | "write" | "save" | "remove" | "reply"> {
+export function noteFolds(at: () => LiveAt, marks: () => LiveMarks | null): Pick<FoldHost, "marks" | "writing" | "writingText" | "write" | "save" | "remove" | "reply"> {
   const on = () => { const a = at(); return marksOn(a.bid, a.src); };
   return {
     marks: on,
     writing: () => marks()?.openMarkRef.current?.id ?? null,
+    writingText: () => marks()?.openMarkRef.current?.draft ?? "",
     write: (id) => {
       const m = id ? on().find((x) => x.id === id) : null;
       marks()?.setOpenMark(id ? { id, draft: (m && m.note) || "" } : null);
