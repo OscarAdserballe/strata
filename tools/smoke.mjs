@@ -158,6 +158,30 @@ try {
     const r = el.getBoundingClientRect();
     return { x0: r.left + 2, x1: r.left + r.width * 0.8, y: r.top + r.height / 2 };
   });
+  // offline, a highlight is painted, kept on the device, and lands once on reconnect
+  if (run) {
+    await ctx.setOffline(true);
+    await page.evaluate(() => window.dispatchEvent(new Event("offline")));
+    await page.locator(".connection-banner").getByText("Offline", { exact: true }).waitFor({ timeout: 30000 }).catch(() => {});
+    await page.mouse.move(run.x0, run.y); await page.mouse.down();
+    await page.mouse.move(run.x1, run.y, { steps: 8 }); await page.mouse.up();
+    const before = (await (await fetch(`${APP}/api/boards/${book.id}`)).json()).marks.length;
+    const marked = await page.locator(".selmenu").getByRole("button", { name: "Mark", exact: true }).click({ timeout: 3000 }).then(() => true, () => false);
+    const waits = await page.locator(".connection-banner").getByText(/1 highlight or note waiting to sync/).waitFor({ timeout: 3000 }).then(() => true, () => false);
+    const kept = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("strata.outbox.mark.")).length);
+    await page.keyboard.press("Escape");
+    const landed = page.waitForResponse((x) => /\/marks$/.test(x.url()) && x.request().method() === "POST", { timeout: 10000 }).catch(() => null);
+    await ctx.setOffline(false);
+    await page.evaluate(() => window.dispatchEvent(new Event("online")));
+    const made = await landed;
+    const left = await page.waitForFunction(() => !Object.keys(localStorage).some((k) => k.startsWith("strata.outbox.mark.")), null, { timeout: 5000 }).then(() => true, () => false);
+    const after = (await (await fetch(`${APP}/api/boards/${book.id}`)).json()).marks.length;
+    check("offline, Mark paints and waits on the device, and lands once on reconnect", marked && waits && kept === 1 && !!made && left && after === before + 1,
+      `marked ${marked} · banner ${waits} · kept ${kept} · landed ${!!made} · ${after - before} new`);
+    const id = made && (await made.json().catch(() => ({}))).id;
+    if (id) await fetch(`${APP}/api/boards/${book.id}/marks/${id}`, { method: "DELETE" }).catch(() => {});
+    await atRest(page);
+  }
   if (run) {
     await page.mouse.move(run.x0, run.y); await page.mouse.down();
     await page.mouse.move(run.x1, run.y, { steps: 8 }); await page.mouse.up();
