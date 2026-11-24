@@ -2,6 +2,10 @@
 import { useSyncExternalStore } from "react";
 import { StrataAPI, StrataWireDown, StrataWireWatch } from "../../data/api.ts";
 import { localShelf, noShelf, type Shelf } from "../../data/outbox.ts";
+import { sources } from "../../data/entities/sources.ts";
+
+/** A link saved to Unfiled offline: that board's id is asked for when the link is sent. */
+export const UNFILED_LINK = "unfiled";
 
 export interface WaitingLink { key: string; board: string; url: string; at: number }
 export interface LinkDeps {
@@ -69,7 +73,7 @@ export function onWaitingLinks(s: Pick<LinkDeps, "landed" | "refused">): void { 
 export const waitingLinks = new WaitingLinks({
   shelf: typeof localStorage !== "undefined" ? localShelf("strata.links.") : noShelf,
   down: StrataWireDown,
-  capture: (board, url, key) => StrataAPI.capture(board, url, key),
+  capture: async (board, url, key) => StrataAPI.capture(board === UNFILED_LINK ? await sources.unfiled() : board, url, key),
   landed: (l, a) => said.landed(l, a),
   refused: (l, e) => said.refused(l, e),
 });
