@@ -19,7 +19,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
   await page.getByLabel('Back', { exact: true }).fill('Pay attention to what matters.');
   await page.getByLabel('Source or attribution (optional)').fill('My notebook');
   assert.equal(libraryReads, 0, 'creating a card does not wait for conversation or existing cards to load');
-  await page.getByRole('button', { name: 'Format & Preview', exact: true }).click();
+  await page.getByRole('button', { name: 'Format', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm save', exact: true }).click();
   await page.getByRole('status').filter({ hasText: 'Saved to Unfiled' }).waitFor();
   await dialog.getByText(front, { exact: true }).click();
@@ -60,7 +60,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
   const delayedFront = front + ' delayed';
   await page.getByLabel('Front', { exact: true }).fill(delayedFront);
   await page.getByLabel('Back', { exact: true }).fill('Finish quietly after I close.');
-  await page.getByRole('button', { name: 'Format & Preview', exact: true }).click();
+  await page.getByRole('button', { name: 'Format', exact: true }).click();
   await page.getByRole('button', { name: 'Confirm save', exact: true }).click();
   await requested;
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
@@ -76,7 +76,7 @@ for (const viewport of [{ width: 1440, height: 1000 }, { width: 390, height: 844
   await page.getByRole('button', { name: 'new card', exact: true }).click();
   await page.locator('.rcompose .front').fill(front + ' from empty review');
   await page.locator('.rcompose .back').fill('A card can start anywhere.');
-  await page.locator('.rcompose').getByRole('button', { name: 'Format & Preview', exact: true }).click();
+  await page.locator('.rcompose').getByRole('button', { name: 'Format', exact: true }).click();
   await page.locator('.rcompose').getByRole('button', { name: 'Confirm save', exact: true }).click();
   await page.locator('.rcompose').waitFor({ state: 'detached' });
   assert.equal(new URL(page.url()).searchParams.get('view'), 'review');

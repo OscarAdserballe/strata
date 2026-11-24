@@ -226,27 +226,30 @@ function draftItem(doc: Document, it: FoldDraft, on: FoldIntents): HTMLElement {
   const front = face("fi-front", "the question this passage answers", it.front);
   const back = face("fi-back", "its answer", it.back);
   const bar = el(doc, "div", "fi-acts");
-  const go = el(doc, "button", "fi-pri " + (formatted ? "fi-keep" : "fi-format"), busy ? "Formatting…" : formatted ? "Keep" : "Format");
+  // Keep takes the words as typed; Format is a choice, and offline the model can't be reached
+  const go = el(doc, "button", "fi-pri fi-keep", "Keep");
+  const tidy = el(doc, "button", "fi-lnk fi-format", busy ? "Formatting…" : "Format");
   const drop = el(doc, "button", "fi-lnk fi-drop", "discard");
-  go.type = drop.type = "button";
-  go.disabled = busy;
+  go.type = tidy.type = drop.type = "button";
+  go.disabled = tidy.disabled = busy;
   // what the boxes hold is what is kept: a word changed after Format is the reader's
-  const press = () => {
-    if (busy) return;
+  const faces = (): [string, string] | null => {
     const f = front.value.trim(), b = back.value.trim();
-    if (!f) { front.focus(); return; }
-    if (formatted) on.keep(it.id, f, b); else on.format(it.id, f, b);
+    if (!f) { front.focus(); return null; }
+    return [f, b];
   };
-  go.onclick = press;
+  const keep = () => { const v = busy ? null : faces(); if (v) on.keep(it.id, v[0], v[1]); };
+  go.onclick = keep;
+  tidy.onclick = () => { const v = busy ? null : faces(); if (v) on.format(it.id, v[0], v[1]); };
   drop.onclick = () => on.discard(it.id);
   const keys = (e: KeyboardEvent) => {
     e.stopPropagation();
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); press(); }
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); keep(); }
     else if (e.key === "Escape" && !front.value.trim() && !back.value.trim()) { e.preventDefault(); on.discard(it.id); }
   };
   front.addEventListener("keydown", keys);
   back.addEventListener("keydown", keys);
-  bar.append(go, drop, el(doc, "em", "fi-hint", formatted ? "⌘↵ keeps" : "⌘↵ formats, then keeps"));
+  bar.append(go, ...(formatted ? [] : [tidy]), drop, el(doc, "em", "fi-hint", "⌘↵ keeps"));
   box.append(lab, front, back);
   if (it.error) box.append(el(doc, "p", "fi-err", it.error));
   box.append(bar);
