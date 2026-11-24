@@ -40,8 +40,8 @@ revokes them.
 | `create_board` | A new board, with a handle and a purpose |
 | `dashboard_add_items` | Tasks into the dashboard's inbox: a title, a line of context and where it came from, for the reader to send on or drop |
 | `dashboard_read` | The dashboard as Markdown: every thread by stage (to-do, thinking, decide, implementing, review) with notes and links, then the inbox |
-| `dashboard_board` | Dispatch: every open thread as JSON `[{ id, title, stage }]`, implementing first |
-| `dashboard_open` | Dispatch: one thread `{ id, title, text, stage, page, notes: [{ id, on, text }] }`, the newest version's page and the notes on it |
+| `dashboard_board` | Dispatch: every open thread as JSON `[{ id, title, stage, claimed? }]`, implementing first; `claimed` says which run holds it |
+| `dashboard_open` | Dispatch: one thread `{ id, title, text, stage, page, notes: [{ id, on, text }] }`, the newest version's page and the notes on it; on a thread in implementing it claims the thread for this run (its `Mcp-Session-Id`) for an hour, and is refused while another run holds it |
 | `dashboard_post` | Dispatch: `{ page?, replies?, ask?, heard? }`, the next version, the ask it answers and how Claude read it, and replies under the reader's notes |
 
 Every answer is Markdown, cut to about 6k tokens (up to 24k with `max_tokens`), and ends with the exact
