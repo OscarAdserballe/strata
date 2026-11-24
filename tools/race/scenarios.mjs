@@ -1191,7 +1191,7 @@ const cardEditLost = {
     await editor.waitFor();
     const face = editor.locator("textarea").first();
     await face.fill(front);
-    await editor.getByRole("button", { name: "Format & Preview", exact: true }).click();
+    await editor.getByRole("button", { name: "Format", exact: true }).click();
     const confirm = editor.getByRole("button", { name: "Confirm save", exact: true });
     await confirm.waitFor();
     await t.net.idle(300);
@@ -1234,7 +1234,7 @@ const authoredTwice = {
     const front = `Race card of my own, seed ${t.seed}: is it saved once?`;
     await form.locator("textarea.front").fill(front);
     await form.locator("textarea.back").fill("Once: the draft's key makes the second save the first one again.");
-    await form.getByRole("button", { name: "Format & Preview", exact: true }).click();
+    await form.getByRole("button", { name: "Format", exact: true }).click();
     const confirm = form.getByRole("button", { name: "Confirm save", exact: true });
     await confirm.waitFor();
     await t.net.idle(300);
@@ -2237,7 +2237,7 @@ const offlineThenSync = {
     await t.net.idle(400);
 
     await wire.cut();
-    await page.locator(".connection-banner").getByText("Offline", { exact: true }).waitFor({ timeout: 30_000 });
+    await page.locator(".connection-mark.off").waitFor({ timeout: 30_000 });
     const graded = [];
     for (let i = 0; i < OFFLINE_GRADES; i++) {
       const was = await q.innerText();
