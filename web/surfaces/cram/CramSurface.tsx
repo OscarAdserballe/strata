@@ -334,7 +334,7 @@ function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, 
           </div>
         );
       })}
-      <div className="cram-group">
+      {distilMode ? null : <div className="cram-group">
         <div className="cram-row">
           <label className="cram-tick">
             <input type="checkbox" checked={prefs.mine} onChange={(e) => setPrefs((p) => ({ ...p, mine: e.target.checked }))} />
@@ -342,13 +342,14 @@ function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, 
           </label>
           <span className="cram-n">{yours.length}</span>
         </div>
-      </div>
+      </div>}
       {!sources.length && !yours.length ? <p className="cram-quiet">This board has no cards yet.</p> : null}
       <div className="cram-foot">
         <span className="cram-total">
+          {distilMode ? `${ticked.size} source${ticked.size === 1 ? "" : "s"} ticked` : <>
           {pile ? pile.length : listed} card{(pile ? pile.length : listed) === 1 ? "" : "s"}
           {prefs.dropped.length ? <> · {prefs.dropped.length} dropped <button className="cram-link"
-            onClick={() => setPrefs((p) => ({ ...p, dropped: [] }))}>bring back</button></> : null}
+            onClick={() => setPrefs((p) => ({ ...p, dropped: [] }))}>bring back</button></> : null}</>}
         </span>
         <span className="grow" />
         <button className="lask-go" disabled={starting || (distilMode ? !ticked.size : pile ? !pile.length : !listed)} onClick={start}>
