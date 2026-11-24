@@ -300,6 +300,8 @@ const MIGRATIONS: [name: string, run: () => void][] = [
     addColumn("dashboard_versions", "ask", "TEXT");
     addColumn("dashboard_versions", "heard", "TEXT");
   }],
+  // A Dispatch version keeps which guide topics were in the reader's own text when it was posted.
+  ["dispatch-told", () => addColumn("dashboard_versions", "told", "TEXT")],
 ];
 
 // A comment thread is now a note with replies: the reader's first words are the note, everything after a reply.

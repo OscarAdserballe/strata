@@ -12,6 +12,7 @@ import Dispatch from "./Dispatch.tsx";
 import { hm } from "./parts.tsx";
 import { loadWriter } from "../../capabilities/write/Writer.tsx";
 import Pad from "../../capabilities/pad/Pad.tsx";
+import PromptsDrawer from "./Prompts.tsx";
 
 // No arrows between the tabs: Claude picks where a thread goes next, so they are places, not steps.
 // what waits on you carries an orange count; the rest is information
@@ -40,6 +41,7 @@ export default function Dashboard() {
       </main>
     </div>
     <Pad />
+    <PromptsDrawer />
     <Toast />
   </>;
 }

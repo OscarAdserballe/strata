@@ -32,7 +32,7 @@ revokes them.
 | `get_text` | A source's or section's extracted text, by page range; for a PDF with none, whether its text is waiting to be read from its file, being read, or why it could not be |
 | `search` | Batched `{ kind, query }` over cards, kept cards, questions, highlights, sources (newest first, dated), the log, chat |
 | `get_changes` | Reviewed, kept, highlighted, asked, answered, added, finished, logged, since a date |
-| `get_guide` | The server's own instructions (`server/features/agent/guide.md`) |
+| `get_guide` | The server's own instructions (`server/features/agent/guide.md`), or the reader's own text for a topic they rewrote in Dispatch's Prompts drawer (`agent_prompts`) |
 | `request_upload` | A one-time signed upload link per new PDF, Markdown, text or HTML file, or the existing source for known bytes |
 | `get_import` | An upload's progress |
 | `capture` | A web page, arXiv abstract or YouTube transcript, through the app's own capture; a link the board already holds, however it is written, answers with that source |
@@ -52,7 +52,7 @@ Agents add and arrange; they never delete for good (`delete_deck` tombstones a d
 
 A deck an agent adds is the deck distil would have made: `add_deck` takes the section's concept tree (one synthesis root, claims with questions, a glossary) with the cards, and each card names its tree node, the questions it answers and the term it introduces. The op checks the shape and nothing about size (one synthesis root, every question answered once, every term defined once), orders definition cards first with `orderByLadder`, and stores the tree as `ready`, so the concept map, drill order and Review's claim are the same for both. A section that already has a tree takes cards without one.
 
-`add_deck` and `set_primer` each need a **guide receipt** (`guide`): a hash of the `flashcards` or `primer` topic of `guide.md`, printed at its end (`server/features/agent/guide.ts`). Without the current one the op is refused with the guide in the error, so an agent can't write a deck or a primer it never read the rules for, and an edit to the guide makes every agent read it again.
+`add_deck` and `set_primer` each need a **guide receipt** (`guide`): a hash of the `flashcards` or `primer` topic of `guide.md`, printed at its end (`server/features/agent/guide.ts`). Without the current one the op is refused with the guide in the error, so an agent can't write a deck or a primer it never read the rules for, and an edit to the guide makes every agent read it again. The receipt hashes the text the agent read, so the reader's own text for a topic has its own.
 
 A card, a tree node and a glossary term are each placed by a verbatim quote of the words they are about and nothing else. `shared/reading/compile-quote.ts` is the one compile step: distil (with the model repairing what fails), `add_deck`, `edit_cards` and the reader all ask it whether a quote occurs exactly once in the card's passage, and an agent's batch with a quote that doesn't compile writes nothing and names why.
 Every write tool takes a `key`: the batch commits in one `ctx.commit` together with a receipt under that

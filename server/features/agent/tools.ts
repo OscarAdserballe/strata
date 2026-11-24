@@ -14,7 +14,7 @@ import { HANDLE, idOf, parseRef } from "../../../shared/agent/ids.ts";
 import { agentRepo as a } from "./repo.ts";
 import { budgetOf } from "./render.ts";
 import { AgentError, boardList, boardOf, changes, CHANGE_KINDS, importContext, openLink, outline, render, search, SEARCH_KINDS, text, type Filter } from "./kinds.ts";
-import { guideTopics } from "./guide.ts";
+import { guideTopic, TOPICS } from "./guide.ts";
 import { checkOps, OP_SCHEMAS, OPS, opLine, runOps } from "./ops.ts";
 import { publicOrigin, uploadUrl, type Caller, type Scope } from "./tokens.ts";
 import { addItems, checkItem, DashError, LINK_KINDS, STAGES as DASH_STAGES } from "../dashboard/dashboard.ts";
@@ -39,8 +39,9 @@ const MAX = { type: "integer", minimum: 500, maximum: 24000, description: "Size 
 const STUDY = { type: "boolean", description: "Default false: the source arrives without flashcards, and the reader can make them later with a button on the page. Pass true only when the reader wants cards from it now (a book takes minutes)." };
 const KEY = { type: "string", pattern: "^[A-Za-z0-9-]{8,80}$", description: "A fresh id for this write, 8–80 letters, digits or dashes. Resending the same key returns the first answer instead of writing twice." };
 
-const GUIDE = guideTopics((body) => body.replace("{{OPS}}", Object.keys(OPS).map(opLine).join("\n")));
-export const GUIDE_TOPICS = [...GUIDE.keys()];
+const fillOps = (body: string): string => body.replace("{{OPS}}", Object.keys(OPS).map(opLine).join("\n"));
+const guide = (topic: string): string | null => guideTopic(topic, fillOps);
+export const GUIDE_TOPICS = TOPICS;
 
 const ACCEPTED = /\.(pdf|md|markdown|txt|html?)$/i;
 
@@ -133,7 +134,7 @@ export const TOOLS: Tool[] = [
     name: "get_guide", title: "Guide", scope: "read",
     description: `How to use this server. Topics: ${GUIDE_TOPICS.join(", ")}. Read "uploads" before request_upload. add_deck and set_primer are refused without the receipt that ends "flashcards" and "primer".`,
     inputSchema: schema({ topic: { type: "string", enum: GUIDE_TOPICS } }),
-    read: (x) => x.topic ? (GUIDE.get(String(x.topic)) ?? fail(`Topics: ${GUIDE_TOPICS.join(", ")}.`)) : [...GUIDE.values()].join("\n\n"),
+    read: (x) => x.topic ? (guide(String(x.topic)) ?? fail(`Topics: ${GUIDE_TOPICS.join(", ")}.`)) : GUIDE_TOPICS.map((t) => guide(t)!).join("\n\n"),
   },
   {
     name: "request_upload", title: "Upload files", scope: "write",
