@@ -1946,9 +1946,11 @@ const dispatchNewThread = {
     const creates = (e) => e.write && e.method === "POST" && e.path === "/api/dashboard/tasks";
     const page = await t.open({ latency: true, lostAck: { match: creates, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dispatch?view=decide`);
-    await page.locator(".ws-new-row").waitFor();
+    await page.locator(".ws-rail .ws-pip.add").waitFor();
     for (const [i, title] of titles.entries()) {
-      if (i === 0) await page.keyboard.press("n"); else await page.locator(".ws-new-row").click();
+      // New thread sits in the drawer the rail's + opens
+      if (i === 0) await page.keyboard.press("n");
+      else { await page.locator(".ws-rail .ws-pip.add").click(); await page.locator(".ws-new-row").click(); }
       const form = page.locator(".ws-new-form");
       await form.getByLabel("Title").fill(title);
       await form.getByLabel("Context").fill(`Context ${i} under loss.`);
