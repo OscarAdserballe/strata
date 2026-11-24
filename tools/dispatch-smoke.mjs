@@ -31,7 +31,7 @@ try {
   await page.goto(`${base}/dispatch?view=decide`, { waitUntil: "networkidle" });
   await tool("dashboard_post", { key: key(), id: fresh, page: "<!doctype html><html><body><h1>Posted while you looked</h1></body></html>",
     ask: "See what I sent once a thread is in Dispatch.", heard: "Two fields above every page: the ask, and how Claude read it." });
-  await page.locator(".ws-list").getByText(`Smoke ${run}: a page posted while Decide is open`).click({ timeout: 40000 });
+  await page.locator(".ws-rail").getByTitle(`Smoke ${run}: a page posted while Decide is open`).click({ timeout: 40000 });
   const frame = await (await page.waitForSelector(".ws-sheet iframe.html-frame", { timeout: 15000 })).contentFrame();
   await frame.waitForSelector("text=Posted while you looked", { timeout: 15000 });
   console.log("✓ a page posted while Decide is open draws without a reload");
@@ -54,8 +54,8 @@ try {
   console.log("✓ a new thread doesn't replace the page being read");
   await api(`/api/dashboard/tasks/${later}`, "PATCH", { stage: "dropped", cleared: true });
 
-  // Drop on the open Decide card takes the thread off the board
-  await page.getByRole("region", { name: `Smoke ${run}: a page posted while Decide is open` }).getByRole("button", { name: "Drop" }).click();
+  // Drop on the line over the page takes the thread off the board
+  await page.locator(".ws-bar").getByRole("button", { name: "Drop" }).click();
   await page.waitForSelector(`text=Smoke ${run}: a page posted while Decide is open`, { state: "detached", timeout: 5000 });
   for (let i = 0; i < 20 && (await stageOf(fresh)) !== null; i++) await page.waitForTimeout(250);
   assert.equal(await stageOf(fresh), null, "a dropped Decide thread leaves the board");
