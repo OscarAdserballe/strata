@@ -25,7 +25,7 @@ try {
       return route.continue();
     });
     page.on("request", r => { if (r.method() === "PATCH" && r.url().includes("/cards/")) patches++; });
-    const format = () => page.getByRole("button", { name: "Format & Preview", exact: true }).click();
+    const format = () => page.getByRole("button", { name: "Format", exact: true }).click();
     const confirm = () => page.getByRole("button", { name: "Confirm save", exact: true }).click();
     const back = () => page.getByRole("button", { name: "Back to editing", exact: true }).click();
     const preview = page.getByRole("region", { name: "Formatted card preview" });

@@ -9,6 +9,7 @@ import { Preview } from "../../capabilities/card/CardForm.tsx";
 import { mdBlocks } from "../../engines/prose/blocks.tsx";
 import { MathText } from "../../engines/prose/math.tsx";
 import { useFaceImages } from "../../capabilities/attach/useFaceImages.ts";
+import { useWireDown } from "../../capabilities/offline/useWireDown.ts";
 import { FaceStrip } from "../../capabilities/attach/Tray.tsx";
 import ConnectAgent from "./ConnectAgent.tsx";
 import "./home-tools.css";
@@ -63,11 +64,11 @@ export default function HomeTools({ onCardsChanged, composeRef }: { onCardsChang
     setError(""); setNotice(""); setMode(next);
     if (next === "card" && !card) { setCard(draft()); setPreview(null); }
   }
+  const down = useWireDown();
   const frontPics = useFaceImages(card?.front ?? "", (front) => setCard((c) => (c ? { ...c, front } : c)));
   const backPics = useFaceImages(card?.back ?? "", (back) => setCard((c) => (c ? { ...c, back } : c)));
-  async function format(e: React.FormEvent) {
-    e.preventDefault();
-    if (!card || saveBusy.current) return;
+  async function format() {
+    if (!card || saveBusy.current || down) return;
     saveBusy.current = true; setSaving(true); setTidying(true); setError("");
     try {
       const faces = await tidier.current("flashcard", { front: card.front.trim(), back: card.back.trim() });
@@ -82,10 +83,18 @@ export default function HomeTools({ onCardsChanged, composeRef }: { onCardsChang
     if (!preview || saveBusy.current) return;
     setCard(preview); setPreview(null); setError("");
   }
+  // your words as typed unless Format was pressed; offline the card waits on the device
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!preview || preview.requestId !== card?.requestId || saveBusy.current) return;
-    const saved = preview;
+    if (!card || saveBusy.current || (preview && preview.requestId !== card.requestId)) return;
+    const saved = preview ?? { ...card, front: card.front.trim(), back: card.back.trim() };
+    if (!saved.front || !saved.back) return;
+    if (down) {
+      authored.personal(saved).then(() => onCardsChanged?.(), (e) => { if (live.current) setError(StrataWhy(e, "A card saved offline didn't reach the server")); });
+      setCard(null); setPreview(null); setMode("cards");
+      setNotice("Saved on this device. It goes to Unfiled when you're back online.");
+      return;
+    }
     saveBusy.current = true; setSaving(true); setError("");
     try {
       const result = await authored.personal(saved);
@@ -117,8 +126,8 @@ export default function HomeTools({ onCardsChanged, composeRef }: { onCardsChang
       </nav>
       {error ? <p role="alert">{error}{mode === "cards" && !loaded ? <button onClick={() => { setError(""); setReload(n => n + 1); }}>Retry loading</button> : null}</p> : null}
       {notice ? <p role="status">{notice}</p> : null}
-      {mode === "card" && card ? <form className="home-tool-form" onSubmit={preview ? save : format}>
-        <p className="home-tool-note">{preview ? "Review the formatted card, then confirm to save it to Unfiled and keep it for review." : "Format your card, then review it before saving. The words stay yours."}</p>
+      {mode === "card" && card ? <form className="home-tool-form" onSubmit={save}>
+        <p className="home-tool-note">{preview ? "Review the formatted card, then confirm to save it to Unfiled and keep it for review." : "Save keeps your words as typed. Format tidies them first, for you to review."}</p>
         {preview ? <div ref={previewRef} tabIndex={-1} role="region" aria-label="Formatted card preview">
           <Preview fields={facesOf("flashcard")} draft={preview} label="Formatted preview" />
           {preview.source ? <p className="home-tool-note">Source: {preview.source}</p> : null}
@@ -136,7 +145,9 @@ export default function HomeTools({ onCardsChanged, composeRef }: { onCardsChang
         </>}
         <div className="home-card-actions">
           {preview ? <button type="button" disabled={saving} onClick={backToEditing}>Back to editing</button> : null}
-          <button type="submit" disabled={saving || !card.front.trim() || !card.back.trim()}>{tidying ? "Formatting…" : saving ? "Saving…" : preview ? "Confirm save" : "Format & Preview"}</button>
+          {preview ? null : <button type="button" disabled={saving || down || !card.front.trim() || !card.back.trim()} onClick={format}
+            title={down ? "formatting asks the model, which needs a connection" : undefined}>{tidying ? "Formatting…" : down ? "Format · needs a connection" : "Format"}</button>}
+          <button type="submit" disabled={saving || !card.front.trim() || !card.back.trim()}>{saving && !tidying ? "Saving…" : preview ? "Confirm save" : "Save"}</button>
         </div>
       </form> : mode === "cards" ? <div className="home-personal-cards">
         {!loaded ? <p>Loading your cards…</p> : !library.cards.length ? <p>Your quotes, questions and ideas can live here. Create your first flashcard above.</p> : null}

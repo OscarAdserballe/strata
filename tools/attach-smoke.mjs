@@ -88,7 +88,7 @@ try {
   await page.getByLabel("Back", { exact: true }).fill("A stable spiral.");
   let tidied = null;
   await page.route("**/api/cards/tidy", async (route) => { tidied = route.request().postDataJSON().faces; await route.fallback(); });
-  await page.getByRole("button", { name: "Format & Preview", exact: true }).click();
+  await page.getByRole("button", { name: "Format", exact: true }).click();
   await page.locator('[aria-label="Formatted card preview"] img.strata-img').waitFor();
   assert.ok(tidied && !JSON.stringify(tidied).includes("img:"), `the tidy never sees the image: ${JSON.stringify(tidied)}`);
   await afterRequests(page, () => page.getByRole("button", { name: "Confirm save", exact: true }).click());
