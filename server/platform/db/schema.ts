@@ -425,6 +425,8 @@ CREATE TABLE IF NOT EXISTS dashboard_presses (
   at INTEGER NOT NULL, session_url TEXT   -- the routine session it woke, or the one already running
 );
 CREATE INDEX IF NOT EXISTS idx_dashboard_presses_task ON dashboard_presses(task_id, at);
+CREATE INDEX IF NOT EXISTS idx_dashboard_presses_at ON dashboard_presses(at);
+CREATE INDEX IF NOT EXISTS idx_dashboard_versions_at ON dashboard_versions(at);
 -- Dispatch: the routine run (its MCP session) working a thread in Implementing, until its lease runs out.
 CREATE TABLE IF NOT EXISTS dashboard_claims (
   task_id TEXT PRIMARY KEY, run TEXT NOT NULL,

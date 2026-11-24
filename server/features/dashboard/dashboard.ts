@@ -15,7 +15,7 @@ const current = (stage: string): string => (stage === "backlog" ? "todo" : stage
 const isEnded = (s: string): boolean => s === "done" || s === "dropped";
 // state and pinned_at predate stages; they are written in step so the rows read the same from either side.
 const stateOf = (stage: string): string => (isEnded(stage) ? stage : "you");
-export const stageOf = (t: TaskRow): string => current(t.stage ?? (isEnded(t.state) ? t.state : "todo"));
+export const stageOf = (t: Pick<TaskRow, "stage" | "state">): string => current(t.stage ?? (isEnded(t.state) ? t.state : "todo"));
 export const LINK_KINDS = ["linear", "github", "slack", "notion", "strata", "claude", "web"] as const;
 export const AREAS = ["work", "personal"] as const;
 const WORK = /slack|linear|github|engineering|1:1|design review|standup|sync\b|meeting|#/i;

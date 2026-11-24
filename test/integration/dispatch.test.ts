@@ -258,3 +258,22 @@ test("a run claims the thread it opens: another run is refused until the first p
     assert.deepEqual(evs.map((e) => `${e.event}${e.took ? `:${e.took}` : ""}`), ["dispatch_claim:took", "dispatch_claim:renewed", "dispatch_release", "dispatch_claim:took"], "claims and releases are logged per run");
   } finally { db.close(); }
 });
+
+test("Runs: each press is matched with the next page posted on its thread, grouped by the run it woke", async () => {
+  const a = await newThread("Runs: a page comes back");
+  const b = await newThread("Runs: still with Claude");
+  await send(`/api/dashboard/tasks/${a}/send`, "POST", {});
+  await send(`/api/dashboard/tasks/${b}/send`, "POST", {});
+  await post(a, { page: page("Runs", "A proposal."), lands: "decide" });
+  await send(`/api/dashboard/tasks/${a}/press`, "POST", { kind: "send" });
+  const r = await server.api("/api/dashboard/runs");
+  assert.equal(r.status, 200);
+  const all = (r.body.runs as any[]).flatMap((x) => x.presses.map((p: any) => ({ ...p, run: x.key })));
+  const [first, again] = all.filter((p) => p.task === a);
+  assert.equal(first.label, "Sent to Dispatch");
+  assert.deepEqual([first.posted?.n, first.posted?.lands, first.open], [1, "decide", null], "the send came back as v1 in Decide");
+  assert.ok(first.posted.at >= first.at);
+  assert.deepEqual([again.label, again.version, again.posted, again.open], ["Send", 1, null, "holding"], "Send on v1 waits for a page");
+  assert.deepEqual([all.find((p) => p.task === b).open], ["holding"]);
+  assert.equal(first.run, all.find((p) => p.task === b).run, "presses within the cooldown share the run they woke");
+});

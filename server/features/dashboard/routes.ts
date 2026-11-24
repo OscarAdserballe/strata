@@ -3,6 +3,7 @@ import { route, type Route } from "../../platform/router/router.ts";
 import { addItems, archive, checkItem, createTask, dropItem, editItem, keepItem, padOf, patchTask, snapshot, taskView, writePad } from "./dashboard.ts";
 import { dashboardRepo as q } from "./repo.ts";
 import { fireRoutine, recordRun, routineView, setRoutine, wake } from "./routine.ts";
+import { runs } from "./runs.ts";
 import { checkPress, checkSend, pane, pressLabel, pressThread, sendThread } from "./dispatch.ts";
 
 const ID = "([A-Za-z0-9_]{3,60})";
@@ -15,6 +16,9 @@ export const dashboardRoutes: Route[] = [
 
   // Loaded only when the Done fold opens: the board never pays for what you cleared.
   route("GET", "/api/dashboard/archive", ({ res }) => { sendJson(res, 200, archive()); }),
+
+  // Runs: read-only, and loaded only when the Runs view opens.
+  route("GET", "/api/dashboard/runs", ({ res }) => { sendJson(res, 200, runs()); }),
 
   // An item you add yourself goes through the same inbox as an agent's.
   route("POST", "/api/dashboard/inbox", async ({ body, commit }) => {
