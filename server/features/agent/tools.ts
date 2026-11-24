@@ -19,14 +19,15 @@ import { checkOps, OP_SCHEMAS, OPS, opLine, runOps } from "./ops.ts";
 import { publicOrigin, uploadUrl, type Caller, type Scope } from "./tokens.ts";
 import { addItems, checkItem, DashError, LINK_KINDS, STAGES as DASH_STAGES } from "../dashboard/dashboard.ts";
 import { renderDashboard } from "../dashboard/render.ts";
-import { board as dispatchBoard, open as openThread, preparePost } from "../dashboard/dispatch.ts";
+import { board as dispatchBoard, claim, open as openThread, preparePost } from "../dashboard/dispatch.ts";
 
-export interface Env { req: IncomingMessage; caller: Caller }
+/** run: the MCP session the call came in on, one per routine run; null from a client that sends none. */
+export interface Env { req: IncomingMessage; caller: Caller; run: string | null }
 type Args = Record<string, unknown>;
-/** A read answers at once; a write does its awaiting first and hands back the part that runs in the commit. */
+/** A read answers at once (inside a commit, with no receipt, when it claims); a write does its awaiting first and hands back the part that runs in the commit. */
 export type Tool = {
   name: string; title: string; description: string; inputSchema: object; scope: Scope;
-} & ({ read(args: Args, env: Env): string } | { write(args: Args, env: Env): Promise<() => string> });
+} & ({ read(args: Args, env: Env): string; claims?: true } | { write(args: Args, env: Env): Promise<() => string> });
 
 const fail = (msg: string): never => { throw new AgentError(msg); };
 const schema = (properties: Record<string, object>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
@@ -269,15 +270,21 @@ export const TOOLS: Tool[] = [
   // Dispatch: one object, a thread { id, title, text, stage, page, notes }, and three calls on it.
   {
     name: "dashboard_board", title: "Dispatch: the board", scope: "read",
-    description: "Every open thread on the dashboard as JSON [{ id, title, stage }], those in implementing first. A thread in implementing is waiting on you: open it.",
+    description: "Every open thread on the dashboard as JSON [{ id, title, stage, claimed? }], those in implementing first. A thread in implementing is waiting on a run: open it, unless claimed says another run holds it.",
     inputSchema: schema({}),
-    read: () => JSON.stringify(dispatchBoard(), null, 1),
+    read: (_x, { run }) => JSON.stringify(dispatchBoard(run), null, 1),
   },
   {
     name: "dashboard_open", title: "Dispatch: one thread", scope: "read",
-    description: "One thread in full as JSON { id, title, text, stage, page, notes: [{ id, on, text }] }: page is the newest version's HTML (null before the first), notes are the reader's on that version, oldest first, on naming the words each is on. A note on nothing is a press (Send, or Reopen on a Finish page); the notes before it say what the reader wants, and you decide what comes next. No page: write one.",
+    description: "One thread in full as JSON { id, title, text, stage, page, notes: [{ id, on, text }] }: page is the newest version's HTML (null before the first), notes are the reader's on that version, oldest first, on naming the words each is on. A note on nothing is a press (Send, or Reopen on a Finish page); the notes before it say what the reader wants, and you decide what comes next. No page: write one. Opening a thread in implementing claims it for this run for an hour, renewed by each open or post; while another run holds it, open is refused, so leave it to that run.",
     inputSchema: schema({ id: { type: "string", description: "The thread's id, from dashboard_board." } }, ["id"]),
-    read: (x) => JSON.stringify(dash(() => openThread(String(x.id ?? ""))), null, 1),
+    claims: true,
+    read: (x, { run }) => {
+      const id = String(x.id ?? "");
+      const took = dash(() => claim(id, run));
+      if (took) logEvent(db, APP, "dispatch_claim", { thread: id, took }, run);
+      return JSON.stringify(dash(() => openThread(id)), null, 1);
+    },
   },
   {
     name: "dashboard_post", title: "Dispatch: say something back", scope: "write",
@@ -290,9 +297,9 @@ export const TOOLS: Tool[] = [
       ask: { type: "string", maxLength: 600, description: "The reader's ask as it stands now, synthesised from the thread and their notes: a line or two." },
       heard: { type: "string", maxLength: 600, description: "How you read it: what this version does about the ask, a line or two." },
     }, ["key", "id"]),
-    write: (x) => dashAsync(async () => {
-      const run = await preparePost(String(x.id ?? ""), { page: x.page, replies: x.replies, lands: x.lands, ask: x.ask, heard: x.heard });
-      return () => { const said = dash(run); logEvent(db, APP, "dispatch_post", { page: x.page !== undefined, lands: x.lands ?? null, replies: x.replies ? Object.keys(x.replies as object).length : 0 }, null); return said; };
+    write: (x, { run }) => dashAsync(async () => {
+      const write = await preparePost(String(x.id ?? ""), { page: x.page, replies: x.replies, lands: x.lands, ask: x.ask, heard: x.heard }, run);
+      return () => { const said = dash(write); logEvent(db, APP, "dispatch_post", { thread: String(x.id ?? ""), page: x.page !== undefined, lands: x.lands ?? null, replies: x.replies ? Object.keys(x.replies as object).length : 0 }, run); return said; };
     }),
   },
 ];
