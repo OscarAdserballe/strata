@@ -80,11 +80,8 @@ try {
     assert.equal(patches, 0, "previewing an edit does not patch the card");
     await back();
     assert.equal(await page.locator(".ced textarea").first().inputValue(), front + " edited");
+    // ⌘↵ saves the words as typed: formatting is the optional step, and never a second trip to the model
     await page.keyboard.press("Control+Enter");
-    await preview.waitFor();
-    await page.keyboard.press("Control+Enter");
-    assert.equal(patches, 0, "the format shortcut cannot confirm a preview");
-    await confirm();
     await page.locator(".ced").waitFor({ state: "detached" });
     assert.equal(calls, 4);
     assert.equal(patches, 1);

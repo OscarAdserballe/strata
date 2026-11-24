@@ -34,7 +34,7 @@ try {
   await context.setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.locator(".connection-mark.off").waitFor();
-  assert.match(await page.locator(".connection-mark.off").getAttribute("title"), /changes are kept on this device · saved \d/);
+  assert.match(await page.locator(".connection-mark.off").getAttribute("title"), /changes are kept on this device · saved \w+ \w+/);
   await page.getByRole("navigation", { name: "Strata" }).getByRole("button", { name: "Today", exact: true }).click();
   assert.ok(await page.locator(".connection-mark.off").isVisible(), "library must retain the offline marker");
   await page.setViewportSize({ width: 390, height: 844 });

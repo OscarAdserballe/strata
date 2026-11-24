@@ -2,8 +2,8 @@ import React, { useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { addImports } from "./imports.ts";
 import KindleHelp from "./KindleHelp.tsx";
-import { StrataAPI, StrataWhy } from "../../data/api.ts";
-import { onWaitingLinks, shortLink, waitingLinks } from "./waiting-links.ts";
+import { StrataAPI, StrataWhy, StrataWireDown } from "../../data/api.ts";
+import { UNFILED_LINK, onWaitingLinks, shortLink, waitingLinks } from "./waiting-links.ts";
 import { store } from "../../data/store.ts";
 import { BOARDS, REGISTER, sources } from "../../data/entities/sources.ts";
 import type { BoardState } from "../../../shared/types/index.ts";
@@ -94,7 +94,8 @@ export const addSource = {
     } catch (e) { hooks?.toastWhy(e, "couldn't queue files"); }
   },
   saveLink: async (board: Target, url: string): Promise<"added" | "captions" | "waiting"> => {
-    const id = await resolve(board);
+    // offline Unfiled can't be asked for its id: the link names it, and the id is asked for on reconnect
+    const id = board === UNFILED && StrataWireDown() ? UNFILED_LINK : await resolve(board);
     if (id && waitLink(id, url.trim())) return "waiting";
     return (await loadCapture()).saveLink(board, url.trim());
   },
