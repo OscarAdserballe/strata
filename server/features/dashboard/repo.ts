@@ -43,6 +43,9 @@ export const dashboardRepo = {
   presses: stmt<PressRow>("SELECT * FROM dashboard_presses ORDER BY task_id, at, rowid"),
   pressesOf: stmt<PressRow>("SELECT * FROM dashboard_presses WHERE task_id = ? ORDER BY at, rowid"),
   lastPress: stmt<PressRow>("SELECT * FROM dashboard_presses WHERE task_id = ? ORDER BY at DESC, rowid DESC LIMIT 1"),
+  // Runs: loaded only when Archive opens; both tables hold a handful of rows per thread.
+  pressesSince: stmt<PressRow & { title: string }>("SELECT p.*, t.title FROM dashboard_presses p JOIN dashboard_tasks t ON t.id = p.task_id WHERE p.at >= ? ORDER BY p.at, p.rowid"),
+  postsSince: stmt<Pick<VersionRow, "task_id" | "n" | "landed" | "at">>("SELECT task_id, n, landed, at FROM dashboard_versions WHERE at >= ? ORDER BY at, n"),
   insPress: stmt("INSERT INTO dashboard_presses (id, task_id, kind, stage, version, at, session_url) VALUES (?,?,?,?,?,?,?)"),
   // The dashboard's revision: every write stamps a thread's updated_at or an inbox item's at or handled_at.
   dashRev: stmt<{ rev: number }>(`SELECT COALESCE(MAX(r), 0) AS rev FROM (SELECT MAX(updated_at) AS r FROM dashboard_tasks

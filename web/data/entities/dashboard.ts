@@ -39,6 +39,12 @@ export const useArchive = (on: boolean): DashTask[] | null => {
   const v = useQuery<{ tasks: DashTask[] }>(on ? ARCHIVE_KEY : "dashboard-archive-off", on ? archiveRead : async () => ({ value: { tasks: [] }, rev: 0, epoch: "", origin: "wire", stamp: 0 }), { tags: [ARCHIVE_KEY] });
   return on ? v?.tasks ?? null : null;
 };
+export interface RunBlock { task: string; title: string; press: string; from: number; to: number | null; posted: number | null; landed: string | null }
+export interface RunLane { session: string | null; start: number; blocks: RunBlock[] }
+export interface Runs { since: number; until: number; runs: RunLane[]; stats: { runs: number; threads: number; posted: number; open: number; medianMs: number | null } }
+/** Archive's timeline, read when Archive opens; since is rounded to the minute so the key holds still. */
+export const useRuns = (since: number): Runs | undefined =>
+  useQuery<Runs>(`dashboard-runs-${since}`, () => fetched<Runs>(`/api/dashboard/runs?since=${since}`), { tags: [ARCHIVE_KEY] });
 export const useRoutine = (): RoutineView | undefined => useQuery<RoutineView>(ROUTINE_KEY, routineRead, { tags: [ROUTINE_KEY] });
 
 /** A write's answer carries the board and the pane as they now are, each under the dashboard's own revision. */

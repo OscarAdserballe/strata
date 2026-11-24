@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { StrataWhy } from "../../data/api.ts";
-import { dash, useArchive, useDispatch, type DispatchThread, type DispatchVersion } from "../../data/entities/dashboard.ts";
+import { dash, useDispatch, type DispatchThread, type DispatchVersion } from "../../data/entities/dashboard.ts";
 import { toast } from "../../shell/layers.ts";
 import LivePage from "../../capabilities/live/LivePage.tsx";
 import { switches } from "../../capabilities/fold/switches.ts";
@@ -20,7 +20,7 @@ export function caption(t: DispatchThread, v: DispatchVersion): string {
 }
 
 /** Dispatch: threads Claude answers with a page, read on a sheet that takes the room; the threads are a rail that opens into a drawer, and Send and the rest sit on one line above the page. */
-export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thinking" | "review"> }) {
+export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thinking" | "review" | "archive"> }) {
   const pane = useDispatch();
   const stage = view === "built" ? "review" : view;
   const here = (pane?.threads ?? []).filter((t) => t.stage === stage).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -104,7 +104,6 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
                 <span className="m">{[latest(x) ? label(latest(x)!) : null, latest(x) ? notes(latest(x)!.notes) : null, latest(x) ? age(latest(x)!.at) : null].filter(Boolean).join(" · ")}</span>
               </button>)}
         {pane && !here.length ? <p className="ws-none">{blank}</p> : null}
-        {stage === "finish" ? <Archived /> : null}
         <NewThread />
       </aside>
       <div className="ws-room">
@@ -169,15 +168,4 @@ function Implementing({ threads, on, onPick }: { threads: DispatchThread[]; on: 
       {t.press?.sessionUrl ? <a className="session" href={t.press.sessionUrl} target="_blank" rel="noopener">Open the session ↗</a> : null}
     </div>
   ))}</>;
-}
-
-// Finish's fold: Dispatch threads archived or dropped, loaded only when opened.
-function Archived() {
-  const [open, setOpen] = useState(false);
-  const list = (useArchive(open) ?? []).filter((t) => t.dispatched).slice(0, 40);
-  return <>
-    <button className="ws-fold" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide archived" : "Archived"}</button>
-    {open ? list.map((x) => <div key={x.id} className="ws-done"><span>{x.title}</span><i>{x.stage === "dropped" ? "dropped" : "archived"}</i></div>) : null}
-    {open && !list.length ? <p className="ws-none">Nothing archived yet.</p> : null}
-  </>;
 }
