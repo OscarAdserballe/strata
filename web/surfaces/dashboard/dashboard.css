@@ -331,7 +331,7 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .runs-legend .holding::before{box-shadow:inset 0 0 0 1px #e3b08f}
 .runs-legend .none::before{box-shadow:inset 0 0 0 1px var(--d-line-2)}
 .runs-legend .ran::before{display:none}
-.runs-detail{position:fixed;right:24px;bottom:24px;z-index:5;width:340px;max-height:60vh;overflow-y:auto;padding:14px 16px;background:#fff;border-radius:12px;box-shadow:var(--d-sheet);display:flex;flex-direction:column;gap:8px;animation:rise .18s ease}
+.runs-detail{position:fixed;right:24px;bottom:24px;z-index:var(--layer-menu);width:340px;max-height:60vh;overflow-y:auto;padding:14px 16px;background:#fff;border-radius:12px;box-shadow:var(--d-sheet);display:flex;flex-direction:column;gap:8px;animation:rise .18s ease}
 .runs-detail header{display:flex;align-items:flex-start;gap:8px}
 .runs-detail header b{flex:1;font-size:14px}
 .runs-detail ol{list-style:none;margin:0;padding:0}
