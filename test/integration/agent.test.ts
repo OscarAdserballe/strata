@@ -60,8 +60,8 @@ test("it speaks MCP: initialize, the twelve tools, notifications", async () => {
   // Changing this list changes every connected agent's tools: it changes on purpose or not at all.
   assert.deepEqual(tools.map((t) => `${t.name}(${(t.inputSchema.required ?? []).join(",")})`), [
     "whoami()", "get_outline()", "get_context(id)", "get_text(id)", "search(queries)", "get_changes(board)", "get_guide()",
-    "request_upload(board,key,files)", "get_import(id)", "capture(board,key,url)", "apply(board,key,ops)", "create_board(key,title)", "dashboard_add_items(key,items)", "dashboard_read()",
-    "dashboard_board()", "dashboard_open(id)", "dashboard_post(key,id)",
+    "request_upload(board,key,files)", "get_import(id)", "capture(board,key,url)", "apply(board,key,ops)", "create_board(key,title)", "dashboard_read()", "dashboard_apply(key,ops)",
+    "dashboard_add_items(key,items)", "dashboard_board()", "dashboard_open(id)", "dashboard_post(key,id)",
   ]);
   assert.equal((await rpc("no/such")).body.error.code, -32601);
 });
@@ -352,7 +352,8 @@ test("apply's schema names every op's fields, so no guide read is needed first",
   const routine = await ok("get_guide", { topic: "routine" });
   assert.match(routine, /Readers scan before they read/, "the routine guide carries the attention principles");
   assert.doesNotMatch(routine, /exemplar/i, "no page to copy the layout of");
-  for (const tool of ["dashboard_board", "dashboard_open", "dashboard_post", "dashboard_add_items", "dashboard_read"]) assert.ok(routine.includes(tool), `the routine guide names ${tool}`);
+  for (const tool of ["dashboard_read", "dashboard_apply"]) assert.ok(routine.includes(tool), `the routine guide names ${tool}`);
+  for (const old of ["dashboard_board", "dashboard_open", "dashboard_post", "dashboard_add_items"]) assert.ok(!routine.includes(old), `the routine guide has moved off ${old}`);
   for (const kind of ["proposal", "built"]) {
     assert.ok(routine.includes(`topic: "${kind}"`), `the routine guide points at the ${kind} topic`);
     assert.doesNotMatch(await ok("get_guide", { topic: kind }), /<!doctype html>/i, `${kind} says what a page holds, not a template to copy`);

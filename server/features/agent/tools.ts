@@ -20,6 +20,7 @@ import { publicOrigin, uploadUrl, type Caller, type Scope } from "./tokens.ts";
 import { addItems, checkItem, DashError, LINK_KINDS, STAGES as DASH_STAGES } from "../dashboard/dashboard.ts";
 import { renderDashboard } from "../dashboard/render.ts";
 import { board as dispatchBoard, claim, open as openThread, preparePost } from "../dashboard/dispatch.ts";
+import { checkDashOps, DASH_OP_SCHEMAS, prepareDashOps } from "../dashboard/ops.ts";
 
 /** run: the MCP session the call came in on, one per routine run; null from a client that sends none. */
 export interface Env { req: IncomingMessage; caller: Caller; run: string | null }
@@ -27,7 +28,7 @@ type Args = Record<string, unknown>;
 /** A read answers at once (inside a commit, with no receipt, when it claims); a write does its awaiting first and hands back the part that runs in the commit. */
 export type Tool = {
   name: string; title: string; description: string; inputSchema: object; scope: Scope;
-} & ({ read(args: Args, env: Env): string; claims?: true } | { write(args: Args, env: Env): Promise<() => string> });
+} & ({ read(args: Args, env: Env): string; claims?(args: Args): boolean } | { write(args: Args, env: Env): Promise<() => string> });
 
 const fail = (msg: string): never => { throw new AgentError(msg); };
 const schema = (properties: Record<string, object>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
@@ -58,6 +59,13 @@ const DASH_ITEM = {
     area: { type: "string", enum: ["work", "personal"], description: "Which list it lands in. Default: work for Slack, Linear, GitHub and meeting sources, personal otherwise." },
   },
 };
+
+/** Opens a thread for Dispatch, claiming it for this run while it is in implementing. Runs inside a commit. */
+function openOne(id: string, run: string | null): string {
+  const took = dash(() => claim(id, run));
+  if (took) logEvent(db, APP, "dispatch_claim", { thread: id, took }, run);
+  return JSON.stringify(dash(() => openThread(id)), null, 1);
+}
 
 /** A capture of a link the board already holds answers with that source instead of making a second. */
 function alreadyOn(boardId: string, url: string): string | null {
@@ -240,10 +248,39 @@ export const TOOLS: Tool[] = [
       };
     },
   },
-  // The dashboard is its own app that borrows this MCP server, so it gets its own tools instead of apply ops.
+  // The dashboard is its own app that borrows this MCP server, so it gets its own two tools, read and apply, instead of board ops.
+  {
+    name: "dashboard_read", title: "Read the dashboard", scope: "read",
+    description: "The dashboard. As Markdown (the default): each thread with its notes and links, grouped by stage (To-do, Thinking, Decide, Implementing, Review, Finish), then the inbox; task for one thread in full, stages to narrow, done_since to include finished and archived ones. With as: \"json\": every open thread as [{ id, title, stage, claimed? }], those in implementing first; or with task, that thread as { id, title, text, stage, page, notes: [{ id, on, text }] }, where page is the newest version's HTML and a note on nothing is a press. Opening a thread in implementing as JSON claims it for this run for an hour, renewed by each open or post; while another run holds it, the open is refused, so leave it to that run.",
+    inputSchema: schema({
+      task: { type: "string", description: "A thread's id (or, as Markdown, its exact title): that thread in full." },
+      as: { type: "string", enum: ["md", "json"], description: "md (default) to read; json for Dispatch: the board, or with task the thread with its page and notes." },
+      stages: { type: "array", items: { type: "string", enum: [...DASH_STAGES] }, description: "Only these stages. Default: every open one." },
+      done_since: { type: "string", description: "A date, e.g. 2026-10-20: also show threads done or dropped since then." },
+      area: { type: "string", enum: ["work", "personal"], description: "Only that area's threads. Default: both." },
+      cursor: CURSOR, max_tokens: MAX,
+    }),
+    claims: (x) => x.as === "json" && typeof x.task === "string",
+    read: (x, env) => x.as === "json" ? (typeof x.task === "string" ? openOne(x.task, env.run) : JSON.stringify(dispatchBoard(env.run), null, 1)) : renderDashboard(x, budgetOf(x.max_tokens)),
+  },
+  {
+    name: "dashboard_apply", title: "Change the dashboard", scope: "write",
+    description: "Does what the reader does on the dashboard, all together or not at all: add a task (to the inbox, or straight to to-do or thinking), edit, move (dropped is delete, undone from the archive), send a thread to Dispatch, post a thread's next page with replies, add a line to the notepad. Each op is one of the shapes in ops. Moving to decide, implementing or finish happens only through send and post; agents never press Send for the reader, write notes as them, or delete for good. Each thing done to a thread shows on it as a line from Claude, with because.",
+    inputSchema: schema({ key: KEY, ops: { type: "array", minItems: 1, maxItems: 50, items: { anyOf: DASH_OP_SCHEMAS } } }, ["key", "ops"]),
+    write: (x, { run }) => dashAsync(async () => {
+      const ops = dash(() => checkDashOps(x.ops));
+      const write = await prepareDashOps(ops, run);
+      return () => {
+        const said = dash(write);
+        logEvent(db, APP, "dashboard_apply", { n: ops.length, ops: [...new Set(ops.map((o) => o.op))] }, run);
+        return `Applied ${ops.length}:\n${said}`;
+      };
+    }),
+  },
+  // Older names for what dashboard_read and dashboard_apply now do; they go after a release.
   {
     name: "dashboard_add_items", title: "Add to the dashboard inbox", scope: "write",
-    description: "Puts tasks in the dashboard's inbox; the reader keeps each in to-do, or drops it. A task is a title, a line or two of context, where it came from (from, with the words it came from as quote) and links to what already exists: Linear issues, GitHub PRs, Slack threads, Notion pages. The reader writes the notes themselves in Thinking, so don't draft a plan or a spec. Read dashboard_read first and don't add what is already there. All or nothing.",
+    description: "Older name, kept for a release: use dashboard_apply with add ops. Puts tasks in the dashboard's inbox; the reader keeps each in to-do, or drops it. A task is a title, a line or two of context, where it came from (from, with the words it came from as quote) and links to what already exists: Linear issues, GitHub PRs, Slack threads, Notion pages. The reader writes the notes themselves in Thinking, so don't draft a plan or a spec. Read dashboard_read first and don't add what is already there. All or nothing.",
     inputSchema: schema({ key: KEY, items: { type: "array", minItems: 1, maxItems: 50, items: DASH_ITEM } }, ["key", "items"]),
     write: async (x) => {
       if (!Array.isArray(x.items) || !x.items.length || x.items.length > 50) fail("items is a list of 1 to 50 items.");
@@ -256,39 +293,21 @@ export const TOOLS: Tool[] = [
     },
   },
   {
-    name: "dashboard_read", title: "Read the dashboard", scope: "read",
-    description: "Everything on the dashboard as Markdown: each thread with its notes and links, grouped by stage (To-do, Thinking, Decide, Implementing, Review, Finish), then the inbox. Pass task for one thread in full, stages to narrow, done_since to include finished and archived ones.",
-    inputSchema: schema({
-      task: { type: "string", description: "A thread's id or exact title: that thread in full." },
-      stages: { type: "array", items: { type: "string", enum: [...DASH_STAGES] }, description: "Only these stages. Default: every open one." },
-      done_since: { type: "string", description: "A date, e.g. 2026-10-20: also show threads done or dropped since then." },
-      area: { type: "string", enum: ["work", "personal"], description: "Only that area's threads. Default: both." },
-      cursor: CURSOR, max_tokens: MAX,
-    }),
-    read: (x) => renderDashboard(x, budgetOf(x.max_tokens)),
-  },
-  // Dispatch: one object, a thread { id, title, text, stage, page, notes }, and three calls on it.
-  {
     name: "dashboard_board", title: "Dispatch: the board", scope: "read",
-    description: "Every open thread on the dashboard as JSON [{ id, title, stage, claimed? }], those in implementing first. A thread in implementing is waiting on a run: open it, unless claimed says another run holds it.",
+    description: "Older name, kept for a release: use dashboard_read({ as: \"json\" }). Every open thread on the dashboard as JSON [{ id, title, stage, claimed? }], those in implementing first. A thread in implementing is waiting on a run: open it, unless claimed says another run holds it.",
     inputSchema: schema({}),
     read: (_x, { run }) => JSON.stringify(dispatchBoard(run), null, 1),
   },
   {
     name: "dashboard_open", title: "Dispatch: one thread", scope: "read",
-    description: "One thread in full as JSON { id, title, text, stage, page, notes: [{ id, on, text }] }: page is the newest version's HTML (null before the first), notes are the reader's on that version, oldest first, on naming the words each is on. A note on nothing is a press (Send, or Reopen on a Finish page); the notes before it say what the reader wants, and you decide what comes next. No page: write one. Opening a thread in implementing claims it for this run for an hour, renewed by each open or post; while another run holds it, open is refused, so leave it to that run.",
+    description: "Older name, kept for a release: use dashboard_read({ task, as: \"json\" }). One thread in full as JSON { id, title, text, stage, page, notes: [{ id, on, text }] }: page is the newest version's HTML (null before the first), notes are the reader's on that version, oldest first, on naming the words each is on. A note on nothing is a press (Send, or Reopen on a Finish page); the notes before it say what the reader wants, and you decide what comes next. No page: write one. Opening a thread in implementing claims it for this run for an hour, renewed by each open or post; while another run holds it, open is refused, so leave it to that run.",
     inputSchema: schema({ id: { type: "string", description: "The thread's id, from dashboard_board." } }, ["id"]),
-    claims: true,
-    read: (x, { run }) => {
-      const id = String(x.id ?? "");
-      const took = dash(() => claim(id, run));
-      if (took) logEvent(db, APP, "dispatch_claim", { thread: id, took }, run);
-      return JSON.stringify(dash(() => openThread(id)), null, 1);
-    },
+    claims: () => true,
+    read: (x, { run }) => openOne(String(x.id ?? ""), run),
   },
   {
     name: "dashboard_post", title: "Dispatch: say something back", scope: "write",
-    description: "page: the next version, a whole self-contained HTML page; posting it hands the thread back to the reader. lands: where it goes, your call from the notes: decide (a proposal to answer), review (the whole thing built, ready to merge) or finish (merged, or not doing it, or filed elsewhere; the page says what to check). Without lands it goes back where it was pressed. replies: { noteId: \"text\" }, said under each of the reader's notes; they can go any time. ask and heard go with every page, shown side by side above it: ask is the reader's ask as it stands now, in your words, including what their notes changed since the last version; heard is how you read it, what this page does about it. A page is only taken while the thread is implementing, and only if it would open: it is refused, naming why, when it is not a whole HTML document, shows nothing or only a placeholder, is cut off, or has a script that does not parse, needs compiling (JSX, text/babel) or loads from anywhere but https.",
+    description: "Older name, kept for a release: use dashboard_apply with a post op. page: the next version, a whole self-contained HTML page; posting it hands the thread back to the reader. lands: where it goes, your call from the notes: decide (a proposal to answer), review (the whole thing built, ready to merge) or finish (merged, or not doing it, or filed elsewhere; the page says what to check). Without lands it goes back where it was pressed. replies: { noteId: \"text\" }, said under each of the reader's notes; they can go any time. ask and heard go with every page, shown side by side above it: ask is the reader's ask as it stands now, in your words, including what their notes changed since the last version; heard is how you read it, what this page does about it. A page is only taken while the thread is implementing, and only if it would open: it is refused, naming why, when it is not a whole HTML document, shows nothing or only a placeholder, is cut off, or has a script that does not parse, needs compiling (JSX, text/babel) or loads from anywhere but https.",
     inputSchema: schema({
       key: KEY, id: { type: "string", description: "The thread's id." },
       page: { type: "string", description: "The next version's HTML." },

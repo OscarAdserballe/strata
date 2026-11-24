@@ -194,7 +194,7 @@ export function inboxView(r: InboxRow): Record<string, unknown> & { id: string; 
   return { ...it, area: it.area ?? guessArea((it.from as From | undefined)?.source), id: r.id, at: r.at, kind: r.kind };
 }
 
-// Notes agents sent before are still read; nothing writes them now.
+// A thread's updates: notes older agents sent, and a line for each thing an agent did to it through dashboard_apply.
 function withUpdates(rows: TaskRow[]): TaskView[] {
   const byTask = new Map<string, UpdateRow[]>();
   for (const u of q.updates.all()) { const list = byTask.get(u.task_id) ?? []; list.push(u); byTask.set(u.task_id, list); }

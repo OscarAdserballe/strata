@@ -38,11 +38,9 @@ revokes them.
 | `capture` | A web page, arXiv abstract or YouTube transcript, through the app's own capture; a link the board already holds, however it is written, answers with that source |
 | `apply` | A batch of typed operations, all or nothing; each op's fields are in its input schema |
 | `create_board` | A new board, with a handle and a purpose |
-| `dashboard_add_items` | Tasks into the dashboard's inbox: a title, a line of context and where it came from, for the reader to send on or drop |
-| `dashboard_read` | The dashboard as Markdown: every thread by stage (to-do, thinking, decide, implementing, review) with notes and links, then the inbox |
-| `dashboard_board` | Dispatch: every open thread as JSON `[{ id, title, stage, claimed? }]`, implementing first; `claimed` says which run holds it |
-| `dashboard_open` | Dispatch: one thread `{ id, title, text, stage, page, notes: [{ id, on, text }] }`, the newest version's page and the notes on it; on a thread in implementing it claims the thread for this run (its `Mcp-Session-Id`) for an hour, and is refused while another run holds it |
-| `dashboard_post` | Dispatch: `{ page?, replies?, ask?, heard? }`, the next version, the ask it answers and how Claude read it, and replies under the reader's notes |
+| `dashboard_read` | The dashboard as Markdown: every thread by stage with notes and links, then the inbox. With `as: "json"`, Dispatch's view: every open thread `[{ id, title, stage, claimed? }]`, or with `task` one thread `{ id, title, text, stage, page, notes }`; opening a thread in implementing claims it for this run (its `Mcp-Session-Id`) for an hour, and is refused while another run holds it |
+| `dashboard_apply` | A batch of dashboard ops, all or nothing (`server/features/dashboard/ops.ts`): `add`, `edit`, `move`, `send`, `post`, `pad` |
+| `dashboard_add_items`, `dashboard_board`, `dashboard_open`, `dashboard_post` | Older names for `dashboard_apply` and `dashboard_read`, kept for one release |
 
 Every answer is Markdown, cut to about 6k tokens (up to 24k with `max_tokens`), and ends with the exact
 call for the next part. Ids carry a prefix (`src_`, `sec_`, `deck_`, `card_`, `q_`, `hl_`, `grp_`, `ms_`,
@@ -61,6 +59,13 @@ Every write tool takes a `key`: the batch commits in one `ctx.commit` together w
 key, so a resent call replays the first answer. `apply`'s operations are in `server/features/agent/ops.ts`;
 a new one is a new entry there, and both apply's schema and the guide list it automatically.
 
+What an agent can do is what the reader can do. Every write route is one of the reader's actions, and
+`server/features/agent/coverage.ts` says for each how an agent does the same (an `apply` op, a
+`dashboard_apply` op or a tool), why it is the reader's alone (`HUMAN_ONLY`: a press, a grade, a keep, a
+delete for good), or that it is a gap still to close (`NOT_YET`, which only shrinks).
+`test/agent-coverage.test.ts` fails on a route that is in none of them, and
+`test/integration/dashboard-apply.test.ts` checks that each dashboard op leaves the board as its route does.
+
 A source's **primer** (`server/features/primers`) is its first layer: one HTML page, itself a source on the
 board, that the reader opens before page 1. The reader asks for one with the Primer button in the reader's bar,
 which records the ask in `primers` and wakes the routine; `whoami` lists every ask under **Primers asked for**,
@@ -68,12 +73,13 @@ and the routine uploads the page it draws (`get_guide({ topic: "primer" })`) and
 which clears the ask. How the page looks is left to the model, source by source.
 
 The dashboard (`server/features/dashboard`, page at `<room>/dashboard`) is a separate app the room only
-hosts: no board owns it, so it has its own tools instead of `apply` ops. A thread moves by the reader's
+hosts: no board owns it, so it has its own two tools, `dashboard_read` and `dashboard_apply`, instead of `apply` ops. A thread moves by the reader's
 hand through three stages, to-do → thinking → review, then done or dropped (`stage`); an older
-`backlog` is read as to-do. New work goes through the inbox: `dashboard_add_items` only fills it, with a
+`backlog` is read as to-do. New work goes through the inbox: an `add` op fills it, with a
 title, a line of `context` and where it came from, and the reader keeps each item in to-do, or drops it.
-The notes on a thread (`body`) are the reader's own, written in Thinking; no tool edits or moves a
-thread. Run now on the board wakes the reader's own scheduled routine through its API trigger
+An agent can do the same with `move`, and edit, move, drop or send a thread; each thing it does is a line
+from Claude on the thread (`dashboard_updates`), and decide, implementing and finish stay reachable only
+through `send` and `post`. Run now on the board wakes the reader's own scheduled routine through its API trigger
 (`server/features/dashboard/routine.ts`): the Fire URL and token are set on the board and never sent
 back, a run carries no task list because the routine reads the board itself, and runs are a minute apart.
 What the routine does is `get_guide({ topic: "routine" })`; the prompt stored on it only points there.
@@ -84,7 +90,7 @@ Dispatch threads build in; it runs on a schedule (weekday mornings fill the inbo
 whose Fire URL and token go into Connect on the dashboard.
 Dispatch (`server/features/dashboard/dispatch.ts`, page at `<room>/dispatch`) is the dashboard's second
 mode: the room's own reader with a pane of threads on its left. A thread sent from to-do
-goes to `implementing`; each page Claude posts with `dashboard_post` becomes a new version, an HTML source
+goes to `implementing`; each page Claude posts with a `post` op becomes a new version, an HTML source
 on the board with the `dispatch` handle (`dashboard_versions`), so every version is kept and the reader's
 notes on it are that version's notes, with agent replies under them as `reply_note` writes them. Where a
 page lands follows the thread's newest press (`dashboard_presses`): sent, or sent back in Decide → Decide;
@@ -93,8 +99,8 @@ agent as the newest note, on nothing. Sending and both presses wake the routine 
 session it answered with is kept on the press; `STRATA_ROUTINE_STUB=1` (the preview sets it) logs the wake
 instead. Decide and Implementing are reached only this way; Focus leaves Dispatch threads out of its Review.
 Every thread is work or personal (`area`): the page shows one area at a time, and an item that names
-no area goes where its source suggests. The older `state`, `pinned_at` and `morning_at` columns, the updates,
-sources and pad tables stay in the database; nothing writes them but the mirror of `stage`.
+no area goes where its source suggests. The older `state`, `pinned_at` and `morning_at` columns and the
+sources table stay in the database; nothing writes them but the mirror of `stage`.
 
 `<board>/chat` reads both chat tables, the board's and per-source thread (`messages`) and Ask on a card
 (`card_messages`), newest first, cleared turns included and marked. A question asked at words of a source
