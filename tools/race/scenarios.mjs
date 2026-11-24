@@ -1904,14 +1904,14 @@ const dispatchPress = {
     const page = await t.open({ latency: true, lostAck: { match: presses, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     const pressOn = async (view, title, reopen) => {
       await page.goto(`${t.base}/dispatch?view=${view}`);
-      const card = page.locator(".ws-card", { hasText: title });
-      await card.first().waitFor();
-      if (!(await card.first().evaluate((el) => el.classList.contains("open")))) await card.first().click();
-      const open = page.locator(".ws-card.open", { hasText: title });
-      if (reopen) await open.getByRole("button", { name: "Reopen", exact: true }).click();
-      await open.getByRole("button", { name: "Send", exact: true }).click();
+      await page.locator(".ws-rail").getByRole("button", { name: title, exact: true }).click();
+      const line = page.locator(".ws-ask-acts");
+      await page.locator(`.rail-sq.on[aria-label="${title}"]`).waitFor();
+      if (reopen) await line.getByRole("button", { name: "Reopen", exact: true }).click();
+      await line.getByRole("button", { name: "Send", exact: true }).click();
       await page.evaluate(() => window.__strataSettled?.());
-      return (await page.locator(".ws-list").textContent()) ?? "";
+      // the rail names each thread in its label, the drawer in its text
+      return page.locator(".ws-nav").evaluate((el) => `${el.textContent} ${[...el.querySelectorAll("[aria-label]")].map((x) => x.getAttribute("aria-label")).join(" ")}`);
     };
     const listed = [await pressOn("decide", titles[0], false), await pressOn("finish", titles[1], true)];
     const pressed = (id) => t.sql("SELECT kind, stage FROM dashboard_presses WHERE task_id = ? AND version IS NOT NULL", id);
@@ -1948,9 +1948,10 @@ const dispatchNewThread = {
     const creates = (e) => e.write && e.method === "POST" && e.path === "/api/dashboard/tasks";
     const page = await t.open({ latency: true, lostAck: { match: creates, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dispatch?view=decide`);
-    await page.locator(".ws-new-row").waitFor();
+    await page.locator(".ws-new-row").waitFor({ state: "attached" });
     for (const [i, title] of titles.entries()) {
-      if (i === 0) await page.keyboard.press("n"); else await page.locator(".ws-new-row").click();
+      // New thread sits in the rail's drawer: N opens its form anywhere, [ opens the drawer to click it
+      if (i === 0) await page.keyboard.press("n"); else { await page.keyboard.press("["); await page.locator(".ws-new-row").click(); }
       const form = page.locator(".ws-new-form");
       await form.getByLabel("Title").fill(title);
       await form.getByLabel("Context").fill(`Context ${i} under loss.`);
