@@ -212,6 +212,35 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .ws-sheet.fit .doc-foot{position:sticky;bottom:0;background:linear-gradient(rgba(255,255,255,0),#fff 14px);padding-bottom:24px;margin-bottom:-32px}
 .ws-blank{position:absolute;inset:0;display:grid;place-items:center;background:#fff;border-radius:inherit}
 .ws-blank p{max-width:30em;text-align:center;font-size:14px;color:var(--d-quiet)}
+
+/* ===== Dispatch: threads as a rail that opens into a drawer, one line over the page, and the page takes the rest ===== */
+.ws.railed{position:relative;justify-content:stretch;gap:12px;padding:12px 20px 0 14px}
+.ws-rail{flex:0 0 40px;min-height:0;display:flex;flex-direction:column;gap:6px;padding:2px 2px 12px;overflow-y:auto}
+.ws-pip{flex:none;width:36px;height:36px;border-radius:9px;display:grid;place-items:center;text-align:center;font-size:13px;font-weight:600;color:var(--d-ink-3);background:rgba(40,30,60,.05);transition:background .15s}
+.ws-pip:hover{background:#fff}
+.ws-pip[aria-current]{background:#fff;color:var(--d-ink);box-shadow:0 0 0 1.5px var(--d-ink)}
+.ws-pip.add{margin-top:auto;background:none;border:1px dashed var(--d-line-2);color:var(--d-mute);font-weight:500}
+/* beside the rail, never over it, so a letter stays clickable while the drawer is open; :focus-within keeps it open while you write */
+.ws.railed .ws-list{position:absolute;z-index:20;left:60px;top:6px;bottom:6px;width:300px;padding:10px;border-radius:12px;background:#faf8f4;box-shadow:var(--d-sheet);
+  opacity:0;transform:translateX(-12px);pointer-events:none;transition:opacity .14s,transform .14s}
+.ws.railed[data-drawer] .ws-list,.ws.railed .ws-list:focus-within{opacity:1;transform:none;pointer-events:auto}
+.ws.railed .ws-new{background:linear-gradient(rgba(250,248,244,0),#faf8f4 12px)}
+.ws.railed .ws-room{flex:1 1 auto}
+.ws.railed .ws-asked{margin:0 0 8px}
+.ws.railed .ws-sheet{margin-bottom:12px}
+.ws-bar{flex-shrink:0;display:flex;align-items:center;gap:10px;min-height:44px;margin-bottom:8px;padding:4px 6px 4px 14px;background:#fff;border-radius:10px;box-shadow:var(--d-lift),0 0 0 1px var(--d-line)}
+.ws-bar .ver{flex:none;font:italic 13.5px var(--serif);color:var(--d-mute);white-space:nowrap}
+.ws-bar .ask{flex:1;min-width:0;display:flex;gap:18px;padding:6px 0 6px 12px;border-left:1px solid var(--d-line);font-size:13px;color:var(--d-ink-2)}
+.ws-bar .ask>span{flex:1 1 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ws-bar .ask i{margin-right:7px;font:600 10.5px var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--d-faint)}
+.ws-bar .ask .heard i{color:var(--d-wait)}
+.ws-bar .ask[aria-expanded="true"]>span{color:var(--d-faint)}
+.ws-bar .ask.plain{font-weight:600;color:var(--d-ink)}
+.ws-bar .acts{flex:none;display:flex;align-items:center;gap:2px}
+.ws-bar .acts .btn{padding:7px 14px;font-size:12.5px}
+.ws-bar .acts .btn.quiet{padding:7px 9px}
+.ws-bar .acts .hint{margin-right:6px;font-size:12px;color:var(--d-mute)}
+.ws-bar .session{padding:0 8px;font-size:12.5px}
 .notes-switch{display:flex;align-items:center;gap:6px;padding:4px 11px;border-radius:9px;background:rgba(255,255,255,.7);border:1px solid #e6e2ea;font-size:12.5px;font-weight:500;color:var(--d-ink)}
 .notes-switch:hover{background:#fff}
 .notes-switch i{width:6px;height:6px;border-radius:50%;background:var(--d-warn)}
@@ -265,6 +294,14 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
   .ws-list{flex:none;overflow:visible}
   .ws-new{position:static;margin:6px 0 0;padding:0;background:none}
   .ws-room{flex:none;min-height:70vh}
+  .ws-rail{display:none}
+  .ws.railed{padding:20px 16px 0}
+  .ws.railed .ws-list{position:static;width:auto;padding:0;background:none;box-shadow:none;opacity:1;transform:none;pointer-events:auto}
+  .ws.railed .ws-room{flex:none}
+  .ws-bar{flex-wrap:wrap;padding:6px 8px 6px 12px}
+  .ws-bar .ask{order:3;flex:1 0 100%;border-left:0;border-top:1px solid var(--d-line);padding:8px 0 4px;flex-direction:column;gap:4px}
+  .ws-bar .ask>span{flex:none}
+  .ws-bar .acts{margin-left:auto}
   .triage .ws-room{min-height:0}
   .tr-main{overflow:visible}
   .doc{padding:28px 22px}
