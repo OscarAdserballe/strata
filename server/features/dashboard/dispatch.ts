@@ -3,6 +3,7 @@ import { genId, now } from "../../platform/db/sql.ts";
 import { MAX_UPLOAD_BYTES } from "../../platform/config.ts";
 import { insertBoard } from "../boards/create.ts";
 import { agentRepo as a } from "../agent/repo.ts";
+import { toldNow } from "../agent/guide.ts";
 import { htmlSource, prepareSource, writeSource, type PreparedSource } from "../sources/ingest.ts";
 import { bytesOf } from "../sources/blobs.ts";
 import { htmlProblems } from "../sources/check-html.ts";
@@ -173,7 +174,7 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
       const lands = (raw.lands as Lands | undefined) ?? landsIn(q.lastPress.get(id));
       const n = q.lastN.get(id)!.n + 1;
       const rid = writeSource(dispatchBoard(), prepared);
-      q.insVersion.run(id, n, rid, lands, at, ask, heard);
+      q.insVersion.run(id, n, rid, lands, at, ask, heard, JSON.stringify(toldNow()));
       moveTo(cur, lands, at);
       q.dropClaim.run(id);
       said.push(`v${n} posted; the thread is in ${lands === "finish" ? "Finish" : lands === "decide" ? "Decide" : "Review"}`);
@@ -224,7 +225,9 @@ export const dispatchBoardId = (): string | null => a.boardByHandle.get(HANDLE)?
 
 // ---------- the pane ----------
 
-export interface VersionView { n: number; resourceId: string; at: number; landed: string; notes: number; ask: string | null; heard: string | null }
+export interface VersionView { n: number; resourceId: string; at: number; landed: string; notes: number; ask: string | null; heard: string | null; told: Told[] | null }
+/** A guide topic in the reader's own text when the page was posted, and when they last wrote it. */
+export interface Told { topic: string; at: number }
 export interface PressView { kind: string; stage: string; version: number | null; at: number; sessionUrl: string | null }
 export interface DispatchThread { id: string; title: string; stage: string; links: Link[]; updatedAt: number; versions: VersionView[]; press: PressView | null; lands: string | null }
 
@@ -234,7 +237,8 @@ export function pane(inbox: number): { rev: number; board: string | null; inbox:
   const vs = new Map<string, VersionView[]>();
   for (const v of q.versions.all()) {
     const list = vs.get(v.task_id) ?? [];
-    list.push({ n: v.n, resourceId: v.resource_id, at: v.at, landed: v.landed, notes: counts.get(v.resource_id) ?? 0, ask: v.ask, heard: v.heard });
+    list.push({ n: v.n, resourceId: v.resource_id, at: v.at, landed: v.landed, notes: counts.get(v.resource_id) ?? 0, ask: v.ask, heard: v.heard,
+      told: v.told ? JSON.parse(v.told) as Told[] : null });
     vs.set(v.task_id, list);
   }
   const last = new Map<string, PressRow>();

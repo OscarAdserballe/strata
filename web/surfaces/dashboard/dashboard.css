@@ -266,3 +266,38 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
   .tr-main{overflow:visible}
   .doc{padding:28px 22px}
 }
+
+/* Prompts: the guide Claude reads, as free text, in a drawer over the dashboard */
+.ws-caption-r{display:flex;align-items:center;gap:8px}
+.dh-prompts{flex:none;font-style:normal;font-family:var(--sans);padding:6px 11px;border-radius:9px;border:1px solid var(--d-line-2);background:rgba(255,255,255,.7);font-size:12.5px;font-weight:500;color:var(--d-ink-3)}
+.dh-prompts:hover{background:#fff;color:var(--d-ink)}
+.pr-scrim{position:fixed;inset:0;z-index:var(--layer-veil);background:rgba(26,20,30,.18)}
+.pr-drawer{position:fixed;top:0;right:0;bottom:0;z-index:var(--layer-veil);width:min(640px,100vw);display:flex;flex-direction:column;gap:10px;padding:18px 20px 16px;background:#faf8f4;box-shadow:var(--d-sheet)}
+.pr-drawer header{display:flex;gap:12px;align-items:flex-start;justify-content:space-between}
+.pr-drawer header b{font-size:16px}
+.pr-drawer header p{margin:2px 0 0;font-size:13px;color:var(--d-mute)}
+.pr-x{flex:none;width:30px;height:30px;border:0;border-radius:8px;background:none;font-size:20px;line-height:1;color:var(--d-ink-3)}
+.pr-x:hover{background:rgba(40,30,60,.06)}
+.pr-tabs{display:flex;flex-wrap:wrap;gap:4px}
+.pr-tabs button{display:inline-flex;align-items:center;gap:5px;padding:5px 10px;border:0;border-radius:8px;background:rgba(40,30,60,.05);font-size:12.5px;color:var(--d-ink-3)}
+.pr-tabs button[aria-selected="true"]{background:#fff;color:var(--d-ink);font-weight:600;box-shadow:0 0 0 1px rgba(26,20,30,.14)}
+.pr-tabs i{width:6px;height:6px;border-radius:50%;background:var(--d-wait)}
+.pr-state{margin:0;font-size:12.5px;color:var(--d-faint)}
+.pr-state[data-own]{color:var(--d-wait);font-weight:600}
+.pr-link{border:0;padding:0;background:none;font-size:12.5px;font-weight:600;color:var(--d-link);cursor:pointer}
+.pr-link.warn{color:var(--d-wait);text-decoration:underline}
+.pr-peek{flex:0 1 30%;overflow:auto;margin:0;padding:10px 12px;border-radius:9px;background:var(--d-sunk);font:12px/1.5 ui-monospace,Menlo,monospace;white-space:pre-wrap;color:var(--d-ink-3)}
+.pr-text{flex:1;min-height:200px;width:100%;padding:12px 14px;border:1px solid var(--d-line-2);border-radius:10px;background:#fff;font:12.5px/1.55 ui-monospace,Menlo,monospace;color:var(--d-ink);resize:none}
+.pr-text:focus{outline:2px solid rgba(47,79,176,.3);outline-offset:0}
+.pr-drawer footer{display:flex;gap:8px;align-items:center}
+.pr-drawer footer span{flex:1}
+.pr-drawer .btn:disabled{opacity:.45;cursor:default}
+.pr-wait{color:var(--d-faint)}
+.pr-told{position:relative;display:inline-block;margin-left:6px;vertical-align:1px;text-transform:none;letter-spacing:0}
+.pr-i{width:15px;height:15px;padding:0;border:0;border-radius:50%;background:var(--d-wait);color:#fff;font:italic 700 10px/15px Georgia,serif;text-align:center;cursor:pointer}
+.pr-pop{position:absolute;top:20px;left:-8px;z-index:6;display:flex;flex-direction:column;width:280px;padding:4px 0 8px;border-radius:10px;background:#fff;box-shadow:var(--d-sheet);font:400 12.5px/1.4 var(--sans);color:var(--d-ink-2)}
+.pr-pop>b{padding:8px 12px 4px;font-size:12.5px;color:var(--d-ink)}
+.pr-row{display:flex;justify-content:space-between;gap:8px;padding:6px 12px;border-top:1px solid #efedf1}
+.pr-row em{font-style:normal;color:var(--d-wait);font-weight:600}
+.pr-row.dim{color:var(--d-faint)}
+.pr-pop .pr-link{align-self:flex-start;margin:6px 12px 0}

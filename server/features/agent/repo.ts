@@ -5,6 +5,7 @@ export interface KeptRow { id: string; course: string; created_at: number; type:
 export interface SourceRow { id: string; filename: string | null; kind: string | null; origin_url: string | null; created_at: number; done_at: number | null; tokens: number | null; bytes_len: number | null }
 export interface ChatRow { resource_id: string | null; words?: string | null; course: string | null; card: string | null; role: string; text: string; created_at: number; archived: number }
 export interface GradeRow { card: string; course: string; got: number; at: number }
+export interface PromptRow { topic: string; text: string | null; base: string; rev: number; updated_at: number }
 export interface AgentImportRow {
   id: string; board_id: string; filename: string; size: number; received: number; stage: string; error: string | null;
   resource_id: string | null; sha256: string | null; origin: string | null; origin_ref: string | null; auto: number; created_at: number;
@@ -100,4 +101,10 @@ export const agentRepo = {
   importByRef: stmt<{ id: string }>("SELECT id FROM imports WHERE board_id = ? AND origin_ref = ? AND stage <> 'cancelled' LIMIT 1"),
   importOfResource: stmt<{ origin: string | null; origin_ref: string | null }>("SELECT origin,origin_ref FROM imports WHERE resource_id = ?"),
   setImportOrigin: stmt("UPDATE imports SET auto = 1, origin = ?, origin_ref = ?, sha256 = ?, study = ? WHERE id = ?"),
+
+  // The reader's own guide text; a reset keeps the row with null text, so its rev never goes back.
+  prompts: stmt<PromptRow>("SELECT topic,text,base,rev,updated_at FROM agent_prompts ORDER BY topic"),
+  prompt: stmt<PromptRow>("SELECT topic,text,base,rev,updated_at FROM agent_prompts WHERE topic = ?"),
+  putPrompt: stmt(`INSERT INTO agent_prompts (topic,text,base,rev,updated_at) VALUES (?,?,?,1,?)
+    ON CONFLICT(topic) DO UPDATE SET text = excluded.text, base = excluded.base, rev = agent_prompts.rev + 1, updated_at = excluded.updated_at`),
 };

@@ -7,6 +7,7 @@ import { switches } from "../../capabilities/fold/switches.ts";
 import type { View } from "./nav.ts";
 import { age, hm } from "./parts.tsx";
 import NewThread from "./NewThread.tsx";
+import { PromptsButton, Told } from "./Prompts.tsx";
 
 const latest = (t: DispatchThread): DispatchVersion | null => t.versions[t.versions.length - 1] ?? null;
 const label = (v: DispatchVersion): string => `v${v.n}${v.landed === "review" ? " · built" : v.landed === "finish" || v.landed === "done" ? " · finish" : ""}`;
@@ -92,7 +93,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
         <NewThread />
       </aside>
       <div className="ws-room">
-        <div className="ws-caption"><span>{t && v ? caption(t, v) : ""}</span>{t && v ? <NotesSwitch /> : null}</div>
+        <div className="ws-caption"><span>{t && v ? caption(t, v) : ""}</span><span className="ws-caption-r"><PromptsButton />{t && v ? <NotesSwitch /> : null}</span></div>
         {v?.ask && v.heard ? <Asked v={v} /> : null}
         <div className="ws-sheet" style={fit ? { flex: `0 1 ${fit}px` } : undefined}>
           {t && v && pane?.board ? <LivePage key={v.resourceId} board={pane.board} resource={v.resourceId}
@@ -108,7 +109,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
 function Asked({ v }: { v: DispatchVersion }) {
   return <div className="ws-asked" aria-label="The ask">
     <div><span className="lab">Your ask</span><p>{v.ask}</p></div>
-    <div className="heard"><span className="lab">Claude heard · v{v.n}</span><p>{v.heard}</p></div>
+    <div className="heard"><span className="lab">Claude heard · v{v.n}<Told v={v} /></span><p>{v.heard}</p></div>
   </div>;
 }
 

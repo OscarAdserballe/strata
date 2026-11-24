@@ -10,6 +10,7 @@ import { idOf } from "../../../shared/agent/ids.ts";
 import { agentRepo as a } from "./repo.ts";
 import { answerMcp, endMcp } from "./mcp.ts";
 import { listTokens, mintToken, revokeToken, uploadAllowed } from "./tokens.ts";
+import { PromptError, promptView, promptsView, TOPICS, writePrompt } from "./guide.ts";
 
 const CHUNK = 512 * 1024;
 
@@ -74,6 +75,21 @@ export const agentRoutes: Route[] = [
       const gone = revokeToken(params[0]);
       if (gone) logEvent(db, APP, "agent_token_revoke", {}, ssn);
       return { status: gone ? 200 : 404, body: { tokens: listTokens(), mcpPath: externalPath("mcp") } };
+    });
+  }, { receipt: "atomic" }),
+
+  // The guide agents read, topic by topic, each written whole over the rev it was based on; null text resets it.
+  route("GET", "/api/agent/prompts", ({ res }) => { sendJson(res, 200, promptsView()); }),
+  route("PUT", /^\/api\/agent\/prompts\/([a-z]{2,40})$/, async ({ params, body, commit, ifMatch, ssn }) => {
+    if (!TOPICS.includes(params[0])) throw httpError(404, `No guide topic "${params[0]}".`);
+    const b = await body<{ text?: unknown }>(256 * 1024);
+    commit(() => {
+      ifMatch(promptView(params[0]).rev, () => promptView(params[0]));
+      try {
+        const v = writePrompt(params[0], b.text ?? null);
+        logEvent(db, APP, "agent_prompt_write", { topic: v.topic, own: v.own }, ssn);
+        return { status: 200, body: v };
+      } catch (e) { if (e instanceof PromptError) throw httpError(400, e.message); throw e; }
     });
   }, { receipt: "atomic" }),
 ];

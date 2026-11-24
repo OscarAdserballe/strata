@@ -2172,6 +2172,50 @@ const padTwoTabs = {
   },
 };
 
+// A prompt saved from the drawer with its answer lost is written once; one saved after another tab wrote the same
+// topic is refused, and the drawer shows the other tab's text rather than sending its own over it.
+const promptSaves = {
+  name: "prompt-saves",
+  checks: {
+    once: "a save whose answer was lost is written once: the rev rises by one",
+    kept: "a save over another tab's newer text is refused, and the server keeps that text",
+    shown: "the drawer shows the text the server holds",
+  },
+  async run(t) {
+    const tag = `${t.seed}-${Date.now().toString(36)}`;
+    const isPut = (e) => e.write && e.method === "PUT" && e.path === "/api/agent/prompts/proposal";
+    const row = () => t.sql("SELECT text, rev FROM agent_prompts WHERE topic = 'proposal'")[0] ?? { text: null, rev: 0 };
+    const rev0 = row().rev;
+    const page = await t.open({ latency: true, lostAck: { match: isPut, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    await page.goto(`${t.base}/dispatch?view=decide`);
+    await page.getByRole("button", { name: "Prompts", exact: true }).click();
+    await page.getByRole("tab", { name: /^proposal/ }).click();
+    const box = page.getByLabel("The proposal prompt");
+    await box.waitFor();
+    await box.fill(`mine ${tag}`);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    const until = performance.now() + GRACE_MS * 2;
+    while (row().text !== `mine ${tag}` && performance.now() < until) await sleep(250);
+    await t.net.idle(500);
+    if (!t.net.entries.filter(isPut).some((e) => e.outcome === "lost-ack")) throw new Error("no prompt save lost its answer: the race this scenario is about did not happen");
+    const first = row();
+    t.check("once", first.text === `mine ${tag}` && first.rev === rev0 + 1, `text ${JSON.stringify(first.text)}, rev ${rev0} → ${first.rev}`);
+
+    // another tab writes over the rev this one holds
+    await t.api("/api/agent/prompts/proposal", "PUT", { text: `theirs ${tag}` });
+    await box.fill(`mine again ${tag}`);
+    await page.getByRole("button", { name: "Save", exact: true }).click();
+    const by = performance.now() + GRACE_MS;
+    let shown = "";
+    while (performance.now() < by) { shown = await box.inputValue(); if (shown === `theirs ${tag}`) break; await sleep(200); }
+    await t.net.idle(500);
+    const writes = t.net.entries.filter(isPut);
+    t.say(`prompt writes: ${writes.map((e) => e.status ?? e.outcome).join(", ")}`);
+    t.check("kept", row().text === `theirs ${tag}` && writes.some((e) => e.status === 409), `the server holds ${JSON.stringify(row().text)}`);
+    t.check("shown", shown === `theirs ${tag}`, `the drawer shows ${JSON.stringify(shown)}`);
+  },
+};
+
 // the wire is cut under the page: every /api request fails until it is joined again, as on a plane
 async function cuttable(page) {
   const wire = { cut: false };
@@ -2293,4 +2337,4 @@ const offlineThenSync = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, offlineThenSync];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, promptSaves, offlineThenSync];

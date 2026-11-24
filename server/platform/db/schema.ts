@@ -414,6 +414,7 @@ CREATE TABLE IF NOT EXISTS dashboard_versions (
   landed TEXT NOT NULL,                   -- decide | review | finish (done in older rows): where posting it put the thread
   at INTEGER NOT NULL,
   ask TEXT, heard TEXT,                   -- Claude's summary of the ask so far, and how Claude read it; null in older rows
+  told TEXT,                              -- JSON [{ topic, at }]: the guide topics in the reader's own text when it was posted
   PRIMARY KEY (task_id, n)
 );
 -- Sending a thread, and Send on its page (Go and Send back in older rows). The newest press on a thread decides where its next page lands.
@@ -433,5 +434,10 @@ CREATE TABLE IF NOT EXISTS dashboard_claims (
 -- The scratch pad: one free-text document, written whole, so it carries a rev for If-Match.
 CREATE TABLE IF NOT EXISTS dashboard_pad (
   id INTEGER PRIMARY KEY CHECK (id = 1), text TEXT NOT NULL, rev INTEGER NOT NULL, updated_at INTEGER NOT NULL
+);
+-- The reader's own text for a guide topic agents read, written whole; null text is the shipped guide again.
+-- base is the shipped text's hash when it was edited, so a guide that changed since shows.
+CREATE TABLE IF NOT EXISTS agent_prompts (
+  topic TEXT PRIMARY KEY, text TEXT, base TEXT NOT NULL, rev INTEGER NOT NULL, updated_at INTEGER NOT NULL
 );
 `;
