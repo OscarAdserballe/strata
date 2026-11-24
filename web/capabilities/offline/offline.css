@@ -18,3 +18,9 @@
 .clash-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}
 .clash-error{margin:6px 0 0;color:#8a2b12;}
 @media (max-width:640px){.clash-texts{grid-template-columns:1fr;}}
+.connection-mark{position:fixed;top:8px;right:12px;z-index:var(--layer-banner);display:flex;align-items:center;gap:6px;height:24px;padding:0 10px;border:1px solid var(--line,#e4e2dc);border-radius:12px;background:#fff;color:var(--ink-soft,#6b6a65);font:12px/1 var(--sans);box-shadow:0 1px 2px rgb(0 0 0 / 5%);}
+.connection-mark i{width:7px;height:7px;border-radius:50%;background:#2f7d4f;}
+.connection-mark.off i{background:#9a958c;}
+.connection-mark .n{min-width:16px;padding:1px 5px;border-radius:8px;background:#f0eee9;text-align:center;}
+.connection-mark button{border:1px solid currentColor;border-radius:10px;padding:2px 8px;background:transparent;color:inherit;cursor:pointer;font:inherit;}
+.connection-mark .err{color:#8a2b12;}
