@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore, type ReactNode } from "react";
 import { StrataWhy } from "../../data/api.ts";
 import { dash, useArchive, useDispatch, type DispatchThread, type DispatchVersion } from "../../data/entities/dashboard.ts";
 import { toast } from "../../shell/layers.ts";
@@ -7,10 +7,15 @@ import { switches } from "../../capabilities/fold/switches.ts";
 import type { View } from "./nav.ts";
 import { age, hm } from "./parts.tsx";
 import NewThread from "./NewThread.tsx";
+import { initials } from "./initials.ts";
 
 const latest = (t: DispatchThread): DispatchVersion | null => t.versions[t.versions.length - 1] ?? null;
 const label = (v: DispatchVersion): string => `v${v.n}${v.landed === "review" ? " · built" : v.landed === "finish" || v.landed === "done" ? " · finish" : ""}`;
 const notes = (n: number): string => (n ? `${n} note${n === 1 ? "" : "s"}` : "");
+
+const typing = (el: EventTarget | null) => !!(el as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])");
+// versions opened this session: a version you haven't seen opens with its ask unfolded, once
+const seen = new Set<string>();
 
 /** The line above the sheet: whose page, which version, and what it answers. */
 export function caption(t: DispatchThread, v: DispatchVersion): string {
@@ -35,6 +40,21 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   // the sheet fits a short page; a long one fills the room and scrolls in its frame
   const [tall, setTall] = useState<{ rid: string; h: number } | null>(null);
   const fit = v && tall?.rid === v.resourceId ? Math.max(tall.h, 240) : null;
+  // the thread list is a drawer over the sheet: hover the rail a moment, or press [
+  const [drawer, setDrawer] = useState(false);
+  const hover = useRef<number | null>(null);
+  const unhover = () => { if (hover.current !== null) { clearTimeout(hover.current); hover.current = null; } };
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+      if (e.key === "[") { e.preventDefault(); setDrawer((d) => !d); } else if (e.key === "Escape") setDrawer(false);
+    };
+    addEventListener("keydown", key);
+    return () => { removeEventListener("keydown", key); unhover(); };
+  }, []);
+  const [unfolded, setUnfolded] = useState<string | null>(null);
+  useEffect(() => { if (v && !seen.has(v.resourceId)) { seen.add(v.resourceId); setUnfolded(v.resourceId); } }, [v?.resourceId]);
+  const pick = (id: string, n: number | null = null) => { setSel({ thread: id, n }); setDrawer(false); };
 
   function press(th: DispatchThread, kind: "send" | "drop" | "archive" | "todo" | "thinking"): void {
     const rest = here.filter((x) => x.id !== th.id);
@@ -50,6 +70,20 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
     dash.press(th.id).catch((e) => toast(StrataWhy(e, "Send didn't reach Claude"), 4200));
   }
 
+  const acts = (x: DispatchThread): ReactNode => stage !== "finish" ? <div className="acts">
+      <button className="btn quiet" title="Back to to-do, pages kept" onClick={() => press(x, "todo")}>Later</button>
+      <button className="btn quiet" title="Write more in Thinking, pages kept" onClick={() => press(x, "thinking")}>To thinking</button>
+      <button className="btn quiet danger" onClick={() => press(x, "drop")}>Drop</button>
+      <button className="btn dark" onClick={() => press(x, "send")}>Send</button>
+    </div> : reopening === x.id ? <div className="acts reopen">
+      <p>Write what's wrong as a note on the page, then Send.</p>
+      <button className="btn quiet" onClick={() => setReopening(null)}>Cancel</button>
+      <button className="btn dark" onClick={() => press(x, "send")}>Send</button>
+    </div> : <div className="acts">
+      <button className="faint" onClick={() => setReopening(x.id)}>Reopen</button>
+      <button className="btn dark" onClick={() => press(x, "archive")}>Archive</button>
+    </div>;
+
   const blank = !pane ? "Loading…"
     : !t ? (stage === "implementing" ? "Nothing with Claude right now." : stage === "review" ? "Nothing to review. Built pages come here."
       : stage === "finish" ? "Nothing to finish. Merged, filed or not-doing threads come here, with what to check." : "Nothing to decide. Send a thread from to-do in Triage.")
@@ -57,33 +91,28 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
     : null;
 
   return (
-    <div className="ws dispatch">
+    <div className={"ws dispatch" + (drawer ? " drawer-open" : "")}>
+      <div className="ws-nav" onMouseEnter={() => { unhover(); hover.current = window.setTimeout(() => setDrawer(true), 350); }}
+        onMouseLeave={() => { unhover(); setDrawer(false); }}>
+      <nav className="ws-rail" aria-label="Threads, as squares">
+        {here.map((x) => <button key={x.id} className={"rail-sq" + (x.id === t?.id ? " on" : "") + (latest(x)?.notes ? " noted" : "")}
+          title={x.title} aria-label={x.title} aria-current={x.id === t?.id ? "true" : undefined} onClick={() => pick(x.id)}>{initials(x.title)}</button>)}
+        <button className="rail-sq new" title="Threads and a new one ( [ )" aria-label="Show the threads" aria-expanded={drawer} onClick={() => setDrawer(!drawer)}>☰</button>
+      </nav>
       <aside className="ws-list" aria-label="Threads">
-        {stage === "implementing" ? <Implementing threads={here} on={t?.id ?? null} onPick={(x) => setSel({ thread: x.id, n: null })} />
+        {stage === "implementing" ? <Implementing threads={here} on={t?.id ?? null} onPick={(x) => pick(x.id)} />
           : here.map((x) => x.id === t?.id
             ? <section key={x.id} className="ws-card open" aria-label={x.title}>
                 <span className="t">{x.title}</span>
                 {x.links.length ? <span className="m">{x.links.map((l) => l.ref).join(" · ")}</span> : null}
                 <ol className="vers" reversed>
                   {[...x.versions].reverse().map((ver) => <li key={ver.n}>
-                    <button aria-current={v?.n === ver.n ? "true" : undefined} onClick={() => setSel({ thread: x.id, n: ver.n })}><b>{label(ver)}</b><span>{notes(ver.notes)}</span></button>
+                    <button aria-current={v?.n === ver.n ? "true" : undefined} onClick={() => pick(x.id, ver.n)}><b>{label(ver)}</b><span>{notes(ver.notes)}</span></button>
                   </li>)}
                 </ol>
-                {stage !== "finish" ? <div className="acts">
-                  <button className="btn dark" onClick={() => press(x, "send")}>Send</button>
-                  <button className="btn quiet" title="Back to to-do, pages kept" onClick={() => press(x, "todo")}>Later</button>
-                  <button className="btn quiet" title="Write more in Thinking, pages kept" onClick={() => press(x, "thinking")}>To thinking</button>
-                  <button className="btn quiet danger" onClick={() => press(x, "drop")}>Drop</button>
-                </div> : reopening === x.id ? <div className="acts reopen">
-                  <p>Write what's wrong as a note on the page, then Send.</p>
-                  <button className="btn dark" onClick={() => press(x, "send")}>Send</button>
-                  <button className="btn quiet" onClick={() => setReopening(null)}>Cancel</button>
-                </div> : <div className="acts">
-                  <button className="btn dark" onClick={() => press(x, "archive")}>Archive</button>
-                  <button className="faint" onClick={() => setReopening(x.id)}>Reopen</button>
-                </div>}
+                {acts(x)}
               </section>
-            : <button key={x.id} className="ws-card" onClick={() => setSel({ thread: x.id, n: null })}>
+            : <button key={x.id} className="ws-card" onClick={() => pick(x.id)}>
                 <span className="t">{x.title}</span>
                 <span className="m">{[latest(x) ? label(latest(x)!) : null, latest(x) ? notes(latest(x)!.notes) : null, latest(x) ? age(latest(x)!.at) : null].filter(Boolean).join(" · ")}</span>
               </button>)}
@@ -91,10 +120,12 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
         {stage === "finish" ? <Archived /> : null}
         <NewThread />
       </aside>
+      </div>
       <div className="ws-room">
-        <div className="ws-caption"><span>{t && v ? caption(t, v) : ""}</span>{t && v ? <NotesSwitch /> : null}</div>
-        {v?.ask && v.heard ? <Asked v={v} /> : null}
-        <div className="ws-sheet" style={fit ? { flex: `0 1 ${fit}px` } : undefined}>
+        {t && v ? <AskLine t={t} v={v} open={unfolded === v.resourceId} onToggle={() => setUnfolded(unfolded === v.resourceId ? null : v.resourceId)}>
+          {stage !== "implementing" ? acts(t) : null}
+        </AskLine> : null}
+        <div className="ws-sheet" style={fit ? { flex: `0 1 ${fit}px` } : undefined} onMouseEnter={() => setUnfolded(null)}>
           {t && v && pane?.board ? <LivePage key={v.resourceId} board={pane.board} resource={v.resourceId}
             onHeight={(h) => setTall((was) => (was?.rid === v.resourceId && was.h === h ? was : { rid: v.resourceId, h }))} /> : null}
           {blank ? <div className="ws-blank"><p>{blank}</p></div> : null}
@@ -104,11 +135,18 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   );
 }
 
-// The ask this version answers and how Claude read it, the same size side by side, so a misreading shows.
-function Asked({ v }: { v: DispatchVersion }) {
-  return <div className="ws-asked" aria-label="The ask">
-    <div><span className="lab">Your ask</span><p>{v.ask}</p></div>
-    <div className="heard"><span className="lab">Claude heard · v{v.n}</span><p>{v.heard}</p></div>
+// The ask this version answers and how Claude read it, side by side so a misreading shows: one line, unfolded on a new version until you read the sheet.
+function AskLine({ t, v, open, onToggle, children }: { t: DispatchThread; v: DispatchVersion; open: boolean; onToggle(): void; children: ReactNode }) {
+  const older = latest(t)?.n !== v.n ? " · older" : "";
+  const both = !!(v.ask && v.heard);
+  return <div className={"ws-ask" + (open && both ? " open" : "")} aria-label="The ask">
+    <button className={"ws-ask-text" + (both ? "" : " solo")} title={caption(t, v)} aria-expanded={both ? open && both : undefined} onClick={both ? onToggle : undefined}>
+      {both ? <>
+        <span className="ask"><span className="lab">Your ask</span><span className="p">{v.ask}</span></span>
+        <span className="heard"><span className="lab">Claude heard · {label(v)}{older}</span><span className="p">{v.heard}</span></span>
+      </> : <span className="ask"><span className="lab">{label(v)}{older}</span><span className="p">{caption(t, v)}</span></span>}
+    </button>
+    <div className="ws-ask-acts"><NotesSwitch />{children}</div>
   </div>;
 }
 

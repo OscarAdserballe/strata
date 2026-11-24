@@ -193,13 +193,6 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .ws-caption .tr-area{padding:2px}
 .ws-caption .tr-area button{padding:3px 10px;font-size:12px;letter-spacing:0;text-transform:none;font-weight:500}
 .ws-caption{flex-shrink:0;display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:34px;padding:0 4px 10px;font:italic 14.5px var(--serif);color:var(--d-mute)}
-.ws-asked{flex-shrink:0;display:grid;grid-template-columns:1fr 1fr;margin:0 0 12px;background:#fff;border-radius:10px;box-shadow:var(--d-lift),0 0 0 1px var(--d-line)}
-.ws-asked>div{padding:10px 14px 12px;min-width:0}
-.ws-asked>div+div{border-left:1px solid var(--d-line);background:#fdf7f1;border-radius:0 10px 10px 0}
-.ws-asked .lab{display:block;margin-bottom:3px;font:600 11px/1.4 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--d-faint)}
-.ws-asked .heard .lab{color:var(--d-wait)}
-.ws-asked p{margin:0;font-size:13.5px;line-height:1.45;color:var(--d-ink-2)}
-@media (max-width:720px){.ws-asked{grid-template-columns:1fr}.ws-asked>div+div{border-left:0;border-top:1px solid var(--d-line);border-radius:0 0 10px 10px}}
 .ws-sheet{flex:1;min-height:0;position:relative;display:flex;margin-bottom:24px;background:#fff;border-radius:10px;box-shadow:var(--d-sheet);overflow:hidden}
 .ws-sheet .livepage{border-radius:inherit}
 .ws-sheet .htmlsrc-body{border-radius:inherit;overflow:hidden}
@@ -265,4 +258,42 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
   .triage .ws-room{min-height:0}
   .tr-main{overflow:visible}
   .doc{padding:28px 22px}
+}
+
+/* Dispatch: the sheet gets the room; threads are a rail of squares whose list slides over the sheet */
+.ws.dispatch{position:relative;justify-content:flex-start;gap:14px;padding:14px 16px 0}
+.ws.dispatch .ws-room{flex:1 1 auto}
+.ws-nav{flex:none;display:flex}
+.ws-rail{width:40px;display:flex;flex-direction:column;align-items:center;gap:8px;padding:2px 0 16px;overflow-y:auto}
+.rail-sq{position:relative;flex:none;width:36px;height:36px;border-radius:8px;background:#efecf2;font:600 12px/36px var(--sans);color:var(--d-ink-3);text-align:center;transition:background .15s}
+.rail-sq:hover{background:#fff}
+.rail-sq.on{background:#fff;color:var(--d-ink);box-shadow:0 0 0 1.5px var(--d-ink)}
+.rail-sq.noted::after{content:"";position:absolute;top:4px;right:4px;width:6px;height:6px;border-radius:50%;background:var(--d-warn)}
+.rail-sq.new{margin-top:4px;background:none;border:1px dashed var(--d-line-2);color:var(--d-mute);font-size:14px;line-height:34px}
+.ws.dispatch .ws-list{position:absolute;z-index:5;left:66px;top:14px;bottom:16px;width:300px;padding:12px;background:#faf8f4;border-radius:12px;box-shadow:var(--d-sheet);
+  visibility:hidden;opacity:0;transform:translateX(-8px);transition:opacity .15s,transform .15s,visibility 0s .15s}
+.ws.dispatch.drawer-open .ws-list{visibility:visible;opacity:1;transform:none;transition-delay:0s}
+.ws-ask{flex-shrink:0;display:flex;align-items:stretch;margin:0 0 10px;min-height:44px;background:#fff;border-radius:10px;box-shadow:var(--d-lift),0 0 0 1px var(--d-line)}
+.ws-ask-text{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;padding:0;text-align:left;border-radius:10px 0 0 10px}
+.ws-ask-text.solo{grid-template-columns:1fr;cursor:default}
+.ws-ask-text > span{display:flex;align-items:baseline;gap:8px;min-width:0;padding:12px 14px}
+.ws-ask-text .heard{background:#fdf7f1;border-left:1px solid var(--d-line)}
+.ws-ask .lab{flex:none;font:600 11px/1.4 var(--sans);letter-spacing:.06em;text-transform:uppercase;color:var(--d-faint)}
+.ws-ask .heard .lab{color:var(--d-wait)}
+.ws-ask .p{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13.5px;color:var(--d-ink-2)}
+.ws-ask.open .ws-ask-text > span{flex-direction:column;gap:3px}
+.ws-ask.open .p{white-space:normal;line-height:1.45}
+.ws-ask-acts{flex:none;display:flex;align-items:center;gap:6px;padding:0 8px;border-left:1px solid var(--d-line)}
+.ws-ask-acts .acts{display:flex;align-items:center;gap:2px}
+.ws-ask-acts .acts .btn{padding:7px 12px}
+.ws-ask-acts .acts.reopen p{margin:0 6px;font-size:12px;color:var(--d-mute)}
+@media (max-width:900px){
+  .ws.dispatch{padding:20px 16px 0}
+  .ws-nav{display:block}
+  .ws-rail{display:none}
+  .ws.dispatch .ws-list{position:static;width:auto;padding:0;background:none;box-shadow:none;visibility:visible;opacity:1;transform:none}
+  .ws-ask{flex-wrap:wrap}
+  .ws-ask-text{flex:1 0 100%;grid-template-columns:1fr;border-radius:10px 10px 0 0}
+  .ws-ask-text .heard{border-left:0;border-top:1px solid var(--d-line)}
+  .ws-ask-acts{flex:1 0 100%;border-left:0;border-top:1px solid var(--d-line);padding:6px 8px;flex-wrap:wrap}
 }
