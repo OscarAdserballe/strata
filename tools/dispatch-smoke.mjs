@@ -31,14 +31,14 @@ try {
   await page.goto(`${base}/dispatch?view=decide`, { waitUntil: "networkidle" });
   await tool("dashboard_post", { key: key(), id: fresh, page: "<!doctype html><html><body><h1>Posted while you looked</h1></body></html>",
     ask: "See what I sent once a thread is in Dispatch.", heard: "Two fields above every page: the ask, and how Claude read it." });
-  await page.locator(".ws-list").getByText(`Smoke ${run}: a page posted while Decide is open`).click({ timeout: 40000 });
+  await page.locator(".ws-rail").getByRole("button", { name: `Smoke ${run}: a page posted while Decide is open` }).click({ timeout: 40000 });
   const frame = await (await page.waitForSelector(".ws-sheet iframe.html-frame", { timeout: 15000 })).contentFrame();
   await frame.waitForSelector("text=Posted while you looked", { timeout: 15000 });
   console.log("✓ a page posted while Decide is open draws without a reload");
-  assert.equal(await page.locator(".ws-asked p").first().textContent(), "See what I sent once a thread is in Dispatch.");
-  assert.equal(await page.locator(".ws-asked .heard p").textContent(), "Two fields above every page: the ask, and how Claude read it.");
+  assert.equal(await page.locator(".ws-ask .ask .p").textContent(), "See what I sent once a thread is in Dispatch.");
+  assert.equal(await page.locator(".ws-ask .heard .p").textContent(), "Two fields above every page: the ask, and how Claude read it.");
   if (process.env.DISPATCH_SHOT) await page.screenshot({ path: process.env.DISPATCH_SHOT });
-  console.log("✓ the ask and how Claude read it sit above the page");
+  console.log("✓ the ask and how Claude read it sit on one line above the page");
 
   // a thread arriving while a page is on the sheet doesn't take the sheet, even one never clicked
   await page.reload({ waitUntil: "networkidle" });
@@ -47,19 +47,19 @@ try {
   const later = await thread(`Smoke ${run}: a thread that arrives later`);
   await api(`/api/dashboard/tasks/${later}/send`, "POST", {});
   await tool("dashboard_post", { key: key(), id: later, page: "<!doctype html><html><body><h1>Arrived later</h1></body></html>" });
-  await page.locator(".ws-list").getByText(`Smoke ${run}: a thread that arrives later`).waitFor({ timeout: 40000 });
+  await page.locator(".ws-rail").getByRole("button", { name: `Smoke ${run}: a thread that arrives later` }).waitFor({ timeout: 40000 });
   await page.waitForTimeout(500);
   await shown.waitForSelector("text=Posted while you looked", { timeout: 2000 });
-  assert.equal(await page.locator(".ws-card.open .t").textContent(), `Smoke ${run}: a page posted while Decide is open`);
+  assert.equal(await page.locator(".rail-sq.on").getAttribute("aria-label"), `Smoke ${run}: a page posted while Decide is open`);
   console.log("✓ a new thread doesn't replace the page being read");
   await api(`/api/dashboard/tasks/${later}`, "PATCH", { stage: "dropped", cleared: true });
 
   // Drop on the open Decide card takes the thread off the board
-  await page.getByRole("region", { name: `Smoke ${run}: a page posted while Decide is open` }).getByRole("button", { name: "Drop" }).click();
+  await page.locator(".ws-ask-acts").getByRole("button", { name: "Drop" }).click();
   await page.waitForSelector(`text=Smoke ${run}: a page posted while Decide is open`, { state: "detached", timeout: 5000 });
   for (let i = 0; i < 20 && (await stageOf(fresh)) !== null; i++) await page.waitForTimeout(250);
   assert.equal(await stageOf(fresh), null, "a dropped Decide thread leaves the board");
-  console.log("✓ Drop on a Decide card");
+  console.log("✓ Drop on the ask line of a Decide page");
 
   // Drop in a Thinking doc
   const think = await thread(`Smoke ${run}: a thought not worth keeping`, "thinking");
