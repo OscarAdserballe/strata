@@ -61,3 +61,15 @@ test("the page's height reaches the host only from the frame that is open", () =
   hear({ source: f.contentWindow, data: { [STRATA]: { t: "height", h: 512 } } });
   assert.deepEqual(heights, [512]);
 });
+
+test("a scroll inside the page reaches the host only from the frame that is open", () => {
+  let said = 0;
+  const engine = new HtmlEngine({ ...hooks, onScrolled: () => { said++; } } as never);
+  engine.open(host, "/live/six");
+  const old = frames[frames.length - 1];
+  engine.open(host, "/live/seven");
+  const f = frames[frames.length - 1];
+  hear({ source: old.contentWindow, data: { [STRATA]: { t: "scrolled" } } });
+  hear({ source: f.contentWindow, data: { [STRATA]: { t: "scrolled" } } });
+  assert.equal(said, 1);
+});

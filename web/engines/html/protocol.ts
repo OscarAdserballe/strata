@@ -25,6 +25,7 @@ export type FromPage =
   | { t: "press" }
   | { t: "load"; n: number }
   | { t: "save"; n: number; value: string }
-  | { t: "height"; h: number };
+  | { t: "height"; h: number }
+  | { t: "scrolled" };
 
 export const STRATA = "strata-live";

@@ -20,13 +20,15 @@ export interface LivePageProps {
   scale?: number;
   /** how tall the page draws itself, for a host that fits its sheet to it */
   onHeight?(h: number): void;
+  /** the reader scrolled the page itself, once per page */
+  onScrolled?(): void;
 }
 
 const NO_EL = { current: null };
 const NO_DOC = { current: { maps: [] as number[][], text: "" } };
 
 /** One live HTML source, read for its notes outside the room: the room's reader wiring with no deck, asks or chapters. */
-export default function LivePage({ board, resource, scale = 1, onHeight }: LivePageProps) {
+export default function LivePage({ board, resource, scale = 1, onHeight, onScrolled }: LivePageProps) {
   const view = useBoardView(board);
   const src = view?.resources?.find((r) => r.id === resource) ?? null;
   // a page posted after the board was read isn't in it yet: read it again for each resource it lacks
@@ -41,7 +43,9 @@ export default function LivePage({ board, resource, scale = 1, onHeight }: LiveP
   const engineRef = useRef<HtmlEngine | null>(null);
   const heightRef = useRef(onHeight);
   heightRef.current = onHeight;
-  engineRef.current ??= liveEngine(() => at.current, () => marksRef.current, (h) => heightRef.current?.(h / scaleRef.current));
+  const scrolledRef = useRef(onScrolled);
+  scrolledRef.current = onScrolled;
+  engineRef.current ??= liveEngine(() => at.current, () => marksRef.current, (h) => heightRef.current?.(h / scaleRef.current), () => scrolledRef.current?.());
   const engine = engineRef.current;
   const scaleRef = useRef(scale);
   scaleRef.current = scale;

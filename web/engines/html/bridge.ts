@@ -459,4 +459,8 @@ new ResizeObserver(() => {
   if (h !== tall) { tall = h; send({ t: "height", h }); }
 }).observe(document.documentElement);
 
+// the host only needs to know the reader started down the page, so this is said once
+const scrolled = () => { if (scrollY < 40) return; removeEventListener("scroll", scrolled); send({ t: "scrolled" }); };
+addEventListener("scroll", scrolled, { passive: true });
+
 send({ t: "ready", words: walk().text.split(/\s+/).filter(Boolean).length });
