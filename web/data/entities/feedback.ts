@@ -5,7 +5,7 @@ export const FEEDBACK_LANE = "feedback";
 export const feedbackOps = {
   send(body: Record<string, unknown>): Op<{ id: string }> {
     return {
-      label: "save that note",
+      label: "send that feedback",
       lanes: [FEEDBACK_LANE],
       method: "POST",
       path: "/api/feedback",

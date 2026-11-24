@@ -1,8 +1,9 @@
 import { store as roomStore, type Store } from "./store.ts";
 import { confirmByShape } from "./entities/confirm.ts";
+import { needsWire } from "./offline-coverage.ts";
 
 /* The one save path: every write is an Op handed to mutate().
-   - Enqueue refuses at once while the wire is known down, unless the op waitsOffline; else it paints layers and marks queries stale.
+   - Enqueue refuses at once while the wire is known down, unless the op waitsOffline (saying what, from offline-coverage.ts); else it paints layers and marks queries stale.
    - Lanes keep order: an op starts when it heads every lane it names; a failed head holds its lanes.
    - One key per op, minted once and reused on every retry and on the pagehide flush.
    - 2xx confirms; a lost answer, deadline, 408/425/429 or 5xx is retried with backoff, paused while offline.
@@ -111,7 +112,7 @@ export function mintKey(): string {
 function saveError(message: string, extra: Partial<SaveError> = {}): SaveError {
   return Object.assign(new Error(message), extra);
 }
-const offline = () => saveError("offline — read only", { status: 0 });
+const offline = (method: string, path: string) => saveError(`offline — ${needsWire(method, path)}`, { status: 0 });
 const bytes = (s: string | undefined) => (s === undefined ? 0 : new TextEncoder().encode(s).length);
 const retryableStatus = (status: number) => status === 408 || status === 425 || status === 429 || status >= 500;
 
@@ -176,7 +177,7 @@ export class Mutator {
   }
 
   mutate<Res>(op: Op<Res>): Promise<Res> {
-    if (this.d.wire.down() && !op.waitsOffline) return Promise.reject(offline());
+    if (this.d.wire.down() && !op.waitsOffline) return Promise.reject(offline(op.method, op.path));
     if (!this.d.transport) return Promise.reject(saveError("the save path is not wired to data/api.ts yet"));
     return new Promise<Res>((resolve, reject) => {
       const waiter = { resolve: resolve as (v: unknown) => void, reject };
@@ -213,7 +214,7 @@ export class Mutator {
 
   /** Read-only POSTs: no lane, no key, no retry, no registry. */
   async call<Res>(method: string, path: string, body?: unknown): Promise<Res> {
-    if (this.d.wire.down()) throw offline();
+    if (this.d.wire.down()) throw offline(method, path);
     if (!this.d.transport) throw saveError("the save path is not wired to data/api.ts yet");
     const text = body === undefined ? undefined : JSON.stringify(body);
     const answer = await this.d.transport({ method, path, body: text, headers: text === undefined ? {} : { "Content-Type": "application/json" } });

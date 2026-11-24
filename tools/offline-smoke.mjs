@@ -33,8 +33,21 @@ try {
 
   await context.setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.locator(".connection-banner").getByText(/saved copies from/).waitFor();
-  assert.match(await page.locator(".connection-banner").innerText(), /changes are kept on this device/);
+  await page.locator(".connection-banner").getByText(/ saved today /).waitFor();
+  assert.match(await page.locator(".connection-banner").innerText(), /are kept on this device; other changes need a connection/);
+  // airplane mode: every read the coverage table says a Download saves answers from this device, none with the shelf's 503
+  const unanswered = await page.evaluate(async (urls) => {
+    const out = [];
+    for (const u of urls) {
+      const r = await fetch(u, { headers: { "X-Strata-Wire": "down" } }).catch(() => null);
+      if (!r || r.status === 503) out.push(u);
+    }
+    return out;
+  }, saved);
+  assert.deepEqual(unanswered, [], "a saved read failed offline");
+  assert.ok(saved.some((u) => u.includes("/api/review/tree?course=")), "review's tree is downloaded with the board's decks");
+  assert.ok(saved.some((u) => u.endsWith("/api/review")), "review is downloaded, not only kept from the last visit");
+  console.log(`✓ offline, all ${saved.length} saved reads answer from the device`);
   await page.getByRole("navigation", { name: "Strata" }).getByRole("button", { name: "Today", exact: true }).click();
   assert.ok(await page.locator(".connection-banner").isVisible(), "library must retain the offline notice");
   await page.setViewportSize({ width: 390, height: 844 });

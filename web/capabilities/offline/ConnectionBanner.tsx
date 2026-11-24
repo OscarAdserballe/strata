@@ -4,8 +4,15 @@ import { updateInterface } from "./offline.ts";
 import { grades } from "../../data/entities/grades.ts";
 import { outbox } from "../../data/outbox.ts";
 import ClashList from "./ClashList.tsx";
+import { waitingKinds } from "../../data/offline-coverage.ts";
+import { ledgerOf } from "./ledger.ts";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+const when = (at: number) => {
+  const days = Math.floor((new Date().setHours(0, 0, 0, 0) - new Date(at).setHours(0, 0, 0, 0)) / 86_400_000);
+  const time = new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return days <= 0 ? `today ${time}` : days === 1 ? `yesterday ${time}` : days < 7 ? `${days} days ago` : new Date(at).toLocaleDateString();
+};
 /** A sync with nothing to look at says so and goes. */
 const SYNCED_MS = 8000;
 
@@ -58,11 +65,13 @@ export default function ConnectionBanner() {
     const t = setTimeout(() => setRound(null), SYNCED_MS);
     return () => clearTimeout(t);
   }, [synced, clashes]);
-  let savedAt = connection.savedAt;
-  if (!savedAt) try {
-    const board = new URLSearchParams(location.search).get("board");
-    if (board) savedAt = Number(localStorage.getItem(`strata.offline.${board}`)) || null;
-  } catch { /* Old copies may not have a recorded date. */ }
+  // the board in front of the reader says when it was saved; the oldest copy any read touched is the fallback
+  let board: string | null = null;
+  try { board = new URLSearchParams(location.search).get("board"); } catch { /* no location */ }
+  const ledger = ledgerOf(board);
+  const savedAt = ledger?.at || connection.savedAt;
+  const savedLine = savedAt ? `${ledger?.title ? `${ledger.title} saved` : "saved copies from"} ${when(savedAt)}${ledger?.missed.length ? ` · ${plural(ledger.missed.length, "file")} missing` : ""}`
+    : board ? "this board isn't downloaded" : "saved date unavailable";
   const told = synced !== null && (synced > 0 || clashes > 0);
   const visible = connection.offline || connection.needsReload || told || clashes > 0;
   useLayoutEffect(() => {
@@ -80,7 +89,7 @@ export default function ConnectionBanner() {
   };
   const clashLine = told ? `Synced ${synced} · ${plural(clashes, "clash", "clashes")}` : clashes ? `${plural(clashes, "clash", "clashes")} from offline` : "";
   return <div ref={banner} className="connection-banner" role="status" aria-live="polite">
-    {connection.offline ? <span><strong>Offline</strong> · {waiting ? `${plural(waiting, "change")} kept on this device` : "changes are kept on this device"} · {savedAt ? `saved copies from ${new Date(savedAt).toLocaleString()}` : "saved date unavailable"}</span>
+    {connection.offline ? <span><strong>Offline</strong> · {waiting ? `${plural(waiting, "change")} kept on this device` : `${waitingKinds()} are kept on this device; other changes need a connection`} · {savedLine}</span>
       : <>
         {clashLine ? <span className="sync-line">{clashLine}</span> : null}
         {clashes ? <button onClick={() => setListOpen((o) => !o)} aria-expanded={listOpen}>{listOpen ? "Hide clashes" : "Show clashes"}</button> : null}

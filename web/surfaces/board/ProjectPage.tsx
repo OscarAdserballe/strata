@@ -8,6 +8,7 @@ import Verbs from "../../capabilities/sources/SourceVerbs.tsx";
 import type { BoardActions } from "../../capabilities/sources/useBoardActions.ts";
 import { boardProject, shortDay, STAR_CAP, type ProjectSource, type ProjectUnit } from "../../capabilities/today/projects.ts";
 import ProjectStar from "../../capabilities/today/ProjectStar.tsx";
+import { offlineHas, useLedger, useWireDown } from "../../capabilities/offline/ledger.ts";
 import { openTab } from "../../shell/screens.ts";
 import type { Tile } from "./boardTiles.ts";
 import "./project-page.css";
@@ -117,11 +118,14 @@ export default function ProjectPage(p: ProjectPageProps) {
   });
 
   const archived = !!plan.archivedAt;
+  const down = useWireDown();
+  const ledger = useLedger(boardId);
   const verbs = { onDel: p.onDel, onAside: p.onAside, onDistil: p.onDistil, onDistilWarm: p.onDistilWarm, onKeep: p.onKeep, onKeepWarm: p.onKeepWarm, onDone: p.onDone };
 
   const sourceRow = (s: ProjectSource) => {
     const t = tileOf.get(s.id);
     const issue = p.issues[s.id];
+    const away = down && ledger && offlineHas(boardId, s.id) === false;
     return <li key={s.id} className="pp-src" draggable={!archived}
       onDragStart={(e) => { drag.current = s.id; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", s.id); } catch { /* some engines refuse */ } }}
       onDragEnd={() => { drag.current = null; setOver(null); }}>
@@ -132,6 +136,7 @@ export default function ProjectPage(p: ProjectPageProps) {
             onClick={() => t && p.onOpen(t)}>{s.name}</button>}
       {t?.busy ? <span className="dk-spin" title="the model is reading this in" /> : null}
       {issue ? <span className="pp-issue">{issue.error} {issue.verb}</span> : null}
+      {away ? <span className="pp-issue" title="download the board while online to read it here">not on this device</span> : null}
       <span className="pp-sright">
         <button className={"pp-star" + (s.pinned ? " on" : "")} aria-pressed={s.pinned} title={s.pinned ? "On Today — click to unstar" : "Star: keep it on Today"}
           aria-label={(s.pinned ? "Unstar " : "Star ") + s.name} onClick={() => star(s)}>{s.pinned ? "★" : "☆"}</button>

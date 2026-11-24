@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { MutableRefObject } from "react";
-import { StrataAPI, StrataSourceText } from "../../data/api.ts";
+import { StrataAPI, StrataSourceText, StrataWireDown } from "../../data/api.ts";
 import { store as roomStore } from "../../data/store.ts";
 import { marksKey } from "../../data/entities/boards.ts";
 import { marksOn, useMarks } from "../../capabilities/annotate/useMarks.ts";
@@ -536,7 +536,9 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
     } catch (e) {
       // 404 is the ordinary never-distilled case, not a failure
       const err = e as { status?: number; message?: string };
-      setTrees((m) => ({ ...m, [sid]: err.status === 404 ? { missing: true } : { data: { status: "error", error: err.message } } }));
+      // a 503 from the shelf is a tree this device never saved, not a broken one
+      const said = err.status === 503 && StrataWireDown() ? "not saved on this device — download the board while online" : err.message;
+      setTrees((m) => ({ ...m, [sid]: err.status === 404 ? { missing: true } : { data: { status: "error", error: said } } }));
     }
   }
   useEffect(() => {

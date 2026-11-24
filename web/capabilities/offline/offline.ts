@@ -10,11 +10,30 @@ export function fetchAsset(url: string, init?: RequestInit): Promise<Response> {
 export async function saveOfflineUrl(url: string): Promise<void> {
   const target = new URL(url, location.href);
   const response = await StrataFetchForShelf(target);
-  if (response.status === 404 && target.pathname.endsWith("/tree")) return; // Optional trees may not have been generated.
-  if (!response.ok || response.headers.has("X-Strata-Shelf")) throw new Error("Download needs a live connection");
-  const kind = target.origin === location.origin && target.pathname.startsWith(StrataPath("/api/")) ? "api" : "shell";
-  const cache = await caches.open(`strata-off-v2-${kind}`);
-  await cache.put(target, await savedCopy(response));
+  const api = target.origin === location.origin && target.pathname.startsWith(StrataPath("/api/"));
+  // a 404 is the server's answer ("no tree yet"), so the copy answers offline as the server would
+  if (response.headers.has("X-Strata-Shelf")) throw new Error("needs a live connection");
+  if (!response.ok && !(api && response.status === 404)) throw new Error(`the server said ${response.status}`);
+  const cache = await caches.open(`strata-off-v2-${api ? "api" : "shell"}`);
+  try { await cache.put(target, await savedCopy(response)); }
+  catch { throw new Error("no room left on this device"); }
+}
+
+/** An image's bytes, into the worker's image cache, where every view of it looks first. */
+export async function saveImage(url: string): Promise<void> {
+  const target = new URL(url, location.href);
+  const cache = await caches.open("strata-images-v1");
+  if (await cache.match(target.href)) return;
+  const response = await StrataFetchForShelf(target);
+  if (!response.ok || response.headers.has("X-Strata-Shelf")) throw new Error(`the server said ${response.status}`);
+  try { await cache.put(target.href, response); }
+  catch { throw new Error("no room left on this device"); }
+}
+
+/** The text of a copy saveOfflineUrl just kept. */
+export async function savedText(url: string): Promise<string> {
+  const hit = await (await caches.open("strata-off-v2-api")).match(new URL(url, location.href));
+  return hit ? hit.text() : "";
 }
 
 async function savedCopy(response: Response): Promise<Response> {
