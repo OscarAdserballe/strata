@@ -8,7 +8,7 @@ import { imports, startImportPump } from "../imports/pump.ts";
 import { htmlProblems } from "../sources/check-html.ts";
 import { idOf } from "../../../shared/agent/ids.ts";
 import { agentRepo as a } from "./repo.ts";
-import { answerMcp } from "./mcp.ts";
+import { answerMcp, endMcp } from "./mcp.ts";
 import { listTokens, mintToken, revokeToken, uploadAllowed } from "./tokens.ts";
 
 const CHUNK = 512 * 1024;
@@ -16,6 +16,7 @@ const CHUNK = 512 * 1024;
 // Answered before the room's login gate: each checks its own token or signed link.
 export const agentPublicRoutes: Route[] = [
   route("POST", "/mcp", answerMcp, { receipt: "exempt" }),   // each write tool keys its own receipt from its `key` argument
+  route("DELETE", "/mcp", endMcp, { receipt: "atomic" }),
   route("GET", "/mcp", ({ res }) => { res.setHeader("Allow", "POST"); sendJson(res, 405, { error: "this MCP server answers POST only (no event stream)" }); }),
 
   route("PUT", /^\/api\/agent\/v1\/upload\/([a-zA-Z0-9_-]{8,80})$/, async ({ req, res, url, params, commit }) => {

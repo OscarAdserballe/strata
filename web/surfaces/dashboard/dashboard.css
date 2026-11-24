@@ -100,6 +100,9 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .r{display:flex;align-items:center;gap:12px;padding:13px 20px;border-bottom:1px solid var(--d-line);transition:background .15s}
 .r:hover{background:rgba(255,255,255,.55)}
 .r .t{flex:1;min-width:0;font:600 16px/1.3 var(--serif);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.by-claude{color:var(--d-go);max-width:22em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.by-claude::before{content:"· ";color:var(--d-mute)}
+.r-meta .by-claude::before{content:""}
 .r-meta{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--d-mute);white-space:nowrap}
 .tr-card.open{gap:10px}
 .tr-head{display:flex;flex-direction:column;gap:6px}
@@ -217,8 +220,8 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .ws-pip:hover{background:#fff}
 .ws-pip[aria-current]{background:#fff;color:var(--d-ink);box-shadow:0 0 0 1.5px var(--d-ink)}
 .ws-pip.add{margin-top:auto;background:none;border:1px dashed var(--d-line-2);color:var(--d-mute);font-weight:500}
-/* :focus-within keeps the drawer open while you write a new thread in it */
-.ws.railed .ws-list{position:absolute;z-index:20;left:8px;top:6px;bottom:6px;width:300px;padding:10px;border-radius:12px;background:#faf8f4;box-shadow:var(--d-sheet);
+/* beside the rail, never over it, so a letter stays clickable while the drawer is open; :focus-within keeps it open while you write */
+.ws.railed .ws-list{position:absolute;z-index:20;left:60px;top:6px;bottom:6px;width:300px;padding:10px;border-radius:12px;background:#faf8f4;box-shadow:var(--d-sheet);
   opacity:0;transform:translateX(-12px);pointer-events:none;transition:opacity .14s,transform .14s}
 .ws.railed[data-drawer] .ws-list,.ws.railed .ws-list:focus-within{opacity:1;transform:none;pointer-events:auto}
 .ws.railed .ws-new{background:linear-gradient(rgba(250,248,244,0),#faf8f4 12px)}

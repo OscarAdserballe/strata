@@ -7,7 +7,7 @@ import { htmlSource, prepareSource, writeSource, type PreparedSource } from "../
 import { bytesOf } from "../sources/blobs.ts";
 import { htmlProblems } from "../sources/check-html.ts";
 import { DashError, stageOf } from "./dashboard.ts";
-import { dashboardRepo as q, type PressRow, type TaskRow, type VersionRow } from "./repo.ts";
+import { dashboardRepo as q, type ClaimRow, type PressRow, type TaskRow, type VersionRow } from "./repo.ts";
 import type { Link } from "./dashboard.ts";
 
 const fail = (msg: string): never => { throw new DashError(msg); };
@@ -53,6 +53,7 @@ function press(t: TaskRow, kind: string, stage: string, version: number | null, 
   const at = now();
   const row: PressRow = { id: genId("p_"), task_id: t.id, kind, stage, version, at, session_url: sessionUrl };
   q.insPress.run(row.id, row.task_id, row.kind, row.stage, row.version, row.at, row.session_url);
+  q.dropClaim.run(t.id);   // a new round: whichever run is woken or looks next takes it
   moveTo(t, "implementing", at);
   return row;
 }
@@ -67,14 +68,45 @@ export function checkPress(id: string, kind: unknown): string {
   return s;
 }
 
+// ---------- claims: one run per thread ----------
+
+/** A run is one MCP session (Mcp-Session-Id); it holds a thread in Implementing for this long after its last open or post. */
+export const LEASE_MS = 60 * 60_000;
+const mins = (ms: number): string => { const m = Math.max(1, Math.round(ms / 60_000)); return `${m} min`; };
+const live = (id: string, at: number): ClaimRow | null => { const c = q.claimOf.get(id); return c && c.until > at ? c : null; };
+const theirs = (id: string, run: string | null, at: number): ClaimRow | null => { const c = live(id, at); return c && c.run !== run ? c : null; };
+function refuse(c: ClaimRow, at: number): never {
+  return fail(`Another run is working on this thread: it took it ${mins(at - c.at)} ago and holds it for ${mins(c.until - at)} more. Leave it to that run and take a thread no run has claimed.`);
+}
+
+/** Takes or renews this run's lease on a thread in Implementing; refused while another run holds it. Runs inside the commit. */
+export function claim(id: string, run: string | null): "took" | "renewed" | null {
+  const t = thread(id), at = now();
+  if (stageOf(t) !== "implementing") return null;
+  const other = theirs(id, run, at);
+  if (other) refuse(other, at);
+  if (!run) return null;
+  const had = live(id, at);
+  q.putClaim.run(id, run, at + LEASE_MS, at);
+  return had ? "renewed" : "took";
+}
+
+/** A run that ends (DELETE /mcp) lets its threads go at once instead of when their leases lapse. */
+export const releaseRun = (run: string): number => Number(q.dropRun.run(run).changes);
+
 // ---------- the agent's three calls ----------
 
 export interface Note { id: string; on: string | null; text: string }
 export interface Thread { id: string; title: string; text: string; stage: string; page: string | null; notes: Note[] }
 
-export function board(): { id: string; title: string; stage: string }[] {
-  const order = ["implementing", "decide", "review", "todo", "thinking"];
-  return q.tasks.all().map((t) => ({ id: t.id, title: t.title, stage: stageOf(t) }))
+/** claimed, on a thread in Implementing a run holds: "you", or how long another run has had it and holds it for. */
+export function board(run: string | null = null): { id: string; title: string; stage: string; claimed?: string }[] {
+  const order = ["implementing", "decide", "review", "todo", "thinking"], at = now();
+  const claims = new Map(q.claims.all().filter((c) => c.until > at).map((c) => [c.task_id, c]));
+  return q.tasks.all().map((t) => {
+    const stage = stageOf(t), c = stage === "implementing" ? claims.get(t.id) : undefined;
+    return { id: t.id, title: t.title, stage, ...(c ? { claimed: c.run === run ? "you" : `another run, for ${mins(at - c.at)}; ${mins(c.until - at)} left` } : {}) };
+  })
     .filter((t) => !ended(t.stage))
     .sort((x, y) => order.indexOf(x.stage) - order.indexOf(y.stage));
 }
@@ -99,8 +131,10 @@ export function open(id: string): Thread {
 
 
 /** Checks a post's shape and does the awaiting a page needs; the returned function writes, inside the commit. */
-export async function preparePost(id: string, raw: { page?: unknown; replies?: unknown; lands?: unknown; ask?: unknown; heard?: unknown }): Promise<() => string> {
+export async function preparePost(id: string, raw: { page?: unknown; replies?: unknown; lands?: unknown; ask?: unknown; heard?: unknown }, run: string | null = null): Promise<() => string> {
   const t = q.task.get(id) ?? fail(`No thread ${id}. dashboard_board lists them.`);
+  const other = stageOf(t) === "implementing" ? theirs(id, run, now()) : null;
+  if (other) refuse(other, now());
   if (raw.page === undefined && raw.replies === undefined) fail("Post a page, replies, or both.");
   const page = raw.page === undefined ? undefined : typeof raw.page === "string" && raw.page.trim() ? raw.page : fail("page is the HTML of the next version.");
   if (page !== undefined && Buffer.byteLength(page) > MAX_UPLOAD_BYTES) fail("page is too big.");
@@ -123,6 +157,11 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
   return () => {
     const said: string[] = [];
     const at = now();
+    if (stageOf(q.task.get(id)!) === "implementing") {
+      const other = theirs(id, run, at);
+      if (other) refuse(other, at);
+      if (run && !prepared) q.putClaim.run(id, run, at + LEASE_MS, at);
+    }
     for (const [mid, text] of replies) {
       const m = q.noteMark.get(mid)!;
       q.insAgentReply.run(genId("mr-"), m.board_id, mid, m.resource_id, text, at, at);
@@ -136,6 +175,7 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
       const rid = writeSource(dispatchBoard(), prepared);
       q.insVersion.run(id, n, rid, lands, at, ask, heard);
       moveTo(cur, lands, at);
+      q.dropClaim.run(id);
       said.push(`v${n} posted; the thread is in ${lands === "finish" ? "Finish" : lands === "decide" ? "Decide" : "Review"}`);
     }
     return said.join("; ") + ".";

@@ -1,6 +1,7 @@
 // Dispatch: a thread's pages kept as versions, notes on the version they were written on, and where a posted page lands.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
 import { useServer } from "../support/server.ts";
 
 const server = useServer({ env: { STRATA_ROUTINE_STUB: "1" } });
@@ -205,6 +206,57 @@ test("Later and To thinking take a thread out of Dispatch with its pages, and Se
   assert.deepEqual([(await thread(id)).stage, (await thread(id)).versions.length], ["decide", 2]);
   await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "thinking" });
   assert.equal((await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "implementing" })).status, 400, "Implementing is still only reached by a press");
+});
+
+test("a run claims the thread it opens: another run is refused until the first posts, ends its session or its lease lapses", async () => {
+  async function run(): Promise<{ id: string; call: (name: string, args?: Record<string, unknown>) => Promise<{ text: string; isError: boolean }> }> {
+    const init = await server.fetch("/mcp", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "initialize", params: { protocolVersion: "2025-06-18" } }) });
+    const sid = init.headers.get("mcp-session-id") ?? "";
+    assert.match(sid, /^run_[A-Za-z0-9_-]{16}$/, "initialize hands out a session id");
+    return { id: sid, call: async (name, args = {}) => {
+      const r = await server.fetch("/mcp", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "Mcp-Session-Id": sid },
+        body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "tools/call", params: { name, arguments: args } }) });
+      const res = (await r.json()).result;
+      return { text: res.content[0].text as string, isError: !!res.isError };
+    } };
+  }
+  const [r1, r2] = [await run(), await run()];
+  assert.notEqual(r1.id, r2.id);
+  const id = await newThread("Two runs, one thread");
+  await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  const claimedOn = async (r: typeof r1) => (JSON.parse((await r.call("dashboard_board")).text) as { id: string; claimed?: string }[]).find((t) => t.id === id)!.claimed;
+  assert.equal(await claimedOn(r1), undefined, "nobody holds a freshly sent thread");
+
+  assert.equal((await r1.call("dashboard_open", { id })).isError, false);
+  assert.equal(await claimedOn(r1), "you");
+  assert.match(String(await claimedOn(r2)), /^another run, for 1 min; 60 min left$/);
+  const refused = await r2.call("dashboard_open", { id });
+  assert.ok(refused.isError && /Another run is working on this thread/.test(refused.text), refused.text);
+  const anon = await call("dashboard_open", { id });
+  assert.ok(anon.isError, "a client without a session can't take it either");
+  const posted = await r2.call("dashboard_post", { key: `claim-post-${Date.now()}`, id, page: page("Mine", "Second run's page.") });
+  assert.ok(posted.isError && /Another run/.test(posted.text), posted.text);
+  assert.equal((await thread(id)).versions.length, 0, "the refused post wrote nothing");
+  assert.equal((await r1.call("dashboard_open", { id })).isError, false, "the holder opens it again, renewing");
+
+  const ended = await server.fetch("/mcp", { method: "DELETE", headers: { Authorization: `Bearer ${token}`, "Mcp-Session-Id": r1.id, "Idempotency-Key": `end-${Date.now()}` } });
+  assert.deepEqual([ended.status, await ended.json()], [200, { released: 1 }]);
+  assert.equal((await r2.call("dashboard_open", { id })).isError, false, "an ended run's thread is free");
+  assert.ok((await r1.call("dashboard_open", { id })).isError, "and now the second run holds it");
+  const done = await r2.call("dashboard_post", { key: `claim-post-${Date.now()}-2`, id, page: page("Done", "Second run's page."), ask: "Two runs.", heard: "One wins." });
+  assert.equal(done.isError, false, done.text);
+  assert.equal(await claimedOn(r1), undefined, "a posted page lets the thread go");
+
+  await send(`/api/dashboard/tasks/${id}/press`, "POST", { kind: "send" });
+  assert.equal((await r1.call("dashboard_open", { id })).isError, false, "a new press is a new round, for whichever run comes");
+  const db = new DatabaseSync(server.db, { timeout: 5000 });
+  try {
+    db.prepare("UPDATE dashboard_claims SET until = ? WHERE task_id = ?").run(Date.now() - 1, id);
+    assert.equal((await r2.call("dashboard_open", { id })).isError, false, "a lapsed lease is anyone's");
+    const evs = db.prepare("SELECT event, json_extract(props,'$.took') AS took FROM events WHERE session = ? AND event IN ('dispatch_claim','dispatch_release') ORDER BY id").all(r1.id) as { event: string; took: string | null }[];
+    assert.deepEqual(evs.map((e) => `${e.event}${e.took ? `:${e.took}` : ""}`), ["dispatch_claim:took", "dispatch_claim:renewed", "dispatch_release", "dispatch_claim:took"], "claims and releases are logged per run");
+  } finally { db.close(); }
 });
 
 test("runs: presses that shared a session form one run, each with how long it waited for its page", async () => {

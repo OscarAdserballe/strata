@@ -108,3 +108,24 @@ test("an agent captures a youtube link unstudied, and is told plainly when there
   assert.match(broken.text, /Couldn't fetch that video's transcript: Firecrawl HTTP 500/);
   assert.equal(rows("SELECT id FROM resources WHERE board_id = ?", board).length, 1);
 });
+
+test("the agent's capture of a link the board already holds answers with that source, even when two land at once", async () => {
+  const board = await newBoard(server, { title: "Agent talks" });
+  const token = ((await server.api("/api/agent/tokens", { method: "POST", body: JSON.stringify({ name: "capture twice", write: true }) })).body as { token: string }).token;
+  let n = 0;
+  const call = async (url: string) => {
+    const r = await server.fetch("/mcp", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "tools/call", params: { name: "capture", arguments: { board, key: `cap-same-${n}-${Date.now()}`, url } } }) });
+    const res = (await r.json()).result;
+    return { text: res.content[0].text as string, isError: !!res.isError };
+  };
+  const scrapes = asked.length;
+  const [a, b] = await Promise.all([call("https://www.youtube.com/watch?v=jNQXAC9IVRw&utm_source=x"), call("https://youtu.be/jNQXAC9IVRw?si=y")]);
+  assert.equal(a.isError || b.isError, false, `${a.text} | ${b.text}`);
+  assert.equal([a, b].filter((r) => /^Captured /.test(r.text)).length, 1, `${a.text} | ${b.text}`);
+  assert.match([a, b].find((r) => !/^Captured /.test(r.text))!.text, /^Already on this board as src_\S+ \("Me at the zoo/);
+  assert.equal(rows("SELECT id FROM resources WHERE board_id = ?", board).length, 1);
+  const third = await call("https://m.youtube.com/watch?v=jNQXAC9IVRw");
+  assert.match(third.text, /^Already on this board as src_/);
+  assert.equal(asked.length - scrapes, 2, "a link already on the board isn't fetched again");
+});

@@ -58,11 +58,13 @@ Run `--quick` after each step and the whole thing before a PR. Each stage serves
     it needs; a server feature is `routes.ts` + `repo.ts` + its logic; code both runtimes run is in
     `shared/`.
 
-13. **Agents see what a board holds.** A new table with `board_id` or `course` gets a kind in
+13. **Agents see what a board holds, and do what the reader does.** A new table with `board_id` or `course` gets a kind in
     `server/features/agent/kinds.ts` (or a reason in its `HIDDEN`); a new agent write is an op in
     `server/features/agent/ops.ts`, never a new tool. The one exception is the dashboard
-    (`server/features/dashboard`): a separate app the room only hosts, with its own `dashboard_*`
-    tools because no board owns it. See [docs/agent.md](docs/agent.md).
+    (`server/features/dashboard`): a separate app the room only hosts, with its own `dashboard_read`
+    and `dashboard_apply` (ops in `server/features/dashboard/ops.ts`) because no board owns it. A new
+    write route says in `server/features/agent/coverage.ts` how an agent does the same, or why it
+    can't. See [docs/agent.md](docs/agent.md).
 
 ## Branches
 
