@@ -2,7 +2,6 @@
 import { StrataAPI } from "../../data/api.ts";
 import { pageState } from "../../data/entities/pagestate.ts";
 import { HtmlEngine } from "../../engines/html/HtmlEngine.ts";
-import { drawnAs } from "../../engines/html/drawn.ts";
 import { marksOn, type LiveSelection, type OpenMark } from "../annotate/useMarks.ts";
 import type { FoldHost } from "../fold/folds.ts";
 
@@ -22,7 +21,7 @@ export interface LiveMarks {
 }
 
 export const liveUrlOf = (at: LiveAt): string | null =>
-  at.bid && at.src && drawnAs(at.src.kind) === "html" ? StrataAPI.resourceLiveUrl(at.bid, at.src.id, at.src.generation) : null;
+  at.bid && at.src && at.src.kind === "html" ? StrataAPI.resourceLiveUrl(at.bid, at.src.id, at.src.generation) : null;
 
 /** The sandboxed page's engine, its selections and saved state routed to the source still open when they arrive. */
 export function liveEngine(at: () => LiveAt, marks: () => LiveMarks | null, onHeight?: (h: number) => void): HtmlEngine {
@@ -51,7 +50,7 @@ export function liveEngine(at: () => LiveAt, marks: () => LiveMarks | null, onHe
 
 /** Hands the open page its marks, and which one is open. */
 export function paintLiveMarks(engine: HtmlEngine, at: LiveAt, open: string | null | undefined): void {
-  if (!at.src || drawnAs(at.src.kind) !== "html") return;
+  if (!at.src || at.src.kind !== "html") return;
   engine.paint(marksOn(at.bid, at.src).map((m) => ({ id: m.id, start: m.start, end: m.end, quote: m.quote, note: !!m.note, box: m.box ?? null })), open ?? null);
 }
 
