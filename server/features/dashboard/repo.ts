@@ -26,6 +26,7 @@ export const dashboardRepo = {
   setTask: stmt("UPDATE dashboard_tasks SET title=?, body=?, state=?, waiting_on=?, parent_id=?, links=?, prompt=?, pinned_at=?, cleared_at=?, updated_at=?, stage=?, morning_at=? WHERE id = ?"),
   updates: stmt<UpdateRow>("SELECT * FROM dashboard_updates ORDER BY at, rowid"),
   updatesOf: stmt<UpdateRow>("SELECT * FROM dashboard_updates WHERE task_id = ? ORDER BY at, rowid"),
+  insUpdate: stmt("INSERT INTO dashboard_updates (id, task_id, at, text, from_json, links) VALUES (?,?,?,?,?,?)"),
   inboxOpen: stmt<InboxRow>("SELECT * FROM dashboard_inbox WHERE handled_at IS NULL ORDER BY at, rowid"),
   inboxAll: stmt<InboxRow>("SELECT * FROM dashboard_inbox ORDER BY at, rowid"),
   inboxDroppedSince: stmt<InboxRow>("SELECT * FROM dashboard_inbox WHERE outcome = 'dropped' AND handled_at >= ? ORDER BY handled_at, rowid"),

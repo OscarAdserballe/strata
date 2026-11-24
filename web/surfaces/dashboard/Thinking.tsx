@@ -3,7 +3,7 @@ import { StrataWhy } from "../../data/api.ts";
 import { dash, useDashBoard, type DashTask } from "../../data/entities/dashboard.ts";
 import { toast } from "../../shell/layers.ts";
 import Writer from "../../capabilities/write/Writer.tsx";
-import { Grow, Src, useTyped } from "./parts.tsx";
+import { ByClaude, Grow, Src, useTyped } from "./parts.tsx";
 import { move, saveText } from "./moves.ts";
 
 /** Thinking: one thread's notes open on the sheet, to-do waiting on the left. */
@@ -21,7 +21,7 @@ export default function Thinking() {
     <div className="ws">
       <aside className="ws-list" aria-label="Threads">
         {open.map((x) => <button key={x.id} className={"ws-card" + (t?.id === x.id ? " on" : "")} onClick={() => setSel(x.id)}>
-          <span className="t">{x.title}</span><span className="m">{x.links[0]?.ref ?? x.createdFrom?.source ?? ""}</span></button>)}
+          <span className="t">{x.title}</span><span className="m">{x.links[0]?.ref ?? x.createdFrom?.source ?? ""}<ByClaude t={x} /></span></button>)}
         {rest.length ? <h3 className="ws-group">To-do</h3> : null}
         {rest.map((x) => <button key={x.id} className="ws-card wait dim" onClick={() => take(x)} title="Open in Thinking"><span className="t">{x.title}</span></button>)}
         {!open.length && !rest.length ? <p className="ws-none">Nothing to think about yet. Keep threads from the inbox in to-do.</p> : null}
