@@ -1,15 +1,18 @@
-// MCP over plain HTTP: one POST per JSON-RPC message, answered with JSON. No sessions, no streams.
-import { createHash } from "node:crypto";
+// MCP over plain HTTP: one POST per JSON-RPC message, answered with JSON. No streams.
+// initialize hands out an Mcp-Session-Id that the client sends back; it is never stored, only used to tell one run from another.
+import { createHash, randomUUID } from "node:crypto";
 import { logEvent } from "../../platform/events/events.ts";
 import { APP } from "../../platform/config.ts";
 import { db } from "../../platform/db/db.ts";
 import { now } from "../../platform/db/sql.ts";
 import { RECEIPT_KEY, receiptStore } from "../../platform/db/receipts.ts";
 import { sendJson } from "../../platform/http/http.ts";
+import type { IncomingMessage } from "node:http";
 import type { Ctx } from "../../platform/router/router.ts";
 import { AgentError } from "./kinds.ts";
 import { callerOf, type Caller } from "./tokens.ts";
 import { TOOL_BY_NAME, TOOLS, type Env } from "./tools.ts";
+import { renewClaims } from "../dashboard/dispatch.ts";
 
 const PROTOCOLS = ["2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"];
 const INSTRUCTIONS = "Strata is the user's reading room: boards of sources, flashcards and notes. Call whoami first to find the board, then get_context on it. Kept cards (<board>/kept) are what the user chose to hold onto; treat them as the core of what they know. Read get_guide before apply or request_upload; a deck (add_deck) or a primer (set_primer) is refused without the receipt that ends get_guide \"flashcards\" or \"primer\".";
@@ -41,6 +44,7 @@ export async function answerMcp(ctx: Ctx): Promise<void> {
   switch (msg.method) {
     case "initialize": {
       const asked = String(msg.params?.protocolVersion ?? "");
+      res.setHeader("Mcp-Session-Id", `run-${randomUUID()}`);
       sendJson(res, 200, result(id, {
         protocolVersion: PROTOCOLS.includes(asked) ? asked : PROTOCOLS[0],
         capabilities: { tools: { listChanged: false } },
@@ -69,10 +73,11 @@ async function callTool(ctx: Ctx, id: Id, caller: Caller, params: Record<string,
   const answer = (text: string, isError = false) => sendJson(res, 200, result(id, said(text, isError)));
   if (!caller.scopes.has(tool.scope)) { answer(`This token can only read. Make one with write access in Strata (Desk → Connect an agent) to use ${name}.`, true); return; }
   const args = (params.arguments && typeof params.arguments === "object" ? params.arguments : {}) as Record<string, unknown>;
-  const env: Env = { req, caller };
+  const env: Env = { req, caller, run: runOf(req, caller) };
   const t0 = performance.now();
   try {
-    if ("read" in tool) { answer(tool.read(args, env)); return; }
+    if ("read" in tool && !tool.claims) { answer(tool.read(args, env)); return; }
+    if ("read" in tool) { ctx.commit(() => ({ status: 200, body: result(id, said(tool.read(args, env))) })); return; }
     const key = String(args.key ?? "");
     if (!RECEIPT_KEY.test(key)) throw new AgentError("key is a fresh id for this write: 8–80 letters, digits or dashes.");
     const { key: _key, ...rest } = args;
@@ -90,6 +95,7 @@ async function callTool(ctx: Ctx, id: Id, caller: Caller, params: Record<string,
     ctx.commit(() => {
       const again = replay();
       const text = again ?? write();
+      renewClaims(env.run);
       if (again === null) store().put({ key: rkey, method: "MCP", path: name, body_hash: hash, status: 200, body: text, rev: null, created_at: now() });
       return { status: 200, body: result(id, said(text)) };
     });
@@ -99,4 +105,11 @@ async function callTool(ctx: Ctx, id: Id, caller: Caller, params: Record<string,
   } finally {
     logEvent(db, APP, "agent_call", { tool: name, ms: Math.round(performance.now() - t0), token: caller.id }, null);
   }
+}
+
+const SESSION = /^[\x21-\x7e]{8,128}$/;
+/** The run a call comes from: its MCP session, or the token alone for a client that never sent one back. */
+function runOf(req: IncomingMessage, caller: Caller): string {
+  const s = req.headers["mcp-session-id"];
+  return typeof s === "string" && SESSION.test(s) ? `${caller.id}:${s}` : `${caller.id}:no-session`;
 }

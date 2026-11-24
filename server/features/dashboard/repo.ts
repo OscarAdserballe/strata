@@ -13,6 +13,7 @@ export interface PressRow { id: string; task_id: string; kind: string; stage: st
 export interface NoteRow { id: string; resource_id: string; quote: string; note: string; box: string | null; created_at: number }
 export interface ReplyRow { id: string; mark_id: string; author: string; text: string; created_at: number }
 export interface PadRow { text: string; rev: number; updated_at: number }
+export interface ClaimRow { task_id: string; run: string; at: number; until: number }
 export interface RoutineRow { url: string; token: string; ran_at: number | null; session_url: string | null; error: string | null; updated_at: number }
 
 export const dashboardRepo = {
@@ -42,6 +43,13 @@ export const dashboardRepo = {
   pressesOf: stmt<PressRow>("SELECT * FROM dashboard_presses WHERE task_id = ? ORDER BY at, rowid"),
   lastPress: stmt<PressRow>("SELECT * FROM dashboard_presses WHERE task_id = ? ORDER BY at DESC, rowid DESC LIMIT 1"),
   insPress: stmt("INSERT INTO dashboard_presses (id, task_id, kind, stage, version, at, session_url) VALUES (?,?,?,?,?,?,?)"),
+  // Claims: which run holds a thread in implementing, until when.
+  claim: stmt<ClaimRow>("SELECT * FROM dashboard_claims WHERE task_id = ?"),
+  claims: stmt<ClaimRow>("SELECT * FROM dashboard_claims WHERE until > ?"),
+  putClaim: stmt(`INSERT INTO dashboard_claims (task_id, run, at, until) VALUES (?,?,?,?)
+    ON CONFLICT(task_id) DO UPDATE SET run = excluded.run, at = excluded.at, until = excluded.until`),
+  renewClaims: stmt("UPDATE dashboard_claims SET until = ? WHERE run = ? AND until > ?"),
+  dropClaim: stmt("DELETE FROM dashboard_claims WHERE task_id = ?"),
   // The dashboard's revision: every write stamps a thread's updated_at or an inbox item's at or handled_at.
   dashRev: stmt<{ rev: number }>(`SELECT COALESCE(MAX(r), 0) AS rev FROM (SELECT MAX(updated_at) AS r FROM dashboard_tasks
     UNION ALL SELECT MAX(COALESCE(handled_at, at)) FROM dashboard_inbox)`),

@@ -7,7 +7,7 @@ import { htmlSource, prepareSource, writeSource, type PreparedSource } from "../
 import { bytesOf } from "../sources/blobs.ts";
 import { htmlProblems } from "../sources/check-html.ts";
 import { DashError, stageOf } from "./dashboard.ts";
-import { dashboardRepo as q, type PressRow, type TaskRow, type VersionRow } from "./repo.ts";
+import { dashboardRepo as q, type ClaimRow, type PressRow, type TaskRow, type VersionRow } from "./repo.ts";
 import type { Link } from "./dashboard.ts";
 
 const fail = (msg: string): never => { throw new DashError(msg); };
@@ -53,6 +53,8 @@ function press(t: TaskRow, kind: string, stage: string, version: number | null, 
   const at = now();
   const row: PressRow = { id: genId("p_"), task_id: t.id, kind, stage, version, at, session_url: sessionUrl };
   q.insPress.run(row.id, row.task_id, row.kind, row.stage, row.version, row.at, row.session_url);
+  // whichever run held it last has posted or let go: the run this press wakes starts unclaimed
+  q.dropClaim.run(t.id);
   moveTo(t, "implementing", at);
   return row;
 }
@@ -67,14 +69,37 @@ export function checkPress(id: string, kind: unknown): string {
   return s;
 }
 
+// ---------- claims ----------
+// A run is one MCP session. Opening a thread in implementing claims it; another run is refused it until the claim lapses.
+// Long, because a build can go an hour without calling Strata; any write from the run renews it.
+export const LEASE = 90 * 60_000;
+
+const clock = (ms: number): string => `${new Date(ms).toISOString().slice(11, 16)} UTC`;
+const live = (c: ClaimRow | undefined, at: number): ClaimRow | undefined => (c && c.until > at ? c : undefined);
+function heldElsewhere(id: string, run: string, at: number): ClaimRow | undefined {
+  const c = live(q.claim.get(id), at);
+  return c && c.run !== run ? c : undefined;
+}
+const taken = (c: ClaimRow): string =>
+  `Another run is working on this thread: it opened it at ${clock(c.at)}, and its claim lapses at ${clock(c.until)} unless it writes again. Skip it.`;
+
+/** Every write a run makes keeps its claims alive. */
+export function renewClaims(run: string): void { const at = now(); q.renewClaims.run(at + LEASE, run, at); }
+
 // ---------- the agent's three calls ----------
 
 export interface Note { id: string; on: string | null; text: string }
 export interface Thread { id: string; title: string; text: string; stage: string; page: string | null; notes: Note[] }
+export interface BoardRow { id: string; title: string; stage: string; claimed?: string }
 
-export function board(): { id: string; title: string; stage: string }[] {
+export function board(run: string): BoardRow[] {
   const order = ["implementing", "decide", "review", "todo", "thinking"];
-  return q.tasks.all().map((t) => ({ id: t.id, title: t.title, stage: stageOf(t) }))
+  const at = now();
+  const held = new Map(q.claims.all(at).map((c) => [c.task_id, c]));
+  return q.tasks.all().map((t): BoardRow => {
+    const stage = stageOf(t), c = stage === "implementing" ? held.get(t.id) : undefined;
+    return { id: t.id, title: t.title, stage, ...(c ? { claimed: c.run === run ? "by you" : `by another run, until ${clock(c.until)}` } : {}) };
+  })
     .filter((t) => !ended(t.stage))
     .sort((x, y) => order.indexOf(x.stage) - order.indexOf(y.stage));
 }
@@ -90,8 +115,14 @@ function notesOf(v: VersionRow | undefined, presses: PressRow[]): Note[] {
   return [...words, ...pressed].sort((x, y) => x.at - y.at).map((x) => x.note);
 }
 
-export function open(id: string): Thread {
+/** Runs inside a commit: opening a thread in implementing claims it for this run, or is refused while another run holds it. */
+export function open(id: string, run: string): Thread {
   const t = q.task.get(id) ?? fail(`No thread ${id}. dashboard_board lists them.`);
+  if (stageOf(t) === "implementing") {
+    const at = now(), other = heldElsewhere(t.id, run, at);
+    if (other) fail(taken(other));
+    q.putClaim.run(t.id, run, live(q.claim.get(t.id), at)?.at ?? at, at + LEASE);
+  }
   const vs = q.versionsOf.all(id), last = vs[vs.length - 1];
   return { id: t.id, title: t.title, text: t.body, stage: stageOf(t), page: last ? (bytesOf(last.resource_id)?.toString("utf-8") ?? null) : null, notes: notesOf(last, q.pressesOf.all(id)) };
 }
@@ -99,8 +130,10 @@ export function open(id: string): Thread {
 
 
 /** Checks a post's shape and does the awaiting a page needs; the returned function writes, inside the commit. */
-export async function preparePost(id: string, raw: { page?: unknown; replies?: unknown; lands?: unknown; ask?: unknown; heard?: unknown }): Promise<() => string> {
+export async function preparePost(id: string, raw: { page?: unknown; replies?: unknown; lands?: unknown; ask?: unknown; heard?: unknown }, run: string): Promise<() => string> {
   const t = q.task.get(id) ?? fail(`No thread ${id}. dashboard_board lists them.`);
+  const before = stageOf(t) === "implementing" ? heldElsewhere(id, run, now()) : undefined;
+  if (before) fail(taken(before));
   if (raw.page === undefined && raw.replies === undefined) fail("Post a page, replies, or both.");
   const page = raw.page === undefined ? undefined : typeof raw.page === "string" && raw.page.trim() ? raw.page : fail("page is the HTML of the next version.");
   if (page !== undefined && Buffer.byteLength(page) > MAX_UPLOAD_BYTES) fail("page is too big.");
@@ -123,6 +156,8 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
   return () => {
     const said: string[] = [];
     const at = now();
+    const other = stageOf(q.task.get(id)!) === "implementing" ? heldElsewhere(id, run, at) : undefined;
+    if (other) fail(taken(other));
     for (const [mid, text] of replies) {
       const m = q.noteMark.get(mid)!;
       q.insAgentReply.run(genId("mr-"), m.board_id, mid, m.resource_id, text, at, at);
@@ -136,6 +171,7 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
       const rid = writeSource(dispatchBoard(), prepared);
       q.insVersion.run(id, n, rid, lands, at, ask, heard);
       moveTo(cur, lands, at);
+      q.dropClaim.run(id);
       said.push(`v${n} posted; the thread is in ${lands === "finish" ? "Finish" : lands === "decide" ? "Decide" : "Review"}`);
     }
     return said.join("; ") + ".";

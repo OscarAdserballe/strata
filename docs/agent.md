@@ -40,8 +40,8 @@ revokes them.
 | `create_board` | A new board, with a handle and a purpose |
 | `dashboard_add_items` | Tasks into the dashboard's inbox: a title, a line of context and where it came from, for the reader to send on or drop |
 | `dashboard_read` | The dashboard as Markdown: every thread by stage (to-do, thinking, decide, implementing, review) with notes and links, then the inbox |
-| `dashboard_board` | Dispatch: every open thread as JSON `[{ id, title, stage }]`, implementing first |
-| `dashboard_open` | Dispatch: one thread `{ id, title, text, stage, page, notes: [{ id, on, text }] }`, the newest version's page and the notes on it |
+| `dashboard_board` | Dispatch: every open thread as JSON `[{ id, title, stage, claimed? }]`, implementing first |
+| `dashboard_open` | Dispatch: one thread `{ id, title, text, stage, page, notes: [{ id, on, text }] }`, the newest version's page and the notes on it; claims a thread in implementing for this run |
 | `dashboard_post` | Dispatch: `{ page?, replies?, ask?, heard? }`, the next version, the ask it answers and how Claude read it, and replies under the reader's notes |
 
 Every answer is Markdown, cut to about 6k tokens (up to 24k with `max_tokens`), and ends with the exact
@@ -92,6 +92,12 @@ Go in Decide → Review; sent back in Review → Review; Go in Review → done. 
 agent as the newest note, on nothing. Sending and both presses wake the routine as Run now does, and the
 session it answered with is kept on the press; `STRATA_ROUTINE_STUB=1` (the preview sets it) logs the wake
 instead. Decide and Implementing are reached only this way; Focus leaves Dispatch threads out of its Review.
+Two runs can wake at once, so a run claims what it works on (`dashboard_claims`). A run is one MCP session:
+`initialize` hands out an `Mcp-Session-Id` that the client sends back, never stored. `dashboard_open` on a
+thread in implementing claims it for 90 minutes; every write from that run renews the claim, posting the page
+drops it, and so does the next press. While another run holds a thread, `dashboard_open` and `dashboard_post`
+refuse it and `dashboard_board` marks it `claimed`, so the second run skips it. A client that sends no session
+is one run per token.
 Every thread is work or personal (`area`): the page shows one area at a time, and an item that names
 no area goes where its source suggests. The older `state`, `pinned_at` and `morning_at` columns, the updates,
 sources and pad tables stay in the database; nothing writes them but the mirror of `stage`.

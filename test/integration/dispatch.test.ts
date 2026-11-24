@@ -1,6 +1,7 @@
 // Dispatch: a thread's pages kept as versions, notes on the version they were written on, and where a posted page lands.
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { DatabaseSync } from "node:sqlite";
 import { useServer } from "../support/server.ts";
 
 const server = useServer({ env: { STRATA_ROUTINE_STUB: "1" } });
@@ -205,4 +206,48 @@ test("Later and To thinking take a thread out of Dispatch with its pages, and Se
   assert.deepEqual([(await thread(id)).stage, (await thread(id)).versions.length], ["decide", 2]);
   await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "thinking" });
   assert.equal((await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "implementing" })).status, 400, "Implementing is still only reached by a press");
+});
+
+test("a run that opens a thread in implementing holds it: a second run is refused it until the first posts its page", async () => {
+  const init = await server.fetch("/mcp", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "initialize", params: { protocolVersion: "2025-11-25" } }) });
+  assert.match(init.headers.get("mcp-session-id") ?? "", /^run-[0-9a-f-]{36}$/, "initialize hands out a session the client sends back");
+  const as = (session: string) => async (name: string, args: Record<string, unknown> = {}) => {
+    const r = await server.fetch("/mcp", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "Mcp-Session-Id": session },
+      body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "tools/call", params: { name, arguments: args } }) });
+    const res = (await r.json()).result;
+    return { text: res.content[0].text as string, isError: !!res.isError };
+  };
+  const one = as("run-one-0000"), two = as("run-two-0000");
+  const id = await newThread("Two runs wake for one thread");
+  await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+
+  const [a, b] = await Promise.all([one("dashboard_open", { id }), two("dashboard_open", { id })]);
+  assert.deepEqual([a.isError, b.isError], [false, true], "of two runs opening at once, the first holds it");
+  assert.match(b.text, /Another run is working on this thread: it opened it at \d\d:\d\d UTC, and its claim lapses at \d\d:\d\d UTC unless it writes again\. Skip it\./);
+  assert.equal((await one("dashboard_open", { id })).isError, false, "the holder opens it again as often as it likes");
+  const seen = (rows: string) => (JSON.parse(rows) as { id: string; claimed?: string }[]).find((t) => t.id === id)!.claimed;
+  assert.equal(seen((await one("dashboard_board")).text), "by you");
+  assert.match(seen((await two("dashboard_board")).text)!, /^by another run, until \d\d:\d\d UTC$/);
+
+  const refused = await two("dashboard_post", { key: `claim-${++k}-${Date.now()}`, id, page: page("v1", "From the second run."), ask: "a", heard: "b" });
+  assert.ok(refused.isError && /Another run is working on this thread/.test(refused.text), refused.text);
+  const ok = await one("dashboard_post", { key: `claim-${++k}-${Date.now()}`, id, page: page("v1", "From the first run."), ask: "a", heard: "b" });
+  assert.equal(ok.isError, false, ok.text);
+  assert.deepEqual((await thread(id)).versions.map((v: any) => v.n), [1], "one version, from the run that held it");
+
+  await send(`/api/dashboard/tasks/${id}/press`, "POST", { kind: "send" });
+  assert.equal((await two("dashboard_open", { id })).isError, false, "a new press starts unclaimed: any run may take it");
+  assert.equal((await one("dashboard_open", { id })).isError, true);
+  assert.equal((await call("dashboard_open", { id })).isError, true, "a client that sends no session is a run of its own, so it is refused too");
+});
+
+test("a claim lapses: a run that dies lets go of its thread", async () => {
+  const id = await newThread("A run that never posts");
+  await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  const db = new DatabaseSync(server.db, { timeout: 5000 });
+  try {
+    db.prepare("INSERT INTO dashboard_claims (task_id, run, at, until) VALUES (?, 'gone:run-dead', 0, ?)").run(id, Date.now() - 1);
+  } finally { db.close(); }
+  assert.equal((await open(id)).stage, "implementing", "a lapsed claim is no claim");
 });

@@ -1873,6 +1873,45 @@ const dashboardAdd = {
   },
 };
 
+const dispatchClaim = {
+  name: "dispatch-claim",
+  what: "two routine runs wake for the same thread in implementing and race to open and post it, each opening twice with answers lost; one run holds it, and only its page lands",
+  checks: {
+    held: "exactly one run held the thread, and the other was told to skip it",
+    once: "the thread has one version, from the run that held it",
+    released: "posting the page let go of the claim",
+  },
+  async run(t) {
+    const tag = `${t.seed}-${Date.now().toString(36)}`;
+    const { token } = await t.api("/api/agent/tokens", "POST", { name: `race claim ${t.seed}`, write: true });
+    let n = 0;
+    const as = (run) => async (name, args, signal) => {
+      const r = await fetch(`${t.base}/mcp`, { method: "POST", signal, headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", "Mcp-Session-Id": run },
+        body: JSON.stringify({ jsonrpc: "2.0", id: ++n, method: "tools/call", params: { name, arguments: args } }) });
+      const body = await r.json();
+      return { text: body.result?.content?.[0]?.text ?? JSON.stringify(body), isError: !!body.result?.isError };
+    };
+    const runs = [`race-run-a-${tag}`, `race-run-b-${tag}`].map(as);
+    const lose = (call, args, ms) => { const c = new AbortController(); setTimeout(() => c.abort(), ms); return call("dashboard_open", args, c.signal).catch(() => null); };
+    const id = `t_clm${t.seed}${Date.now().toString(36)}`.replace(/[^A-Za-z0-9_]/g, "");
+    await t.api("/api/dashboard/tasks", "POST", { id, title: `Race claim ${tag}`, body: "Two runs.", area: "work" });
+    await t.api(`/api/dashboard/tasks/${id}/send`, "POST", {});
+    const opened = await Promise.all(runs.flatMap((call, i) => [lose(call, { id }, (t.seed * (i + 3)) % 15), call("dashboard_open", { id })]));
+    const told = opened.filter((o) => o?.isError && /Another run is working on this thread/.test(o.text)).length;
+    const holder = t.sql("SELECT run FROM dashboard_claims WHERE task_id = ?", id)[0]?.run ?? "";
+    const i = runs.findIndex((_, j) => holder.endsWith(`race-run-${"ab"[j]}-${tag}`));
+    t.check("held", i >= 0 && told >= 1, `holder ${holder || "none"}; ${told} open(s) told to skip`);
+    const html = (who) => `<!doctype html><html><body><h1>Race claim ${tag}</h1><p>From run ${who}.</p></body></html>`;
+    await Promise.all(runs.map((call, j) => call("dashboard_post", { key: `race-claim-${tag}-${j}`, id, page: html("ab"[j]), ask: "a", heard: "b" })));
+    const versions = t.sql("SELECT n FROM dashboard_versions WHERE task_id = ?", id).length;
+    const posted = t.sql("SELECT b.bytes FROM dashboard_versions v JOIN resource_blobs b ON b.resource_id = v.resource_id WHERE v.task_id = ?", id)
+      .map((r) => Buffer.from(r.bytes).toString("utf8"));
+    t.check("once", versions === 1 && i >= 0 && posted[0]?.includes(`From run ${"ab"[i]}.`), `${versions} version(s); ${posted.map((p) => (p.match(/From run (\w)/) ?? [])[1]).join(",")}`);
+    const left = t.sql("SELECT COUNT(*) n FROM dashboard_claims WHERE task_id = ?", id)[0].n;
+    t.check("released", left === 0, `${left} claim(s) left`);
+  },
+};
+
 const dispatchPress = {
   name: "dispatch-press",
   what: "in Dispatch you press Send on one thread's page in Decide and Reopen then Send on another's in Finish, on a lossy wire with the first press's answer lost; each press is stored once, and Claude's next page lands once, where its post says",
@@ -2293,4 +2332,4 @@ const offlineThenSync = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, offlineThenSync];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchClaim, dispatchNewThread, padTwoTabs, offlineThenSync];

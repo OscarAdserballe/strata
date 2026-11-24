@@ -21,12 +21,13 @@ import { addItems, checkItem, DashError, LINK_KINDS, STAGES as DASH_STAGES } fro
 import { renderDashboard } from "../dashboard/render.ts";
 import { board as dispatchBoard, open as openThread, preparePost } from "../dashboard/dispatch.ts";
 
-export interface Env { req: IncomingMessage; caller: Caller }
+export interface Env { req: IncomingMessage; caller: Caller; run: string }
 type Args = Record<string, unknown>;
 /** A read answers at once; a write does its awaiting first and hands back the part that runs in the commit. */
 export type Tool = {
   name: string; title: string; description: string; inputSchema: object; scope: Scope;
-} & ({ read(args: Args, env: Env): string } | { write(args: Args, env: Env): Promise<() => string> });
+} & ({ read(args: Args, env: Env): string; claims?: true } | { write(args: Args, env: Env): Promise<() => string> });
+// claims: a read that also writes the run's claim on what it opened, so it runs inside a commit; it takes no key.
 
 const fail = (msg: string): never => { throw new AgentError(msg); };
 const schema = (properties: Record<string, object>, required: string[] = []) => ({ type: "object", properties, required, additionalProperties: false });
@@ -256,15 +257,16 @@ export const TOOLS: Tool[] = [
   // Dispatch: one object, a thread { id, title, text, stage, page, notes }, and three calls on it.
   {
     name: "dashboard_board", title: "Dispatch: the board", scope: "read",
-    description: "Every open thread on the dashboard as JSON [{ id, title, stage }], those in implementing first. A thread in implementing is waiting on you: open it.",
+    description: "Every open thread on the dashboard as JSON [{ id, title, stage, claimed? }], those in implementing first. A thread in implementing is waiting on you: open it, unless claimed says another run has it.",
     inputSchema: schema({}),
-    read: () => JSON.stringify(dispatchBoard(), null, 1),
+    read: (_x, { run }) => JSON.stringify(dispatchBoard(run), null, 1),
   },
   {
     name: "dashboard_open", title: "Dispatch: one thread", scope: "read",
-    description: "One thread in full as JSON { id, title, text, stage, page, notes: [{ id, on, text }] }: page is the newest version's HTML (null before the first), notes are the reader's on that version, oldest first, on naming the words each is on. A note on nothing is a press (Send, or Reopen on a Finish page); the notes before it say what the reader wants, and you decide what comes next. No page: write one.",
+    description: "One thread in full as JSON { id, title, text, stage, page, notes: [{ id, on, text }] }: page is the newest version's HTML (null before the first), notes are the reader's on that version, oldest first, on naming the words each is on. A note on nothing is a press (Send, or Reopen on a Finish page); the notes before it say what the reader wants, and you decide what comes next. No page: write one. Opening a thread in implementing claims it for this session until you post its page; while another session holds it, open is refused: skip that thread.",
     inputSchema: schema({ id: { type: "string", description: "The thread's id, from dashboard_board." } }, ["id"]),
-    read: (x) => JSON.stringify(dash(() => openThread(String(x.id ?? ""))), null, 1),
+    claims: true,
+    read: (x, { run }) => JSON.stringify(dash(() => openThread(String(x.id ?? ""), run)), null, 1),
   },
   {
     name: "dashboard_post", title: "Dispatch: say something back", scope: "write",
@@ -277,8 +279,8 @@ export const TOOLS: Tool[] = [
       ask: { type: "string", maxLength: 600, description: "The reader's ask as it stands now, synthesised from the thread and their notes: a line or two." },
       heard: { type: "string", maxLength: 600, description: "How you read it: what this version does about the ask, a line or two." },
     }, ["key", "id"]),
-    write: (x) => dashAsync(async () => {
-      const run = await preparePost(String(x.id ?? ""), { page: x.page, replies: x.replies, lands: x.lands, ask: x.ask, heard: x.heard });
+    write: (x, env) => dashAsync(async () => {
+      const run = await preparePost(String(x.id ?? ""), { page: x.page, replies: x.replies, lands: x.lands, ask: x.ask, heard: x.heard }, env.run);
       return () => { const said = dash(run); logEvent(db, APP, "dispatch_post", { page: x.page !== undefined, lands: x.lands ?? null, replies: x.replies ? Object.keys(x.replies as object).length : 0 }, null); return said; };
     }),
   },
