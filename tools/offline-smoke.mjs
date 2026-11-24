@@ -21,7 +21,10 @@ try {
   });
   assert.deepEqual(await cached(), [], "visiting a board must not download it implicitly");
   await page.locator('button[title*="keep this board readable offline"]').click();
-  await page.getByText("downloaded for offline reading", { exact: true }).waitFor({ timeout: 60000 });
+  const said = page.getByText(/^downloaded/);
+  await said.waitFor({ timeout: 60000 });
+  assert.match(await said.innerText(), /^downloaded for offline reading/, "every file of the board was saved");
+  assert.match(await page.locator("button.bh-dl").innerText(), /offline ✓/, "the button says the board is on the device with nothing missing");
   const saved = await cached();
   assert.ok(saved.includes(`${app}/api/boards/${board.id}`));
   assert.ok(saved.some((url) => url.endsWith("/raw")));
