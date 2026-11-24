@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import Markdown from "markdown-to-jsx";
-import type { DashFrom } from "../../data/entities/dashboard.ts";
+import type { DashFrom, DashTask } from "../../data/entities/dashboard.ts";
 import { imagesInMarkdown } from "../../engines/prose/images.tsx";
 
 export const hm = (at: number): string => new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
@@ -20,6 +20,12 @@ export const newThreadId = (): string => "t_" + Array.from(crypto.getRandomValue
 const kindOf = (src: string): string => /linear|TRY-|RCP-|GD-/i.test(src) ? "linear" : /slack|#/i.test(src) ? "slack"
   : /github|PR\b/i.test(src) ? "github" : /notion/i.test(src) ? "notion" : /^you$/i.test(src) ? "you" : /agent|routine|claude/i.test(src) ? "agent" : "";
 /** Where a thing came from: a coloured square by kind, then its name, linked when it has a place. */
+/** What an agent last did to a thread, and why: the newest update from Claude, if the thread has one. */
+export function ByClaude({ t }: { t: DashTask }) {
+  const u = [...t.updates].reverse().find((x) => x.from?.source === "Claude");
+  return u ? <span className="by-claude" title={`${u.text} · ${age(u.at)}`}>{u.text}</span> : null;
+}
+
 export function Src({ from }: { from: DashFrom | null | undefined }) {
   const s = from?.source || "You";
   const inner = <><i />{s}</>;

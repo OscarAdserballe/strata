@@ -96,7 +96,7 @@ async function callTool(ctx: Ctx, id: Id, caller: Caller, params: Record<string,
   const t0 = performance.now();
   let failed = false;
   try {
-    if ("read" in tool && tool.claims) { ctx.commit(() => ({ status: 200, body: result(id, said(tool.read(args, env))) })); return; }
+    if ("read" in tool && tool.claims?.(args)) { ctx.commit(() => ({ status: 200, body: result(id, said(tool.read(args, env))) })); return; }
     if ("read" in tool) { answer(tool.read(args, env)); return; }
     const key = String(args.key ?? "");
     if (!RECEIPT_KEY.test(key)) throw new AgentError("key is a fresh id for this write: 8–80 letters, digits or dashes.");

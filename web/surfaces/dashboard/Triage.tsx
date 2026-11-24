@@ -4,7 +4,7 @@ import { dash, useDashBoard, useRoutine, type DashItem, type DashTask } from "..
 import { toast } from "../../shell/layers.ts";
 import { go, type Mode, type Sub } from "./nav.ts";
 import Writer from "../../capabilities/write/Writer.tsx";
-import { Grow, Src, age, hm, newThreadId, useArea, useTyped } from "./parts.tsx";
+import { ByClaude, Grow, Src, age, hm, newThreadId, useArea, useTyped } from "./parts.tsx";
 import { move, saveText } from "./moves.ts";
 
 const OLD = 14 * 864e5;
@@ -103,7 +103,7 @@ function Thread({ t, open, onOpen, mode }: { t: DashTask; open: boolean; onOpen(
   if (!open) return (
     <div className="r">
       <button className="t" onClick={() => onOpen(t.id)} title={t.title}>{t.title}</button>
-      <span className="r-meta">{t.links[0]?.ref ?? (t.createdFrom?.source === "You" ? "You" : "")}</span>
+      <span className="r-meta"><ByClaude t={t} />{t.links[0]?.ref ?? (t.createdFrom?.source === "You" ? "You" : "")}</span>
     </div>
   );
   const leave = () => { flushTitle(); flushBody(); onOpen(null); };
@@ -112,7 +112,7 @@ function Thread({ t, open, onOpen, mode }: { t: DashTask; open: boolean; onOpen(
       <div className="tr-head">
         <Grow className="dtitle" value={title} aria-label="Title" {...titleHeld} onChange={(e) => setTitle(e.target.value.replace(/\n/g, " "))}
           onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); (e.currentTarget.closest("article")?.querySelector(".dbody") as HTMLElement | null)?.focus(); } if (e.key === "Escape") leave(); }} />
-        <span className="tr-src">{meta}</span>
+        <span className="tr-src">{meta}<ByClaude t={t} /></span>
       </div>
       <label className="cap" htmlFor={`body-${t.id}`}>Prompt · yours to trim</label>
       <Writer id={`body-${t.id}`} className="dbody" label="Prompt" value={body} placeholder="What should be done, in a few lines you could hand to Claude." {...bodyHeld} onChange={setBody}
