@@ -3,7 +3,7 @@ import { route, type Route } from "../../platform/router/router.ts";
 import { addItems, archive, checkItem, createTask, dropItem, editItem, keepItem, padOf, patchTask, snapshot, taskView, writePad } from "./dashboard.ts";
 import { dashboardRepo as q } from "./repo.ts";
 import { fireRoutine, recordRun, routineView, setRoutine, wake } from "./routine.ts";
-import { checkPress, checkSend, pane, pressLabel, pressThread, sendThread } from "./dispatch.ts";
+import { checkPress, checkSend, pane, pressLabel, pressThread, runs, sendThread } from "./dispatch.ts";
 
 const ID = "([A-Za-z0-9_]{3,60})";
 // Every write answers with the board and the Dispatch pane as they now are: a dashboard write leaves the room's revision
@@ -62,6 +62,7 @@ export const dashboardRoutes: Route[] = [
 
   // Dispatch: the left pane's threads, and the presses that hand a thread to Claude.
   route("GET", "/api/dashboard/dispatch", ({ res }) => { sendJson(res, 200, pane(q.inboxOpen.all().length)); }),
+  route("GET", "/api/dashboard/runs", ({ res }) => { sendJson(res, 200, runs(Date.now())); }),
 
   route("POST", new RegExp(`^/api/dashboard/tasks/${ID}/send$`), async ({ params, commit }) => {
     checkSend(params[0]);

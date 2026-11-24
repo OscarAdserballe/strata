@@ -39,6 +39,14 @@ export const useArchive = (on: boolean): DashTask[] | null => {
   const v = useQuery<{ tasks: DashTask[] }>(on ? ARCHIVE_KEY : "dashboard-archive-off", on ? archiveRead : async () => ({ value: { tasks: [] }, rev: 0, epoch: "", origin: "wire", stamp: 0 }), { tags: [ARCHIVE_KEY] });
   return on ? v?.tasks ?? null : null;
 };
+export interface RunBlock { task: string; title: string; kind: string; pressed: number; posted: number | null; landed: string | null }
+export interface Runs { since: number; runs: { session: string | null; from: number; blocks: RunBlock[] }[] }
+export const RUNS_KEY = "dashboard-runs";
+const runsRead: Fetcher<Runs> = () => fetched<Runs>("/api/dashboard/runs");
+export const useRuns = (on: boolean): Runs | null => {
+  const v = useQuery<Runs>(on ? RUNS_KEY : "dashboard-runs-off", on ? runsRead : async () => ({ value: { since: 0, runs: [] }, rev: 0, epoch: "", origin: "wire", stamp: 0 }), { tags: [RUNS_KEY, DISPATCH_KEY] });
+  return on ? v ?? null : null;
+};
 export const useRoutine = (): RoutineView | undefined => useQuery<RoutineView>(ROUTINE_KEY, routineRead, { tags: [ROUTINE_KEY] });
 
 /** A write's answer carries the board and the pane as they now are, each under the dashboard's own revision. */

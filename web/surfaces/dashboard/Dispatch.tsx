@@ -7,6 +7,7 @@ import { switches } from "../../capabilities/fold/switches.ts";
 import type { View } from "./nav.ts";
 import { age, hm } from "./parts.tsx";
 import NewThread from "./NewThread.tsx";
+import Runs from "./Runs.tsx";
 import { initials } from "./initials.ts";
 
 const latest = (t: DispatchThread): DispatchVersion | null => t.versions[t.versions.length - 1] ?? null;
@@ -51,7 +52,9 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   }, []);
   const [unfolded, setUnfolded] = useState<string | null>(null);
   useEffect(() => { if (v && !seen.has(v.resourceId)) { seen.add(v.resourceId); setUnfolded(v.resourceId); } }, [v?.resourceId]);
-  const pick = (id: string, n: number | null = null) => { setSel({ thread: id, n }); setDrawer(false); };
+  const [showRuns, setShowRuns] = useState(false);
+  useEffect(() => { setShowRuns(false); }, [view]);
+  const pick = (id: string, n: number | null = null) => { setSel({ thread: id, n }); setDrawer(false); setShowRuns(false); };
 
   function press(th: DispatchThread, kind: "send" | "drop" | "archive" | "todo" | "thinking"): void {
     const rest = here.filter((x) => x.id !== th.id);
@@ -94,6 +97,8 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
       <nav className="ws-rail" aria-label="Threads, as squares">
         {here.map((x) => <button key={x.id} className={"rail-sq" + (x.id === t?.id ? " on" : "") + (latest(x)?.notes ? " noted" : "")}
           title={x.title} aria-label={x.title} aria-current={x.id === t?.id ? "true" : undefined} onClick={() => pick(x.id)}>{initials(x.title)}</button>)}
+        {stage === "finish" ? <button className={"rail-sq rail-runs" + (showRuns ? " on" : "")} title="Runs: what each routine run did" aria-label="Runs" aria-pressed={showRuns}
+          onClick={() => { setShowRuns(!showRuns); setDrawer(false); }}>⧗</button> : null}
         <button className="rail-sq new" title="Threads and a new one ( [ )" aria-label="Show the threads" aria-expanded={drawer} onClick={() => setDrawer(!drawer)}>☰</button>
       </nav>
       <aside className="ws-list" aria-label="Threads">
@@ -114,11 +119,15 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
                 <span className="m">{[latest(x) ? label(latest(x)!) : null, latest(x) ? notes(latest(x)!.notes) : null, latest(x) ? age(latest(x)!.at) : null].filter(Boolean).join(" · ")}</span>
               </button>)}
         {pane && !here.length ? <p className="ws-none">{blank}</p> : null}
-        {stage === "finish" ? <Archived /> : null}
+        {stage === "finish" ? <>
+          <button className="ws-fold" aria-pressed={showRuns} onClick={() => { setShowRuns(!showRuns); setDrawer(false); }}>{showRuns ? "Back to the page" : "Runs · the last 7 days"}</button>
+          <Archived />
+        </> : null}
         <NewThread />
       </aside>
       </div>
       <div className="ws-room">
+        {showRuns ? <div className="ws-sheet runs-sheet"><Runs onPick={(id) => { if (here.some((x) => x.id === id)) pick(id); else setShowRuns(false); }} /></div> : <>
         {t && v ? <AskLine t={t} v={v} open={unfolded === v.resourceId} onToggle={() => setUnfolded(unfolded === v.resourceId ? null : v.resourceId)}>
           {stage !== "implementing" ? acts(t) : null}
         </AskLine> : null}
@@ -126,6 +135,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
           {t && v && pane?.board ? <LivePage key={v.resourceId} board={pane.board} resource={v.resourceId} /> : null}
           {blank ? <div className="ws-blank"><p>{blank}</p></div> : null}
         </div>
+        </>}
       </div>
     </div>
   );

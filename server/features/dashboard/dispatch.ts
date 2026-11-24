@@ -208,3 +208,28 @@ export function pane(inbox: number): { rev: number; board: string | null; inbox:
   });
   return { rev: q.dashRev.get()!.rev, board: dispatchBoardId(), inbox, threads };
 }
+
+// ---------- runs: what each routine run was woken for, and how long its page took ----------
+
+export interface RunBlock { task: string; title: string; kind: string; pressed: number; posted: number | null; landed: string | null }
+export interface RunLane { session: string | null; from: number; blocks: RunBlock[] }
+export const RUNS_DAYS = 7;
+
+/** One lane per session a press woke, one block per press: from the press to the first page posted after it, or still open. */
+export function runs(at: number): { since: number; runs: RunLane[] } {
+  const since = at - RUNS_DAYS * 86_400_000;
+  const titles = new Map(q.allTasks.all().map((t) => [t.id, t.title]));
+  const posted = new Map<string, VersionRow[]>();
+  for (const v of q.versions.all()) { const l = posted.get(v.task_id) ?? []; l.push(v); posted.set(v.task_id, l); }
+  const lanes = new Map<string, RunLane>();
+  for (const p of q.presses.all()) {
+    if (p.at < since) continue;
+    const v = (posted.get(p.task_id) ?? []).find((x) => x.at >= p.at);
+    const key = p.session_url ?? "";
+    const lane = lanes.get(key) ?? { session: p.session_url, from: p.at, blocks: [] };
+    lane.from = Math.min(lane.from, p.at);
+    lane.blocks.push({ task: p.task_id, title: titles.get(p.task_id) ?? p.task_id, kind: pressLabel(p.kind, p.stage), pressed: p.at, posted: v?.at ?? null, landed: v?.landed ?? null });
+    lanes.set(key, lane);
+  }
+  return { since, runs: [...lanes.values()].sort((a, b) => b.from - a.from) };
+}

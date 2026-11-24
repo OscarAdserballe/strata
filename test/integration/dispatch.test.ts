@@ -206,3 +206,18 @@ test("Later and To thinking take a thread out of Dispatch with its pages, and Se
   await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "thinking" });
   assert.equal((await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "implementing" })).status, 400, "Implementing is still only reached by a press");
 });
+
+test("runs: each session a press woke is a lane, and each press a block from the press to the page it brought", async () => {
+  const id = await newThread("A thread for the Runs view");
+  const sent = await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  const before = (await server.api("/api/dashboard/runs")).body as { runs: { session: string | null; blocks: any[] }[] };
+  const open = before.runs.flatMap((l) => l.blocks).find((b) => b.task === id);
+  assert.deepEqual([open.title, open.kind, open.posted, open.landed], ["A thread for the Runs view", "Send", null, null], "a press with no page yet is still with Claude");
+  await post(id, { page: page("v1", "Here."), ask: "Show runs.", heard: "A lane per run." });
+  const after = (await server.api("/api/dashboard/runs")).body as { runs: { session: string | null; blocks: any[] }[] };
+  const lane = after.runs.find((l) => l.blocks.some((b) => b.task === id))!;
+  assert.equal(lane.session, sent.body.press.session_url);
+  const b = lane.blocks.find((x) => x.task === id);
+  assert.equal(b.landed, "decide");
+  assert.ok(b.posted >= b.pressed);
+});
