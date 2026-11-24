@@ -1904,6 +1904,9 @@ const dispatchPress = {
     const page = await t.open({ latency: true, lostAck: { match: presses, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     const pressOn = async (view, title, reopen) => {
       await page.goto(`${t.base}/dispatch?view=${view}`);
+      // the list is a drawer over the page on a desktop; [ keeps it open
+      await page.locator(".ws-rail").waitFor();
+      await page.keyboard.press("[");
       const card = page.locator(".ws-card", { hasText: title });
       await card.first().waitFor();
       if (!(await card.first().evaluate((el) => el.classList.contains("open")))) await card.first().click();
@@ -1948,6 +1951,8 @@ const dispatchNewThread = {
     const creates = (e) => e.write && e.method === "POST" && e.path === "/api/dashboard/tasks";
     const page = await t.open({ latency: true, lostAck: { match: creates, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dispatch?view=decide`);
+    await page.locator(".ws-rail").waitFor();
+    await page.keyboard.press("[");
     await page.locator(".ws-new-row").waitFor();
     for (const [i, title] of titles.entries()) {
       if (i === 0) await page.keyboard.press("n"); else await page.locator(".ws-new-row").click();
