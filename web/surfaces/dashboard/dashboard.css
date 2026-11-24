@@ -272,7 +272,7 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .rail-sq.new{margin-top:4px;background:none;border:1px dashed var(--d-line-2);color:var(--d-mute);font-size:14px;line-height:34px}
 .ws.dispatch .ws-list{position:absolute;z-index:5;left:66px;top:14px;bottom:16px;width:300px;padding:12px;background:#faf8f4;border-radius:12px;box-shadow:var(--d-sheet);
   visibility:hidden;opacity:0;transform:translateX(-8px);transition:opacity .15s,transform .15s,visibility 0s .15s}
-.ws.dispatch.drawer-open .ws-list{visibility:visible;opacity:1;transform:none;transition-delay:0s}
+.ws.dispatch.drawer-open .ws-list,.ws.dispatch .ws-list:has(.ws-new-form){visibility:visible;opacity:1;transform:none;transition-delay:0s}
 .ws-ask{flex-shrink:0;display:flex;align-items:stretch;margin:0 0 10px;min-height:44px;background:#fff;border-radius:10px;box-shadow:var(--d-lift),0 0 0 1px var(--d-line)}
 .ws-ask-text{flex:1;min-width:0;display:grid;grid-template-columns:1fr 1fr;padding:0;text-align:left;border-radius:10px 0 0 10px}
 .ws-ask-text.solo{grid-template-columns:1fr;cursor:default}
