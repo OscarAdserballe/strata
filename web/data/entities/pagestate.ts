@@ -2,6 +2,7 @@ import { fetched } from "../api.ts";
 import { store as roomStore, type Fetcher, type Store } from "../store.ts";
 import { mutator, type Mutator, type Op } from "../mutate.ts";
 import { revOf } from "./boards.ts";
+import { outbox as roomOutbox } from "../outbox.ts";
 
 // What a live page kept with window.strata.save: one JSON value per source, replaced whole, last save wins.
 
@@ -40,6 +41,10 @@ export const pageStateOps = {
   },
 };
 
+/** A page's save as shelved offline: the newest per source is the one replayed (last save wins). */
+export interface PageStateAct { board: string; rid: string; value: string }
+roomOutbox.kind<PageStateAct>("pagestate", { build: (a) => pageStateOps.save(a.board, a.rid, a.value), collapse: (a) => a.rid });
+
 export const pageState = {
   /** Reads afresh each time a page asks (another tab may have saved); a failed read falls back to what the store holds. */
   async load(board: string, rid: string, s: Store = roomStore): Promise<string | null> {
@@ -54,7 +59,9 @@ export const pageState = {
   },
   async save(board: string, rid: string, value: string, s: Store = roomStore, m: Mutator = mutator): Promise<void> {
     // never over a value it hasn't read: without a base the save would carry no If-Match
-    if (!s.entry<PageStateEntity>(pageStateKey(rid))?.held) await pageState.load(board, rid, s);
+    if (!s.entry<PageStateEntity>(pageStateKey(rid))?.held) await pageState.load(board, rid, s).catch((e) => { if (!(m === mutator && m.offline())) throw e; });
+    // offline the page is answered once its save is on the device; the save is sent when the wire is back
+    if (m === mutator && m.offline()) { void roomOutbox.send("pagestate", { board, rid, value } satisfies PageStateAct, pageStateOps.save(board, rid, value, s)).catch(() => {}); return; }
     await m.mutate(pageStateOps.save(board, rid, value, s));
   },
 };

@@ -1,6 +1,7 @@
 import type { BoardState } from "../../../shared/types/index.ts";
 import { store as roomStore, type Store } from "../store.ts";
-import { mutator as roomMutator, type Conflict, type Mutator, type Op } from "../mutate.ts";
+import { mutator as roomMutator, type Conflict, type Mutator, type Op, type SaveError } from "../mutate.ts";
+import { outbox as roomOutbox, type Clash } from "../outbox.ts";
 import { authoredKey, type AuthoredRow } from "./boards.ts";
 import { upsertRow } from "./confirm.ts";
 
@@ -106,12 +107,43 @@ export const authoredOps = {
   },
 };
 
-/** Ops that run out of retries release their lanes, so the next Save is not queued behind them. */
+/** A card write as shelved offline: the update's base frozen at the click, so a replay can't land over a text it never saw. */
+export type AuthoredAct =
+  | { do: "create"; board: string; draft: MintDraft; draftKey?: string }
+  | { do: "update"; board: string; mid: string; patch: AuthoredPatch; base: number | null }
+  | { do: "personal"; draft: PersonalDraft };
+
+const facesText = (v: { front?: unknown; back?: unknown } | null | undefined) => `${String(v?.front ?? "")}\n\n---\n\n${String(v?.back ?? "")}`;
+
+export function authoredKind(s: Store) {
+  return {
+    build: (a: AuthoredAct): Op<any> => a.do === "create" ? authoredOps.create(a.board, a.draft, a.draftKey)
+      : a.do === "update" ? authoredOps.update(a.board, a.mid, a.patch, s, a.base)
+      : authoredOps.personal(a.draft),
+    clash: (e: SaveError, a: AuthoredAct) => {
+      if (a.do !== "update" || !e.conflict?.value) return null;
+      const theirs = e.conflict.value as { front?: unknown; back?: unknown };
+      const mine = { front: a.patch.front ?? theirs.front, back: a.patch.back ?? theirs.back };
+      if (facesText(mine) === facesText(theirs)) return null;
+      return { where: { board: a.board, source: null, passage: String(theirs.front ?? "") }, mine: facesText(mine), theirs: facesText(theirs), rev: Number(e.conflict.rev) || 0, args: a };
+    },
+    over: (c: Clash): AuthoredAct => ({ ...(c.args as Extract<AuthoredAct, { do: "update" }>), base: c.rev }),
+    release: true,
+  };
+}
+roomOutbox.kind<AuthoredAct>("authored", authoredKind(roomStore));
+
+/** Ops that run out of retries release their lanes, so the next Save is not queued behind them; offline they wait on the device. */
 export const authored = {
   create: (board: string, draft: MintDraft, opts: { draftKey?: string } = {}, m: Mutator = roomMutator) =>
-    m.release(authoredOps.create(board, draft, opts.draftKey)),
+    m === roomMutator && m.offline() ? roomOutbox.send<{ id: string; state: BoardState }>("authored", { do: "create", board, draft, draftKey: opts.draftKey } satisfies AuthoredAct)
+      : m.release(authoredOps.create(board, draft, opts.draftKey)),
   update: (board: string, mid: string, patch: AuthoredPatch, m: Mutator = roomMutator, s: Store = roomStore) =>
-    m.release(authoredOps.update(board, mid, patch, s)),
+    m === roomMutator && m.offline()
+      ? roomOutbox.send<{ state: BoardState }>("authored", { do: "update", board, mid, patch, base: finite(rowOf(board, mid, s)?.rev) } satisfies AuthoredAct)
+      : m.release(authoredOps.update(board, mid, patch, s)),
   file: (board: string, ids: string[], deck: string, m: Mutator = roomMutator) => m.release(authoredOps.file(board, ids, deck)),
-  personal: (draft: PersonalDraft, m: Mutator = roomMutator) => m.release(authoredOps.personal(draft)),
+  personal: (draft: PersonalDraft, m: Mutator = roomMutator) =>
+    m === roomMutator && m.offline() ? roomOutbox.send<{ id: string; mintId: string }>("authored", { do: "personal", draft } satisfies AuthoredAct)
+      : m.release(authoredOps.personal(draft)),
 };

@@ -1,5 +1,5 @@
 import { flushSync } from "react-dom";
-import { StrataAPI, StrataWhy } from "../../data/api.ts";
+import { StrataAPI, StrataWhy, StrataWireDown } from "../../data/api.ts";
 import { authored } from "../../data/entities/authored.ts";
 import { reviewStrip } from "../../data/entities/review.ts";
 import { ATTEMPT_DEADLINE_MS, mintKey } from "../../data/mutate.ts";
@@ -93,6 +93,16 @@ export async function compose(card: Wire, front = "", answer = "", home: Wire = 
 export async function saveComposed(fields: ComposedCard): Promise<void> {
   const { front, back, source } = fields as { front: string; back?: string; source?: string };
   const c = composerNow(); const id = c && (c.boardId || room.activeId()); if (!c || !id) return;
+  // offline the card waits on the device: the form closes now, and the board takes the card when it lands
+  if (StrataWireDown()) {
+    const landed = c.unfiled ? authored.personal({ front, back: back as string, source: source || c.source, requestId: c.requestId as string }).then(() => null)
+      : c.mintId ? authored.update(id, c.mintId, { front, back, source, state: "closed" })
+      : authored.create(id, { front, variant: "bare", pairId: c.pairId, source: source || c.source, meta: { answer: c.answer, hot: !!back, anchorExplicit: !!source }, state: back ? "closed" : "open", back: back || undefined }, { draftKey: c.requestId });
+    void landed.then((r: Wire | null) => { if (r?.state && id === room.activeId()) room.setBoard(r.state); }, () => {});
+    setComposer(null);
+    toast("card kept on this device — it's added when you're back online");
+    return;
+  }
   try {
     if (c.unfiled) {
       await authored.personal({ front, back: back as string, source: source || c.source, requestId: c.requestId as string });
@@ -121,7 +131,7 @@ export function saveCardEdit(c: Wire, patch: Record<string, unknown>): Promise<W
   const saved = c.mine && c.mintId
     ? saveAuthored(c.boardId || room.activeId(), c.mintId, patch)
       .then((r) => { if (r && r.state) room.setBoard(r.state); return { ...c, ...patch }; })
-    : saveCard(c, patch).then(
+    : saveCard(c, patch, undefined, undefined, room.activeId()).then(
     (merged) => { room.patchCard(deckOf(c), c.id, merged); return merged; },
     (e) => { if (e && e.theirs) room.patchCard(deckOf(c), c.id, e.theirs); throw e; });
   // the editor waits one attempt's deadline; the op keeps retrying and patches the lists when it lands

@@ -2,6 +2,7 @@ import type { Card, CardEditAnswer } from "../../../shared/types/index.ts";
 import { mutator as roomMutator, type Conflict, type Mutator, type Op, type SaveError } from "../../data/mutate.ts";
 import { store as roomStore, sameData, type Store } from "../../data/store.ts";
 import { authored, rowOf } from "../../data/entities/authored.ts";
+import { outbox as roomOutbox, type Clash } from "../../data/outbox.ts";
 
 export const cardKey = (id: string): string => `card:${id}`;
 export const deckOf = (card: { deck?: string | null }): string => String(card.deck || "").split("/")[0];
@@ -50,8 +51,32 @@ export function cardEditOp(card: Card, patch: Faces, s: Store = roomStore): Op<C
   };
 }
 
-export async function saveCard(card: Card, patch: Faces, m: Mutator = roomMutator, s: Store = roomStore): Promise<Card> {
+/** A deck card's edit as shelved offline: the card as it was at the click carries the base. */
+export interface CardEditAct { card: Card; patch: Faces; board: string | null }
+const facesText = (v: Faces) => Object.keys(v).sort().map((k) => `${k}: ${typeof v[k] === "string" ? v[k] : JSON.stringify(v[k])}`).join("\n\n");
+export function cardEditKind(s: Store) {
+  return {
+    build: (a: CardEditAct) => cardEditOp(a.card, a.patch, s),
+    clash: (e: SaveError, a: CardEditAct) => {
+      const theirs = e.conflict?.value as Faces | null;
+      if (!theirs || !a.board) return null;
+      const keys = Object.keys(a.patch);
+      const pick = (v: Faces) => Object.fromEntries(keys.map((k) => [k, v[k]]));
+      if (same(pick(theirs), a.patch)) return null;
+      return { where: { board: a.board, source: null, passage: String(a.card.front ?? "") }, mine: facesText(a.patch), theirs: facesText(pick(theirs)), rev: Number(e.conflict?.rev) || 0, args: a };
+    },
+    over: (c: Clash): CardEditAct => { const a = c.args as CardEditAct; return { ...a, card: { ...a.card, rev: c.rev } }; },
+  };
+}
+roomOutbox.kind<CardEditAct>("card.edit", cardEditKind(roomStore));
+
+export async function saveCard(card: Card, patch: Faces, m: Mutator = roomMutator, s: Store = roomStore, board: string | null = null): Promise<Card> {
   if (!deckOf(card)) throw new Error("this card has no deck to write to");
+  // offline the edit is kept on the device and painted at once; a clash on reconnect goes to the banner's list
+  if (m === roomMutator && m.offline()) {
+    void roomOutbox.send("card.edit", { card: { ...card, rev: baseOf(card, s) ?? card.rev }, patch, board } satisfies CardEditAct).catch(() => {});
+    return { ...card, ...patch } as Card;
+  }
   try {
     const res = await m.mutate(cardEditOp(card, patch, s));
     return res.card;
