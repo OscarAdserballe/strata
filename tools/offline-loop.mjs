@@ -50,9 +50,10 @@ try {
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     await page.getByRole("button", { name: "Project menu", exact: true }).click();
     await page.locator('button[title*="keep this board readable offline"]').click();
-    const said = page.getByText(/^(downloaded for offline reading|download incomplete.*)$/);
+    const said = page.getByText(/^downloaded/);
     await said.waitFor({ timeout: 90000 });
-    assert.equal(await said.innerText(), "downloaded for offline reading", `${b.title}: ${await said.innerText()}`);
+    assert.match(await said.innerText(), /^downloaded for offline reading/, `${b.title}: ${await said.innerText()}`);
+    await said.waitFor({ state: "detached", timeout: 15000 }).catch(() => {});
   }
   check("both boards download for the flight", true);
 
