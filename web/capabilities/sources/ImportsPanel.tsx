@@ -8,6 +8,7 @@ import type { ImportStatus } from '../../../shared/imports/import-status.ts';
 import { importPlanNow, loadImportPlan } from './import-plan-load.ts';
 import './import-activity.css';
 import './import-modal.css';
+import { shortLink, useWaitingLinks } from './waiting-links.ts';
 
 // each screen subscribes for itself, so only it re-renders when an import moves
 export function useImportActivity() {
@@ -18,9 +19,10 @@ export function useImportActivity() {
 
 export function ImportsStatus({onOpen,className='seg',floating=false}:{onOpen:(board:string,resource:string)=>void;className?:string;floating?:boolean}) {
   const {jobs,local,attention}=useImportActivity();
+  const links=useWaitingLinks();
   const [open,setOpen]=useState(false);
   const moving=jobs.filter(j=>importsMoving([j],[])).length+local.filter(j=>!j.error&&!jobs.some(s=>s.id===j.id)).length;
-  const any=moving>0||attention>0;
+  const any=moving>0||attention>0||links.length>0;
   useEffect(()=>{if(!any)setOpen(false);},[any]);
   useEffect(()=>{
     if(!open)return;
@@ -29,12 +31,13 @@ export function ImportsStatus({onOpen,className='seg',floating=false}:{onOpen:(b
     return ()=>window.removeEventListener('keydown',esc,true);
   },[open]);
   if(!any)return null;
-  const words=[moving?`importing ${moving}`:'',attention?`${attention} import${attention===1?' needs':'s need'} you`:''].filter(Boolean).join(' · ');
+  const words=[moving?`importing ${moving}`:'',attention?`${attention} import${attention===1?' needs':'s need'} you`:'',links.length?`${links.length} link${links.length===1?'':'s'} waiting for a connection`:''].filter(Boolean).join(' · ');
   return <span className={'imports-status'+(floating?' floating':'')+(attention?' attention':'')}>
     <button className={className} aria-expanded={open} aria-label={`Imports: ${words}`} title="imports in progress"
       onClick={(e)=>{e.stopPropagation();setOpen(o=>!o);}}>{moving?<i className="dk-spin" aria-hidden="true"/>:null}{words}</button>
     {open?<div className="imports-pop" onClick={(e)=>e.stopPropagation()}>
       <button className="imports-pop-x" aria-label="Close imports" onClick={()=>setOpen(false)}>✕</button>
+      {links.length?<ul className="waiting-links" aria-label="Links waiting for a connection">{links.map(l=><li key={l.key}>Waiting for a connection · {shortLink(l.url)}</li>)}</ul>:null}
       <ImportActivity label="Imports in progress" onOpen={(b,r)=>{setOpen(false);onOpen(b,r);}}/>
     </div>:null}
   </span>;
