@@ -51,7 +51,7 @@ test("it refuses anyone without a live token, and a read-only token cannot write
   assert.equal((await rpc("tools/list", {}, gone.token)).status, 401, "a revoked token stops working at once");
 });
 
-test("it speaks MCP: initialize, the twelve tools, notifications", async () => {
+test("it speaks MCP: initialize, the tools, notifications", async () => {
   const init = await rpc("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test", version: "1" } });
   assert.equal(init.body.result.protocolVersion, "2025-06-18");
   assert.equal((await rpc("initialize", { protocolVersion: "1999-01-01" })).body.result.protocolVersion, "2025-11-25", "an unknown version gets our newest");
@@ -61,7 +61,7 @@ test("it speaks MCP: initialize, the twelve tools, notifications", async () => {
   assert.deepEqual(tools.map((t) => `${t.name}(${(t.inputSchema.required ?? []).join(",")})`), [
     "whoami()", "get_outline()", "get_context(id)", "get_text(id)", "search(queries)", "get_changes(board)", "get_guide()",
     "request_upload(board,key,files)", "get_import(id)", "capture(board,key,url)", "apply(board,key,ops)", "create_board(key,title)", "dashboard_add_items(key,items)", "dashboard_read()",
-    "dashboard_board()", "dashboard_open(id)", "dashboard_post(key,id)",
+    "dashboard_board()", "dashboard_open(id)", "dashboard_claim(key,id,run)", "dashboard_post(key,id)",
   ]);
   assert.equal((await rpc("no/such")).body.error.code, -32601);
 });
@@ -357,4 +357,15 @@ test("apply's schema names every op's fields, so no guide read is needed first",
     assert.ok(routine.includes(`topic: "${kind}"`), `the routine guide points at the ${kind} topic`);
     assert.doesNotMatch(await ok("get_guide", { topic: kind }), /<!doctype html>/i, `${kind} says what a page holds, not a template to copy`);
   }
+});
+
+test("capture: a page the board already holds comes back as that source, however its link was written", async () => {
+  const b = await newBoard(server, { title: "Captured twice" });
+  const r = await server.api(`/api/boards/${b}/capture/finish`, { method: "POST", headers: { "Content-Type": "application/json", "Idempotency-Key": `cap-${Date.now()}` },
+    body: JSON.stringify({ url: "https://www.youtube.com/watch?v=dupe0000001", title: "A talk", vtt: "WEBVTT\n\n00:00:01.000 --> 00:00:04.000\nOnce is enough.\n" }) });
+  assert.equal(r.status, 201, JSON.stringify(r.body));
+  const before = (await server.api(`/api/boards/${b}`)).body.resources.length;
+  const again = await ok("capture", { board: b, key: `cap-again-${Date.now()}`, url: "https://youtu.be/dupe0000001?si=shared" });
+  assert.match(again, new RegExp(`Already on .* as src_${r.body.resourceId}`));
+  assert.equal((await server.api(`/api/boards/${b}`)).body.resources.length, before, "nothing new on the board");
 });

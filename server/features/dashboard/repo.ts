@@ -12,6 +12,7 @@ export interface VersionRow { task_id: string; n: number; resource_id: string; l
 export interface PressRow { id: string; task_id: string; kind: string; stage: string; version: number | null; at: number; session_url: string | null }
 export interface NoteRow { id: string; resource_id: string; quote: string; note: string; box: string | null; created_at: number }
 export interface ReplyRow { id: string; mark_id: string; author: string; text: string; created_at: number }
+export interface ClaimRow { task_id: string; run: string; at: number; until: number }
 export interface PadRow { text: string; rev: number; updated_at: number }
 export interface RoutineRow { url: string; token: string; ran_at: number | null; session_url: string | null; error: string | null; updated_at: number }
 
@@ -46,6 +47,11 @@ export const dashboardRepo = {
   dashRev: stmt<{ rev: number }>(`SELECT COALESCE(MAX(r), 0) AS rev FROM (SELECT MAX(updated_at) AS r FROM dashboard_tasks
     UNION ALL SELECT MAX(COALESCE(handled_at, at)) FROM dashboard_inbox)`),
   dispatched: stmt<{ task_id: string }>("SELECT DISTINCT task_id FROM dashboard_presses"),
+  claims: stmt<ClaimRow>("SELECT * FROM dashboard_claims WHERE until > ?"),
+  claimOf: stmt<ClaimRow>("SELECT * FROM dashboard_claims WHERE task_id = ?"),
+  putClaim: stmt(`INSERT INTO dashboard_claims (task_id, run, at, until) VALUES (?,?,?,?)
+    ON CONFLICT(task_id) DO UPDATE SET run = excluded.run, at = excluded.at, until = excluded.until`),
+  dropClaim: stmt("DELETE FROM dashboard_claims WHERE task_id = ?"),
   // The reader's notes are marks with words in them, on the version's source.
   noteCounts: stmt<{ resource_id: string; n: number }>(`SELECT m.resource_id, COUNT(*) AS n FROM dashboard_versions v
     JOIN marks m ON m.resource_id = v.resource_id WHERE m.note IS NOT NULL AND trim(m.note) <> '' GROUP BY m.resource_id`),

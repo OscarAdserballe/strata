@@ -425,6 +425,11 @@ CREATE TABLE IF NOT EXISTS dashboard_presses (
   at INTEGER NOT NULL, session_url TEXT   -- the routine session it woke, or the one already running
 );
 CREATE INDEX IF NOT EXISTS idx_dashboard_presses_task ON dashboard_presses(task_id, at);
+-- Dispatch: the routine run working a thread, so two runs never work the same thread. A claim lapses at until unless its run renews it.
+CREATE TABLE IF NOT EXISTS dashboard_claims (
+  task_id TEXT PRIMARY KEY, run TEXT NOT NULL,
+  at INTEGER NOT NULL, until INTEGER NOT NULL
+);
 -- The scratch pad: one free-text document, written whole, so it carries a rev for If-Match.
 CREATE TABLE IF NOT EXISTS dashboard_pad (
   id INTEGER PRIMARY KEY CHECK (id = 1), text TEXT NOT NULL, rev INTEGER NOT NULL, updated_at INTEGER NOT NULL

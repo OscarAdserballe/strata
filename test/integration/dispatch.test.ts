@@ -206,3 +206,30 @@ test("Later and To thinking take a thread out of Dispatch with its pages, and Se
   await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "thinking" });
   assert.equal((await send(`/api/dashboard/tasks/${id}`, "PATCH", { stage: "implementing" })).status, 400, "Implementing is still only reached by a press");
 });
+
+test("two runs never work one thread: the first claim wins, the other is refused, and posting the page frees it", async () => {
+  const id = await newThread("Runs that don't collide");
+  await send(`/api/dashboard/tasks/${id}/send`, "POST", {});
+  const claim = (run: string, key = `claim-${++k}-${Date.now()}`) => call("dashboard_claim", { key, id, run });
+  const [a, b] = await Promise.all([claim("https://claude.ai/code/session_a"), claim("https://claude.ai/code/session_b")]);
+  assert.equal([a, b].filter((r) => !r.isError).length, 1, `exactly one of two simultaneous claims wins: ${a.text} | ${b.text}`);
+  const [won, lost] = a.isError ? ["https://claude.ai/code/session_b", "https://claude.ai/code/session_a"] : ["https://claude.ai/code/session_a", "https://claude.ai/code/session_b"];
+  assert.match((a.isError ? a : b).text, new RegExp(`Run ${won} is working ${id}`));
+
+  const listed = (JSON.parse((await call("dashboard_board")).text) as any[]).find((t) => t.id === id);
+  assert.equal(listed.claimed.run, won, "the board shows who holds it");
+  assert.equal((await open(id)).claimed.run, won);
+  assert.match((await claim(won)).text, /^Renewed/, "the holder renews by claiming again");
+  const key = `claim-lost-${Date.now()}`;
+  assert.equal((await claim(won, key)).text, (await claim(won, key)).text, "a claim whose answer was lost replays under its key");
+
+  assert.match((await post(id, { page: page("v1", "Mine."), run: lost })).text, /is working/, "the other run's page is refused");
+  assert.match((await post(id, { page: page("v1", "Mine.") })).text, /is working/, "so is a page that names no run");
+  assert.equal((await thread(id)).versions.length, 0);
+  assert.match((await post(id, { page: page("v1", "Mine."), ask: "Don't collide.", heard: "Claims.", run: won })).text, /v1 posted/);
+  assert.equal(JSON.parse((await call("dashboard_board")).text).find((t: any) => t.id === id).claimed, undefined, "posting the page releases it");
+  assert.match((await claim(lost)).text, /Only a thread in implementing is claimed/);
+
+  await send(`/api/dashboard/tasks/${id}/press`, "POST", { kind: "send" });
+  assert.match((await claim(lost)).text, /^Claimed/, "a new press is free for any run");
+});

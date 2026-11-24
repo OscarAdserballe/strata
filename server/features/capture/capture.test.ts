@@ -258,3 +258,15 @@ test("caption lines join into paragraphs at a sentence end once long enough, and
   assert.ok(unpunctuated.length > 1);
   assert.ok(unpunctuated.every((p) => p.length <= 1100));
 });
+
+test("canonicalUrl: one key per page, however the link was copied", async () => {
+  const { canonicalUrl } = await import("./capture.ts");
+  const v = "youtube:PUv66718DII";
+  for (const u of ["https://www.youtube.com/watch?v=PUv66718DII", "https://youtu.be/PUv66718DII?si=abc", "https://m.youtube.com/watch?v=PUv66718DII&t=42s", "https://youtube.com/shorts/PUv66718DII"]) {
+    assert.equal(canonicalUrl(u), v, u);
+  }
+  assert.equal(canonicalUrl("https://www.example.com/post/?utm_source=x&b=2&a=1#top"), canonicalUrl("http://example.com/post?a=1&b=2"));
+  assert.notEqual(canonicalUrl("https://example.com/post?id=1"), canonicalUrl("https://example.com/post?id=2"), "a parameter that names the page is kept");
+  assert.equal(canonicalUrl("ftp://example.com/x"), null);
+  assert.equal(canonicalUrl("not a link"), null);
+});

@@ -3,7 +3,7 @@ import type { IncomingMessage } from "node:http";
 import { q } from "../repo.ts";
 import { imports } from "../imports/pump.ts";
 import { prepareArticle, prepareVideo } from "../capture/article.ts";
-import { captureAvailable, FIRECRAWL_KEY, isHttpUrl, isYouTube, NoTranscript } from "../capture/capture.ts";
+import { canonicalUrl, captureAvailable, FIRECRAWL_KEY, isHttpUrl, isYouTube, NoTranscript } from "../capture/capture.ts";
 import { insertBoard } from "../boards/create.ts";
 import { pairForResource, writeSource } from "../sources/ingest.ts";
 import { logEvent } from "../../platform/events/events.ts";
@@ -19,7 +19,7 @@ import { checkOps, OP_SCHEMAS, OPS, opLine, runOps } from "./ops.ts";
 import { publicOrigin, uploadUrl, type Caller, type Scope } from "./tokens.ts";
 import { addItems, checkItem, DashError, LINK_KINDS, STAGES as DASH_STAGES } from "../dashboard/dashboard.ts";
 import { renderDashboard } from "../dashboard/render.ts";
-import { board as dispatchBoard, open as openThread, preparePost } from "../dashboard/dispatch.ts";
+import { board as dispatchBoard, open as openThread, prepareClaim, preparePost } from "../dashboard/dispatch.ts";
 
 export interface Env { req: IncomingMessage; caller: Caller }
 type Args = Record<string, unknown>;
@@ -41,6 +41,14 @@ const GUIDE = guideTopics((body) => body.replace("{{OPS}}", Object.keys(OPS).map
 export const GUIDE_TOPICS = [...GUIDE.keys()];
 
 const ACCEPTED = /\.(pdf|md|markdown|txt|html?)$/i;
+
+/** The source on a board already captured from this page, however its link was written. */
+function alreadyCaptured(boardId: string, url: string): { id: string; filename: string | null } | null {
+  const key = canonicalUrl(url);
+  return key ? a.captured.all(boardId).find((r) => canonicalUrl(r.origin_url) === key) ?? null : null;
+}
+const capturedLine = (had: { id: string; filename: string | null }, ref: string): string =>
+  `Already on ${ref} as ${idOf("source", had.id)}${had.filename ? ` ("${had.filename}")` : ""}; nothing new was captured.`;
 
 const dashAsync = async <T,>(fn: () => Promise<T>): Promise<T> => { try { return await fn(); } catch (e) { if (e instanceof DashError) throw new AgentError(e.message); throw e; } };
 const dash = <T,>(fn: () => T): T => { try { return fn(); } catch (e) { if (e instanceof DashError) throw new AgentError(e.message); throw e; } };
@@ -174,12 +182,14 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "capture", title: "Capture a link", scope: "write",
-    description: "Adds a web article, arXiv page or YouTube video (as its transcript, with title, channel and date; this can take a minute or two) to a board as a source, the same way the app's capture does, but without flashcards unless study is true. Not for local files (use request_upload).",
+    description: "Adds a web article, arXiv page or YouTube video (as its transcript, with title, channel and date; this can take a minute or two) to a board as a source, the same way the app's capture does, but without flashcards unless study is true. A page the board already holds, however its link was written, comes back as the existing source and nothing is added. Not for local files (use request_upload).",
     inputSchema: schema({ board: BOARD, key: KEY, url: STR, study: STUDY }, ["board", "key", "url"]),
     write: async (x) => {
       const b = boardOf(x.board);
       const url = String(x.url ?? "").trim();
       if (!isHttpUrl(url)) fail("That doesn't look like a link.");
+      const had = alreadyCaptured(b.id, url);
+      if (had) return () => capturedLine(had, b.ref);
       const video = isYouTube(url);
       if (video && !FIRECRAWL_KEY) fail("This room has no Firecrawl key, so it can't read YouTube transcripts. Add the video from the app, which takes captions downloaded on your machine.");
       if (!captureAvailable) fail("This room has no article fetcher configured, so links can't be captured. Download the page and use request_upload.");
@@ -188,6 +198,8 @@ export const TOOLS: Tool[] = [
         : `Couldn't fetch that ${video ? "video's transcript" : "page"}: ${e.message}`));
       prepared.input.study = x.study === true;
       return () => {
+        const raced = alreadyCaptured(b.id, url);
+        if (raced) return capturedLine(raced, b.ref);
         const rid = writeSource(b.id, prepared, null);
         pairForResource(b.id, filename, rid);
         logEvent(db, APP, "capture_done", { board: b.id, kind: video ? "youtube" : "article", via: "agent" }, null);
@@ -256,7 +268,7 @@ export const TOOLS: Tool[] = [
   // Dispatch: one object, a thread { id, title, text, stage, page, notes }, and three calls on it.
   {
     name: "dashboard_board", title: "Dispatch: the board", scope: "read",
-    description: "Every open thread on the dashboard as JSON [{ id, title, stage }], those in implementing first. A thread in implementing is waiting on you: open it.",
+    description: "Every open thread on the dashboard as JSON [{ id, title, stage, claimed? }], those in implementing first. A thread in implementing is waiting on a run: claim it with dashboard_claim before working on it. claimed { run, until } means a run is working on it; leave it unless the run is yours.",
     inputSchema: schema({}),
     read: () => JSON.stringify(dispatchBoard(), null, 1),
   },
@@ -265,6 +277,18 @@ export const TOOLS: Tool[] = [
     description: "One thread in full as JSON { id, title, text, stage, page, notes: [{ id, on, text }] }: page is the newest version's HTML (null before the first), notes are the reader's on that version, oldest first, on naming the words each is on. A note on nothing is a press (Send, or Reopen on a Finish page); the notes before it say what the reader wants, and you decide what comes next. No page: write one.",
     inputSchema: schema({ id: { type: "string", description: "The thread's id, from dashboard_board." } }, ["id"]),
     read: (x) => JSON.stringify(dash(() => openThread(String(x.id ?? ""))), null, 1),
+  },
+  {
+    name: "dashboard_claim", title: "Dispatch: take a thread", scope: "write",
+    description: "Claims a thread in implementing for this run, so no other run works on it at the same time. It is refused, naming the run and until when, if another run holds it. A claim lasts 30 minutes: claim again to renew it while you work, and posting a page releases it. run names this run and is the same on every call; pass it to dashboard_post too.",
+    inputSchema: schema({
+      key: KEY, id: { type: "string", description: "The thread's id." },
+      run: { type: "string", description: "This run's own id, the same on every call: your session's URL if you know it." },
+    }, ["key", "id", "run"]),
+    write: (x) => dashAsync(async () => {
+      const claim = prepareClaim(String(x.id ?? ""), x.run);
+      return () => { const said = dash(claim); logEvent(db, APP, "dispatch_claim", { renewed: said.startsWith("Renewed") }, null); return said; };
+    }),
   },
   {
     name: "dashboard_post", title: "Dispatch: say something back", scope: "write",
@@ -276,9 +300,10 @@ export const TOOLS: Tool[] = [
       replies: { type: "object", additionalProperties: { type: "string" }, description: "{ noteId: \"text\" }, ids from dashboard_open's notes." },
       ask: { type: "string", maxLength: 600, description: "The reader's ask as it stands now, synthesised from the thread and their notes: a line or two." },
       heard: { type: "string", maxLength: 600, description: "How you read it: what this version does about the ask, a line or two." },
+      run: { type: "string", description: "The run you claimed the thread with. A thread another run holds is refused." },
     }, ["key", "id"]),
     write: (x) => dashAsync(async () => {
-      const run = await preparePost(String(x.id ?? ""), { page: x.page, replies: x.replies, lands: x.lands, ask: x.ask, heard: x.heard });
+      const run = await preparePost(String(x.id ?? ""), { page: x.page, replies: x.replies, lands: x.lands, ask: x.ask, heard: x.heard, run: x.run });
       return () => { const said = dash(run); logEvent(db, APP, "dispatch_post", { page: x.page !== undefined, lands: x.lands ?? null, replies: x.replies ? Object.keys(x.replies as object).length : 0 }, null); return said; };
     }),
   },

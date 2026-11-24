@@ -7,7 +7,7 @@ import { htmlSource, prepareSource, writeSource, type PreparedSource } from "../
 import { bytesOf } from "../sources/blobs.ts";
 import { htmlProblems } from "../sources/check-html.ts";
 import { DashError, stageOf } from "./dashboard.ts";
-import { dashboardRepo as q, type PressRow, type TaskRow, type VersionRow } from "./repo.ts";
+import { dashboardRepo as q, type ClaimRow, type PressRow, type TaskRow, type VersionRow } from "./repo.ts";
 import type { Link } from "./dashboard.ts";
 
 const fail = (msg: string): never => { throw new DashError(msg); };
@@ -53,6 +53,7 @@ function press(t: TaskRow, kind: string, stage: string, version: number | null, 
   const at = now();
   const row: PressRow = { id: genId("p_"), task_id: t.id, kind, stage, version, at, session_url: sessionUrl };
   q.insPress.run(row.id, row.task_id, row.kind, row.stage, row.version, row.at, row.session_url);
+  q.dropClaim.run(t.id);
   moveTo(t, "implementing", at);
   return row;
 }
@@ -70,11 +71,57 @@ export function checkPress(id: string, kind: unknown): string {
 // ---------- the agent's three calls ----------
 
 export interface Note { id: string; on: string | null; text: string }
-export interface Thread { id: string; title: string; text: string; stage: string; page: string | null; notes: Note[] }
+export interface Claimed { run: string; until: string }
+export interface Thread { id: string; title: string; text: string; stage: string; page: string | null; notes: Note[]; claimed?: Claimed }
 
-export function board(): { id: string; title: string; stage: string }[] {
+// ---------- claims: one routine run per thread ----------
+
+/** How long a claim holds without its run renewing it: long enough for a proposal, renewed while a build goes on. */
+export const CLAIM_MS = 30 * 60_000;
+const claimed = (c: ClaimRow): Claimed => ({ run: c.run, until: new Date(c.until).toISOString() });
+const liveClaim = (id: string, at: number): ClaimRow | undefined => { const c = q.claimOf.get(id); return c && c.until > at ? c : undefined; };
+
+/** Whether run may work a thread at `at`: nobody holds it, this run does, or another run does until its claim lapses. */
+export function claimVerdict(cur: ClaimRow | undefined, run: string | null, at: number): "free" | "mine" | "taken" {
+  if (!cur || cur.until <= at) return "free";
+  return run !== null && cur.run === run ? "mine" : "taken";
+}
+
+export function checkRun(raw: unknown): string {
+  const s = typeof raw === "string" ? raw.trim() : "";
+  if (s.length < 4 || s.length > 200) fail("run names this run, 4–200 characters, the same on every call: your session's URL if you know it.");
+  return s;
+}
+
+function refuseTaken(id: string, run: string | null, at: number): ClaimRow | undefined {
+  const cur = liveClaim(id, at);
+  if (claimVerdict(cur, run, at) === "taken") fail(`Run ${cur!.run} is working ${id} until ${claimed(cur!).until}. Leave it and take another thread.`);
+  return cur;
+}
+
+/** Checks a claim before anything awaits; the returned function claims or renews it, inside the commit. */
+export function prepareClaim(id: string, rawRun: unknown): () => string {
+  const run = checkRun(rawRun);
+  const check = (at: number): ClaimRow | undefined => {
+    const s = stageOf(thread(id));
+    if (s !== "implementing") fail(`Only a thread in implementing is claimed; ${id} is in ${s}.`);
+    return refuseTaken(id, run, at);
+  };
+  check(now());
+  return () => {
+    const at = now(), cur = check(at);
+    q.putClaim.run(id, run, cur?.at ?? at, at + CLAIM_MS);
+    return `${cur ? "Renewed" : "Claimed"}: ${id} is yours until ${new Date(at + CLAIM_MS).toISOString()}. Claim it again before then if you are still working on it; posting a page releases it.`;
+  };
+}
+
+export function board(): { id: string; title: string; stage: string; claimed?: Claimed }[] {
   const order = ["implementing", "decide", "review", "todo", "thinking"];
-  return q.tasks.all().map((t) => ({ id: t.id, title: t.title, stage: stageOf(t) }))
+  const held = new Map(q.claims.all(now()).map((c) => [c.task_id, c]));
+  return q.tasks.all().map((t) => {
+    const c = held.get(t.id);
+    return { id: t.id, title: t.title, stage: stageOf(t), ...(c ? { claimed: claimed(c) } : {}) };
+  })
     .filter((t) => !ended(t.stage))
     .sort((x, y) => order.indexOf(x.stage) - order.indexOf(y.stage));
 }
@@ -93,14 +140,18 @@ function notesOf(v: VersionRow | undefined, presses: PressRow[]): Note[] {
 export function open(id: string): Thread {
   const t = q.task.get(id) ?? fail(`No thread ${id}. dashboard_board lists them.`);
   const vs = q.versionsOf.all(id), last = vs[vs.length - 1];
-  return { id: t.id, title: t.title, text: t.body, stage: stageOf(t), page: last ? (bytesOf(last.resource_id)?.toString("utf-8") ?? null) : null, notes: notesOf(last, q.pressesOf.all(id)) };
+  const c = liveClaim(id, now());
+  return { id: t.id, title: t.title, text: t.body, stage: stageOf(t), page: last ? (bytesOf(last.resource_id)?.toString("utf-8") ?? null) : null, notes: notesOf(last, q.pressesOf.all(id)),
+    ...(c ? { claimed: claimed(c) } : {}) };
 }
 
 
 
 /** Checks a post's shape and does the awaiting a page needs; the returned function writes, inside the commit. */
-export async function preparePost(id: string, raw: { page?: unknown; replies?: unknown; lands?: unknown; ask?: unknown; heard?: unknown }): Promise<() => string> {
+export async function preparePost(id: string, raw: { page?: unknown; replies?: unknown; lands?: unknown; ask?: unknown; heard?: unknown; run?: unknown }): Promise<() => string> {
   const t = q.task.get(id) ?? fail(`No thread ${id}. dashboard_board lists them.`);
+  const run = raw.run === undefined ? null : checkRun(raw.run);
+  refuseTaken(id, run, now());
   if (raw.page === undefined && raw.replies === undefined) fail("Post a page, replies, or both.");
   const page = raw.page === undefined ? undefined : typeof raw.page === "string" && raw.page.trim() ? raw.page : fail("page is the HTML of the next version.");
   if (page !== undefined && Buffer.byteLength(page) > MAX_UPLOAD_BYTES) fail("page is too big.");
@@ -123,6 +174,7 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
   return () => {
     const said: string[] = [];
     const at = now();
+    const held = refuseTaken(id, run, at);
     for (const [mid, text] of replies) {
       const m = q.noteMark.get(mid)!;
       q.insAgentReply.run(genId("mr-"), m.board_id, mid, m.resource_id, text, at, at);
@@ -136,8 +188,9 @@ export async function preparePost(id: string, raw: { page?: unknown; replies?: u
       const rid = writeSource(dispatchBoard(), prepared);
       q.insVersion.run(id, n, rid, lands, at, ask, heard);
       moveTo(cur, lands, at);
+      q.dropClaim.run(id);
       said.push(`v${n} posted; the thread is in ${lands === "finish" ? "Finish" : lands === "decide" ? "Decide" : "Review"}`);
-    }
+    } else if (held) q.putClaim.run(id, held.run, held.at, at + CLAIM_MS);
     return said.join("; ") + ".";
   };
 }

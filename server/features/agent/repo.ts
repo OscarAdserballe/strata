@@ -26,6 +26,7 @@ export const agentRepo = {
   boardsAll: stmt<{ id: string; title: string; type: string | null; handle: string | null; purpose: string | null; touched_at: number | null; created_at: number }>(
     "SELECT id,title,type,handle,purpose,touched_at,created_at FROM boards WHERE type IS NULL OR type != 'eval' ORDER BY COALESCE(touched_at, created_at) DESC"),
   boardByHandle: stmt<{ id: string }>("SELECT id FROM boards WHERE handle = ?"),
+  captured: stmt<{ id: string; filename: string | null; origin_url: string }>("SELECT id, filename, origin_url FROM resources WHERE board_id = ? AND origin_url IS NOT NULL"),
   boardMeta: stmt<{ id: string; title: string; handle: string | null; purpose: string | null; created_at: number; touched_at: number | null }>(
     "SELECT id,title,handle,purpose,created_at,touched_at FROM boards WHERE id = ?"),
   setHandle: stmt("UPDATE boards SET handle = ? WHERE id = ?"),
