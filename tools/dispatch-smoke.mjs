@@ -93,5 +93,19 @@ try {
   assert.match(page.url(), /view=triage&sub=todo/);
   assert.ok(await stageOf(kept));
   console.log("✓ To-do in the header opens the list");
+
+  // Runs: one click from Finish's list, read only when opened, a lane per run with the press that came back as a page
+  const runsReads = [];
+  page.on("request", (r) => { if (r.url().includes("/api/dashboard/runs")) runsReads.push(r.url()); });
+  await page.goto(`${base}/dispatch?view=finish`, { waitUntil: "networkidle" });
+  assert.equal(runsReads.length, 0, "Finish doesn't read the runs");
+  await page.locator(".ws-rail").waitFor();
+  await page.keyboard.press("[");
+  await page.getByRole("button", { name: "Archived and runs →" }).click();
+  await page.locator(".runs-lane").first().waitFor({ timeout: 10000 });
+  assert.match(page.url(), /view=runs/);
+  assert.ok(await page.locator(".runs-block.posted").count() >= 1, "a press that came back as a page is drawn");
+  assert.equal(runsReads.length, 1);
+  console.log("✓ Runs opens from Finish, read only when opened");
   assert.deepEqual(errors, []);
 } finally { await browser.close(); }

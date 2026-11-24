@@ -39,6 +39,16 @@ export const useArchive = (on: boolean): DashTask[] | null => {
   const v = useQuery<{ tasks: DashTask[] }>(on ? ARCHIVE_KEY : "dashboard-archive-off", on ? archiveRead : async () => ({ value: { tasks: [] }, rev: 0, epoch: "", origin: "wire", stamp: 0 }), { tags: [ARCHIVE_KEY] });
   return on ? v?.tasks ?? null : null;
 };
+export interface RunPress {
+  id: string; task: string; title: string; label: string; at: number; version: number | null;
+  posted: { n: number; at: number; lands: string } | null; open: string | null;
+}
+export interface RunView { key: string; sessionUrl: string | null; at: number; presses: RunPress[] }
+export interface RunsView { now: number; since: number; runs: RunView[]; ranAt: number | null; ranSession: string | null }
+export const RUNS_KEY = "dashboard-runs";
+const runsRead: Fetcher<RunsView> = () => fetched<RunsView>("/api/dashboard/runs");
+/** Read only while the Runs view is open: nothing else pays for a week of presses. */
+export const useRuns = (): RunsView | undefined => useQuery<RunsView>(RUNS_KEY, runsRead, { tags: [RUNS_KEY] });
 export const useRoutine = (): RoutineView | undefined => useQuery<RoutineView>(ROUTINE_KEY, routineRead, { tags: [ROUTINE_KEY] });
 
 /** A write's answer carries the board and the pane as they now are, each under the dashboard's own revision. */

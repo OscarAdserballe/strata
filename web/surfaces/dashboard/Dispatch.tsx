@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { StrataWhy } from "../../data/api.ts";
-import { dash, useArchive, useDispatch, type DispatchThread, type DispatchVersion } from "../../data/entities/dashboard.ts";
+import { dash, useDispatch, type DispatchThread, type DispatchVersion } from "../../data/entities/dashboard.ts";
 import { toast } from "../../shell/layers.ts";
 import LivePage from "../../capabilities/live/LivePage.tsx";
 import { switches } from "../../capabilities/fold/switches.ts";
-import type { View } from "./nav.ts";
+import { go, type View } from "./nav.ts";
 import { age, hm } from "./parts.tsx";
 import NewThread from "./NewThread.tsx";
 
@@ -30,7 +30,7 @@ const typing = (t: EventTarget | null) => !!(t as HTMLElement | null)?.closest?.
 type Press = "send" | "drop" | "archive" | "todo" | "thinking";
 
 /** Dispatch: threads Claude answers with a page, read on the sheet with Strata's notes; Send, Later, To thinking and Drop on the card, Archive in Finish. */
-export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thinking" | "review"> }) {
+export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thinking" | "review" | "runs"> }) {
   const pane = useDispatch();
   const stage = view === "built" ? "review" : view;
   const here = (pane?.threads ?? []).filter((t) => t.stage === stage).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -204,13 +204,7 @@ function Implementing({ threads, on, onPick }: { threads: DispatchThread[]; on: 
   ))}</>;
 }
 
-// Finish's fold: Dispatch threads archived or dropped, loaded only when opened.
+// Finish's way to the archive, which now lives with the runs: one click to see what was archived and how each thread was handled.
 function Archived() {
-  const [open, setOpen] = useState(false);
-  const list = (useArchive(open) ?? []).filter((t) => t.dispatched).slice(0, 40);
-  return <>
-    <button className="ws-fold" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide archived" : "Archived"}</button>
-    {open ? list.map((x) => <div key={x.id} className="ws-done"><span>{x.title}</span><i>{x.stage === "dropped" ? "dropped" : "archived"}</i></div>) : null}
-    {open && !list.length ? <p className="ws-none">Nothing archived yet.</p> : null}
-  </>;
+  return <button className="ws-fold" onClick={() => go({ view: "runs" })}>Archived and runs →</button>;
 }
