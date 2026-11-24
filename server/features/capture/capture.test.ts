@@ -5,7 +5,7 @@ import {
   isYouTube, isHttpUrl, ytDlpCommand, parseVtt, cuesToParagraphs, transcriptToMarkdown,
   articleToMarkdown, firstHeading, captureFilename, hostname, fetchOembed, dropOverlap,
   stripSiteSuffix, healSeams, normalizeExtract, appendMissingImages,
-  parseYouTubeScrape, videoToMarkdown, linesToParagraphs,
+  parseYouTubeScrape, videoToMarkdown, linesToParagraphs, canonicalUrl,
 } from "./capture.ts";
 
 const VTT = `WEBVTT
@@ -257,4 +257,14 @@ test("caption lines join into paragraphs at a sentence end once long enough, and
   const unpunctuated = linesToParagraphs(Array.from({ length: 200 }, () => "ja es ist wieder zeit für so ein video"));
   assert.ok(unpunctuated.length > 1);
   assert.ok(unpunctuated.every((p) => p.length <= 1100));
+});
+
+test("canonicalUrl: one key for a page however its link is written", () => {
+  const same = (urls: string[]) => assert.equal(new Set(urls.map(canonicalUrl)).size, 1, urls.map(canonicalUrl).join(" | "));
+  same(["https://www.youtube.com/watch?v=jNQXAC9IVRw", "https://youtu.be/jNQXAC9IVRw?si=abc", "https://m.youtube.com/watch?v=jNQXAC9IVRw&t=30s",
+    "https://www.youtube.com/live/jNQXAC9IVRw", "https://youtube.com/shorts/jNQXAC9IVRw"]);
+  same(["https://www.nytimes.com/2025/10/01/opinion/ezra-klein.html?utm_source=x#top", "http://nytimes.com/2025/10/01/opinion/ezra-klein.html/"]);
+  same(["https://example.com/p?b=2&a=1", "https://example.com/p?a=1&b=2&fbclid=zz"]);
+  assert.notEqual(canonicalUrl("https://www.youtube.com/watch?v=aaaaaaaaaaa"), canonicalUrl("https://www.youtube.com/watch?v=bbbbbbbbbbb"));
+  assert.notEqual(canonicalUrl("https://example.com/p?id=1"), canonicalUrl("https://example.com/p?id=2"));
 });
