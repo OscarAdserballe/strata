@@ -139,7 +139,7 @@ try {
   try {
     flight.wire.cut = true;
     await flight.page.evaluate(() => window.dispatchEvent(new Event("offline")));
-    await flight.page.locator(".connection-banner").getByText("Offline", { exact: true }).waitFor({ timeout: 30000 });
+    await flight.page.locator(".connection-mark.off").waitFor({ timeout: 30000 });
     await flight.page.keyboard.press("Space");
     await flight.page.keyboard.press("2");
     await flight.review.locator(".q").filter({ hasText: "Question down" }).waitFor();
@@ -147,7 +147,7 @@ try {
     await flight.page.keyboard.press("1");
     await flight.review.locator(".q").filter({ hasText: "Question left" }).waitFor();
     assert.equal(await flight.review.getByRole("alert").count(), 0, "offline grading raises no save alert");
-    await flight.page.locator(".connection-banner").getByText(/2 changes kept on this device/).waitFor();
+    await flight.page.waitForFunction(() => /2 changes kept on this device/.test(document.querySelector(".connection-mark.off")?.getAttribute("title") ?? ""));
     const shelved = await flight.page.evaluate(() => Object.keys(localStorage).filter(k => k.startsWith("strata.outbox.grade.")).length);
     assert.equal(shelved, 2, "both offline grades are kept on the device");
     assert.equal(flight.attempts.length, 0);
@@ -160,7 +160,7 @@ try {
     assert.deepEqual([first.body.card, first.body.got, second.body.card, second.body.got], ["up", true, "down", false]);
     assert.notEqual(first.body.requestId, second.body.requestId);
     await flight.page.waitForFunction(() => !Object.keys(localStorage).some(k => k.startsWith("strata.outbox.grade.")));
-    await flight.page.locator(".connection-banner").getByText("Synced 2 · 0 clashes", { exact: true }).waitFor();
+    await flight.page.locator(".connection-mark").getByText("Synced 2 changes", { exact: true }).waitFor();
     console.log("✓ offline, grading carries on, the grades wait on the device, and they sync once, in order, on reconnect");
   } finally { await flight.close(); }
 

@@ -36,8 +36,8 @@ try {
 
   await context.setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
-  await page.locator(".connection-banner").getByText(/ saved today /).waitFor();
-  assert.match(await page.locator(".connection-banner").innerText(), /are kept on this device; other changes need a connection/);
+  await page.locator(".connection-mark.off").waitFor();
+  assert.match(await page.locator(".connection-mark.off").getAttribute("title"), /are kept on this device; other changes need a connection · .* saved today /);
   // airplane mode: every read the coverage table says a Download saves answers from this device, none with the shelf's 503
   const unanswered = await page.evaluate(async (urls) => {
     const out = [];
@@ -52,24 +52,24 @@ try {
   assert.ok(saved.some((u) => u.endsWith("/api/review")), "review is downloaded, not only kept from the last visit");
   console.log(`✓ offline, all ${saved.length} saved reads answer from the device`);
   await page.getByRole("navigation", { name: "Strata" }).getByRole("button", { name: "Today", exact: true }).click();
-  assert.ok(await page.locator(".connection-banner").isVisible(), "library must retain the offline notice");
+  assert.ok(await page.locator(".connection-mark.off").isVisible(), "library must retain the offline marker");
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload({ waitUntil: "domcontentloaded" });
   // measure only once the library's entrance animation has stopped moving the banner
-  await page.locator(".connection-banner").waitFor();
+  await page.locator(".connection-mark.off").waitFor();
   await still(page);
-  const banner = await page.locator(".connection-banner").boundingBox();
-  assert.ok(banner.x >= 0 && banner.width <= 390 && banner.height > 0);
+  const banner = await page.locator(".connection-mark.off").boundingBox();
+  assert.ok(banner.x >= 0 && banner.x + banner.width <= 390 && banner.height > 0 && banner.height <= 32, "the marker is a small pill, not a bar");
   await page.getByRole("region", { name: "Downloaded for offline reading" }).getByRole("button", { name: board.title }).waitFor();
   if (process.env.STRATA_OFFLINE_SCREENSHOT) await page.screenshot({ path: process.env.STRATA_OFFLINE_SCREENSHOT });
-  console.log("✓ saved room reopens offline with a dated banner that keeps changes on the device, including the mobile library");
+  console.log("✓ saved room reopens offline with a dated marker that keeps changes on the device, including the mobile library");
 
   await context.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  await page.getByRole("button", { name: "Refresh now" }).waitFor();
+  await page.locator(".connection-mark").getByRole("button", { name: "Refresh" }).waitFor();
   page.on("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Refresh now" }).click();
-  await page.waitForFunction(() => !document.querySelector(".connection-banner"));
+  await page.locator(".connection-mark").getByRole("button", { name: "Refresh" }).click();
+  await page.waitForFunction(() => !document.querySelector(".connection-mark"));
   assert.deepEqual((await cached()).sort(), saved.sort(), "reconnecting must preserve downloads");
 
   // A short outage must pass without the banner; one longer than the grace must raise it and clear on return.
@@ -80,7 +80,7 @@ try {
       window.__offAt = Date.now();               // at or before the first refusal: the outage can only be longer
       window.__healedAt = null;
       window.addEventListener("strata:wire", () => { if (window.__awaitHeal) window.__healedAt ??= Date.now(); });
-      new MutationObserver(() => { if (document.querySelector(".connection-banner")) window.__bannerSeen = true; })
+      new MutationObserver(() => { if (document.querySelector(".connection-mark.off")) window.__bannerSeen = true; })
         .observe(document.body, { childList: true, subtree: true });
     });
     let probesRefused = 0;
@@ -102,14 +102,14 @@ try {
     assert.ok(attempt < 3, `the machine stretched every staged outage past the grace (the last to ${outage} ms)`);
     console.log(`  (a loaded machine stretched the outage to ${outage} ms, past the grace; staging it again)`);
     await page.reload({ waitUntil: "domcontentloaded" });
-    await page.waitForFunction(() => !document.querySelector(".connection-banner"), null, { timeout: 30_000 });
+    await page.waitForFunction(() => !document.querySelector(".connection-mark.off"), null, { timeout: 30_000 });
   }
-  assert.equal(await page.locator(".connection-banner").count(), 0, "…and once the wire has answered, none is coming");
+  assert.equal(await page.locator(".connection-mark.off").count(), 0, "…and once the wire has answered, none is coming");
   console.log("✓ a moment's outage passes without the offline banner");
 
   await context.setOffline(true);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
-  const offline = page.locator(".connection-banner").getByText("Offline", { exact: true });
+  const offline = page.locator(".connection-mark.off");
   await offline.waitFor({ timeout: 60_000 });   // ceilings, not waits: the grace (8 s) plus a probe, on a loaded machine
   await context.setOffline(false);
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
@@ -124,7 +124,7 @@ try {
   });
   await page.evaluate(() => window.dispatchEvent(new Event("focus")));
   await page.waitForLoadState("networkidle");
-  assert.equal(await page.locator(".connection-banner").count(), 0, "a new build shows no banner");
+  assert.equal(await page.locator(".connection-mark, .connection-banner").count(), 0, "a new build shows no banner");
   await page.reload({ waitUntil: "networkidle" });
   assert.deepEqual((await cached()).sort(), saved.sort(), "reloading into a new build must preserve downloaded content");
   console.log("✓ a new build shows no banner, and reloading into it preserves downloaded content");
