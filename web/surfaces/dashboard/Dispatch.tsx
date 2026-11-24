@@ -37,9 +37,6 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   // a thread arriving later sorts above the one on the sheet, so pin what is shown
   const pinned = here.some((x) => x.id === sel?.thread);
   useEffect(() => { if (!pinned && t) setSel({ thread: t.id, n: null }); }, [pinned, t?.id]);
-  // the sheet fits a short page; a long one fills the room and scrolls in its frame
-  const [tall, setTall] = useState<{ rid: string; h: number } | null>(null);
-  const fit = v && tall?.rid === v.resourceId ? Math.max(tall.h, 240) : null;
   // the thread list is a drawer over the sheet: hover the rail a moment, or press [
   const [drawer, setDrawer] = useState(false);
   const hover = useRef<number | null>(null);
@@ -125,9 +122,8 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
         {t && v ? <AskLine t={t} v={v} open={unfolded === v.resourceId} onToggle={() => setUnfolded(unfolded === v.resourceId ? null : v.resourceId)}>
           {stage !== "implementing" ? acts(t) : null}
         </AskLine> : null}
-        <div className="ws-sheet" style={fit ? { flex: `0 1 ${fit}px` } : undefined} onMouseEnter={() => setUnfolded(null)}>
-          {t && v && pane?.board ? <LivePage key={v.resourceId} board={pane.board} resource={v.resourceId}
-            onHeight={(h) => setTall((was) => (was?.rid === v.resourceId && was.h === h ? was : { rid: v.resourceId, h }))} /> : null}
+        <div className="ws-sheet" onMouseEnter={() => setUnfolded(null)}>
+          {t && v && pane?.board ? <LivePage key={v.resourceId} board={pane.board} resource={v.resourceId} /> : null}
           {blank ? <div className="ws-blank"><p>{blank}</p></div> : null}
         </div>
       </div>
