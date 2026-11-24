@@ -3,7 +3,7 @@ import type { IncomingMessage } from "node:http";
 import { q } from "../repo.ts";
 import { imports } from "../imports/pump.ts";
 import { prepareArticle, prepareVideo } from "../capture/article.ts";
-import { captureAvailable, FIRECRAWL_KEY, isHttpUrl, isYouTube, NoTranscript } from "../capture/capture.ts";
+import { captureAvailable, capturedFrom, FIRECRAWL_KEY, isHttpUrl, isYouTube, NoTranscript } from "../capture/capture.ts";
 import { insertBoard } from "../boards/create.ts";
 import { pairForResource, writeSource } from "../sources/ingest.ts";
 import { logEvent } from "../../platform/events/events.ts";
@@ -174,12 +174,15 @@ export const TOOLS: Tool[] = [
   },
   {
     name: "capture", title: "Capture a link", scope: "write",
-    description: "Adds a web article, arXiv page or YouTube video (as its transcript, with title, channel and date; this can take a minute or two) to a board as a source, the same way the app's capture does, but without flashcards unless study is true. Not for local files (use request_upload).",
+    description: "Adds a web article, arXiv page or YouTube video (as its transcript, with title, channel and date; this can take a minute or two) to a board as a source, the same way the app's capture does, but without flashcards unless study is true. A link the board already has a source from (the same video or page, by any URL form) returns that source and adds nothing. Not for local files (use request_upload).",
     inputSchema: schema({ board: BOARD, key: KEY, url: STR, study: STUDY }, ["board", "key", "url"]),
     write: async (x) => {
       const b = boardOf(x.board);
       const url = String(x.url ?? "").trim();
       if (!isHttpUrl(url)) fail("That doesn't look like a link.");
+      const had = capturedFrom(b.id, url);
+      const already = (s: { id: string; filename: string | null }) => `Already on ${b.ref} as ${idOf("source", s.id)} "${s.filename ?? url}", captured from the same link; nothing was added.`;
+      if (had) return () => already(capturedFrom(b.id, url) ?? had);
       const video = isYouTube(url);
       if (video && !FIRECRAWL_KEY) fail("This room has no Firecrawl key, so it can't read YouTube transcripts. Add the video from the app, which takes captions downloaded on your machine.");
       if (!captureAvailable) fail("This room has no article fetcher configured, so links can't be captured. Download the page and use request_upload.");
@@ -188,6 +191,9 @@ export const TOOLS: Tool[] = [
         : `Couldn't fetch that ${video ? "video's transcript" : "page"}: ${e.message}`));
       prepared.input.study = x.study === true;
       return () => {
+        // a second capture of the link may have landed while this one fetched
+        const landed = capturedFrom(b.id, url);
+        if (landed) return already(landed);
         const rid = writeSource(b.id, prepared, null);
         pairForResource(b.id, filename, rid);
         logEvent(db, APP, "capture_done", { board: b.id, kind: video ? "youtube" : "article", via: "agent" }, null);

@@ -5,7 +5,7 @@ import {
   isYouTube, isHttpUrl, ytDlpCommand, parseVtt, cuesToParagraphs, transcriptToMarkdown,
   articleToMarkdown, firstHeading, captureFilename, hostname, fetchOembed, dropOverlap,
   stripSiteSuffix, healSeams, normalizeExtract, appendMissingImages,
-  parseYouTubeScrape, videoToMarkdown, linesToParagraphs,
+  parseYouTubeScrape, videoToMarkdown, linesToParagraphs, linkKey,
 } from "./capture.ts";
 
 const VTT = `WEBVTT
@@ -257,4 +257,14 @@ test("caption lines join into paragraphs at a sentence end once long enough, and
   const unpunctuated = linesToParagraphs(Array.from({ length: 200 }, () => "ja es ist wieder zeit für so ein video"));
   assert.ok(unpunctuated.length > 1);
   assert.ok(unpunctuated.every((p) => p.length <= 1100));
+});
+
+test("linkKey: the same video, paper or page by another URL is one key; different things stay apart", () => {
+  const same = (xs: string[]) => assert.equal(new Set(xs.map(linkKey)).size, 1, xs.join(" | "));
+  same(["https://www.youtube.com/watch?v=jNQXAC9IVRw", "https://youtu.be/jNQXAC9IVRw?si=abc", "https://m.youtube.com/watch?v=jNQXAC9IVRw&t=42s", "https://www.youtube.com/shorts/jNQXAC9IVRw", "https://www.youtube.com/live/jNQXAC9IVRw?feature=share"]);
+  same(["https://arxiv.org/abs/2401.01234", "https://arxiv.org/abs/2401.01234v3", "https://arxiv.org/pdf/2401.01234v2.pdf"]);
+  same(["https://www.example.com/a/post/?utm_source=x&b=2&a=1#top", "http://example.com/a/post?a=1&b=2", "https://example.com/a/post?fbclid=zz&a=1&b=2"]);
+  assert.notEqual(linkKey("https://youtu.be/jNQXAC9IVRw"), linkKey("https://youtu.be/dQw4w9WgXcQ"));
+  assert.notEqual(linkKey("https://example.com/a?id=1"), linkKey("https://example.com/a?id=2"));
+  assert.notEqual(linkKey("https://example.com/a"), linkKey("https://other.com/a"));
 });

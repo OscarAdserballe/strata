@@ -1,4 +1,5 @@
 import { envGet, fetchWithTimeout } from "../../platform/llm/llm.ts";
+import { captureRepo } from "./repo.ts";
 
 export const TAVILY_KEY = envGet("TAVILY_API_KEY");
 export const FIRECRAWL_KEY = envGet("FIRECRAWL_API_KEY");
@@ -15,6 +16,34 @@ export function isYouTube(url: string): boolean {
 }
 export function isHttpUrl(url: string): boolean {
   try { const u = new URL(url); return u.protocol === "http:" || u.protocol === "https:"; } catch { return false; }
+}
+
+// Tracking parameters say who shared a link, not what it points at.
+const TRACKING = /^(utm_[a-z_]+|fbclid|gclid|mc_cid|mc_eid|ref|ref_src)$/i;
+
+/** One key per thing a link points at, so the same video or article reached by another URL is known as the same. */
+export function linkKey(url: string): string {
+  let u: URL;
+  try { u = new URL(url.trim()); } catch { return url.trim(); }
+  const host = u.hostname.toLowerCase().replace(/^(www|m)\./, "");
+  if (host === "youtu.be") return `youtube:${u.pathname.split("/")[1] ?? ""}`;
+  if (host.endsWith("youtube.com")) {
+    const v = u.searchParams.get("v") ?? u.pathname.match(/^\/(?:shorts|live|embed)\/([^/?#]+)/)?.[1];
+    if (v) return `youtube:${v}`;
+  }
+  if (host === "arxiv.org") {
+    const id = u.pathname.match(/^\/(?:abs|pdf|html)\/([^/?#]+?)(?:v\d+)?(?:\.pdf)?\/?$/)?.[1];
+    if (id) return `arxiv:${id}`;
+  }
+  const params = [...u.searchParams].filter(([k]) => !TRACKING.test(k)).sort(([a, x], [b, y]) => (a === b ? x.localeCompare(y) : a.localeCompare(b)));
+  const query = params.length ? `?${new URLSearchParams(params).toString()}` : "";
+  return `${host}${u.pathname.replace(/\/+$/, "")}${query}`;
+}
+
+/** The source on this board already captured from what url points at, if there is one. */
+export function capturedFrom(boardId: string, url: string): { id: string; filename: string | null } | null {
+  const key = linkKey(url);
+  return captureRepo.linked.all(boardId).find((r) => linkKey(r.origin_url) === key) ?? null;
 }
 
 // --impersonate chrome dodges YouTube's 429 throttle; "en-orig,en" avoids the junk en-en-US variant.

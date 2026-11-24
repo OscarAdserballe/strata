@@ -108,3 +108,23 @@ test("an agent captures a youtube link unstudied, and is told plainly when there
   assert.match(broken.text, /Couldn't fetch that video's transcript: Firecrawl HTTP 500/);
   assert.equal(rows("SELECT id FROM resources WHERE board_id = ?", board).length, 1);
 });
+
+test("an agent capturing a link the board already has gets that source back, even when two runs capture it at once", async () => {
+  const board = await newBoard(server, { title: "Agent repeats" });
+  const { token } = (await server.api("/api/agent/tokens", { method: "POST", body: JSON.stringify({ name: "repeats", write: true }) })).body;
+  const [a, b] = await Promise.all([
+    tool(token, { board, key: "agent-rep-1", url: "https://www.youtube.com/watch?v=jNQXAC9IVRw" }),
+    tool(token, { board, key: "agent-rep-2", url: "https://youtu.be/jNQXAC9IVRw?si=shared" }),
+  ]);
+  const said = [a, b].map((r) => r.text).sort();
+  assert.ok(a.isError === false && b.isError === false, said.join(" | "));
+  assert.match(said[0], /^Already on \S+ as src_\S+ "[^"]+", captured from the same link; nothing was added\.$/);
+  assert.match(said[1], /^Captured "Me at the zoo"/);
+  const calls = asked.length;
+  const later = await tool(token, { board, key: "agent-rep-3", url: "https://m.youtube.com/watch?v=jNQXAC9IVRw&t=12s" });
+  assert.match(later.text, /^Already on/);
+  assert.equal(asked.length, calls, "a link already on the board is not fetched again");
+  assert.equal(rows("SELECT id FROM resources WHERE board_id = ?", board).length, 1);
+  const elsewhere = await newBoard(server, { title: "Another board" });
+  assert.match((await tool(token, { board: elsewhere, key: "agent-rep-4", url: "https://youtu.be/jNQXAC9IVRw" })).text, /^Captured/, "another board captures it afresh");
+});

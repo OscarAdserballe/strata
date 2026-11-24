@@ -35,7 +35,7 @@ revokes them.
 | `get_guide` | The server's own instructions (`server/features/agent/guide.md`) |
 | `request_upload` | A one-time signed upload link per new PDF, Markdown, text or HTML file, or the existing source for known bytes |
 | `get_import` | An upload's progress |
-| `capture` | A web page, arXiv abstract or YouTube transcript, through the app's own capture |
+| `capture` | A web page, arXiv abstract or YouTube transcript, through the app's own capture; a link the board already has a source from (by any URL form, `linkKey` in `capture.ts`) returns that source |
 | `apply` | A batch of typed operations, all or nothing; each op's fields are in its input schema |
 | `create_board` | A new board, with a handle and a purpose |
 | `dashboard_add_items` | Tasks into the dashboard's inbox: a title, a line of context and where it came from, for the reader to send on or drop |
