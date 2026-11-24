@@ -1,5 +1,6 @@
 import { useSyncExternalStore } from "react";
 import { StrataAPI, StrataConnection, StrataPath, StrataWireDown } from "../../data/api.ts";
+import { offlineReads } from "../../../shared/offline/contract.ts";
 import { fetchAsset, saveOfflineUrl } from "./offline.ts";
 
 // progress lives in its own store, so each step re-renders the button and not the room
@@ -33,7 +34,7 @@ export async function downloadBoard(id: string | null, b: Board, say: Say): Prom
   } catch (e) { toastWhy(e, "couldn't download the interface"); return; }
   // ask for persistent storage: Safari evicts Cache Storage for sites it thinks you left
   try { navigator.storage && navigator.storage.persist && navigator.storage.persist(); } catch { /* best effort */ }
-  const urls = new Set([StrataPath("/"), StrataPath("/api/boards"), StrataPath("/api/decks"), StrataPath("/api/register"), StrataPath(`/api/boards/${id}`), StrataPath(`/api/boards/${id}/touched`)]);
+  const urls = new Set(offlineReads(id, b).map((p) => StrataPath(p)));
   for (const el of document.querySelectorAll<HTMLScriptElement & HTMLLinkElement>("script[src], link[rel=stylesheet]")) urls.add(el.src || el.href);
   for (const asset of assets) urls.add(StrataPath("/" + asset));
   urls.add(StrataPath("/pdf.worker.min.js"));
@@ -43,14 +44,6 @@ export async function downloadBoard(id: string | null, b: Board, say: Say): Prom
     const css = cssUrl ? await (await fetchAsset(cssUrl)).text() : "";
     for (const m of css.matchAll(/url\((['"]?)([^)'"]+?\.woff2)\1\)/g)) urls.add(new URL(m[2], cssUrl).href);
   } catch { /* maths falls back to whatever fonts are already cached */ }
-  for (const p of b.pairs || []) if (p.deck) urls.add(StrataPath(`/api/decks/${p.deck}`));
-  for (const r of b.resources || []) {
-    urls.add(StrataPath(`/api/boards/${id}/messages?resource=${encodeURIComponent(r.id)}`));
-    urls.add(StrataAPI.resourceRawUrl(id, r.id));
-    if (r.kind !== "pdf") urls.add(StrataPath(`/api/boards/${id}/resources/${r.id}/preview`));
-    urls.add(StrataPath(`/api/boards/${id}/resources/${r.id}/tree`));
-  }
-  for (const s of b.sections || []) urls.add(StrataPath(`/api/boards/${id}/resources/${s.resourceId}/tree?section=${encodeURIComponent(s.id)}`));
   const list = Array.from(urls);
   let done = 0, missed = 0;
   tell(`0 / ${list.length}`);

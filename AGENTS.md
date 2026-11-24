@@ -64,6 +64,11 @@ Run `--quick` after each step and the whole thing before a PR. Each stage serves
     (`server/features/dashboard`): a separate app the room only hosts, with its own `dashboard_*`
     tools because no board owns it. See [docs/agent.md](docs/agent.md).
 
+14. **Offline is a contract.** A new write is either an outbox kind (it waits on the device and is
+    sent on reconnect) or online-only with a reason, in `shared/offline/contract.ts`; a new read a
+    reading screen needs goes in its `offlineReads`, which the board download saves.
+    `test/offline-contract.test.ts` fails on a write that is in neither.
+
 ## Branches
 
 Open as many branches as the work needs: one branch and PR per separate piece of work. The branch a

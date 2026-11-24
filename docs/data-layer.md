@@ -49,6 +49,11 @@ and every read must be ordered against the writes it may have missed.
   over, and the server refuses it with a 409 if another note is there now. If a save that waited
   offline gets a 409 with a different text, it is not written over. It becomes a clash (`strata.clash.<key>`: where, mine, theirs, rev), listed by the
   offline banner until you keep mine (sent over the new rev), keep theirs, or hand it to an agent.
+- **The offline contract** (`shared/offline/contract.ts`). Every write is listed as waiting in an
+  outbox kind or as online-only with its reason, and `offlineReads` names what a downloaded board
+  answers. Cards you write or edit (`authored`, `card-edit`) wait like marks; a link pasted offline
+  waits in `strata.links.` and is captured under its receipt on reconnect. Formatting a card asks the
+  model, so Save keeps your words as typed and Format is the optional step.
 - **Undo.** An op may be held (`holdMs`): its layers paint at once, it leaves only when the hold is
   up, and until then `withdraw(key)` takes it back unsent. The pagehide flush sends a held op early.
   A source's delete is held 8 s for the Undo in its toast; the server keeps that source's kept cards.
