@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { chromium } from "playwright";
+import { chromium, devices } from "playwright";
 
-// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, keeps it on the sheet when another thread arrives, and drops threads from Decide and Thinking, and To-do opens from the header.
+// node tools/dispatch-smoke.mjs [base]: Dispatch draws a page posted while Decide is open, on a phone too, keeps it on the sheet when another thread arrives, and drops threads from Decide and Thinking, and To-do opens from the header.
 const base = (process.argv[2] || "http://127.0.0.1:8804").replace(/\/+$/, "");
 let n = 0;
 const key = () => `smoke-${Date.now().toString(36)}-${++n}`;
@@ -39,6 +39,19 @@ try {
   assert.equal(await page.locator(".ws-asked .heard p").textContent(), "Two fields above every page: the ask, and how Claude read it.");
   if (process.env.DISPATCH_SHOT) await page.screenshot({ path: process.env.DISPATCH_SHOT });
   console.log("✓ the ask and how Claude read it sit above the page");
+
+  // a phone draws the same page in its frame, on a sheet tall enough to read
+  const phone = await browser.newContext(devices["iPhone 13"]);
+  try {
+    const pp = await phone.newPage();
+    await pp.goto(`${base}/dispatch?view=decide`, { waitUntil: "networkidle" });
+    await pp.locator(".ws-list").getByText(`Smoke ${run}: a page posted while Decide is open`).click({ timeout: 15000 });
+    const pf = await (await pp.waitForSelector(".ws-sheet iframe.html-frame", { timeout: 15000 })).contentFrame();
+    await pf.waitForSelector("text=Posted while you looked", { timeout: 15000 });
+    const h = await pp.locator(".ws-sheet").evaluate((e) => e.getBoundingClientRect().height);
+    assert.ok(h > 400, `the sheet on a phone is ${h}px tall`);
+  } finally { await phone.close(); }
+  console.log("✓ a phone draws the page in its frame");
 
   // a thread arriving while a page is on the sheet doesn't take the sheet, even one never clicked
   await page.reload({ waitUntil: "networkidle" });

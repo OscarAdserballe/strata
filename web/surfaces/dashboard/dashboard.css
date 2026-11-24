@@ -343,6 +343,7 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
   .ws.railed{padding:20px 16px 0}
   .ws.railed .ws-list{position:static;width:auto;padding:0;background:none;box-shadow:none;opacity:1;transform:none;pointer-events:auto}
   .ws.railed .ws-room{flex:none}
+  .dispatch .ws-sheet{flex:none;height:85vh;height:85svh}
   .ws-bar{flex-wrap:wrap;padding:6px 8px 6px 12px}
   .ws-bar .ask{order:3;flex:1 0 100%;border-left:0;border-top:1px solid var(--d-line);padding:8px 0 4px;flex-direction:column;gap:4px}
   .ws-bar .ask>span{flex:none}
