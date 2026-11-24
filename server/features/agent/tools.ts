@@ -3,7 +3,7 @@ import type { IncomingMessage } from "node:http";
 import { q } from "../repo.ts";
 import { imports } from "../imports/pump.ts";
 import { prepareArticle, prepareVideo } from "../capture/article.ts";
-import { captureAvailable, FIRECRAWL_KEY, isHttpUrl, isYouTube, NoTranscript } from "../capture/capture.ts";
+import { canonicalUrl, captureAvailable, FIRECRAWL_KEY, isHttpUrl, isYouTube, NoTranscript } from "../capture/capture.ts";
 import { insertBoard } from "../boards/create.ts";
 import { pairForResource, writeSource } from "../sources/ingest.ts";
 import { logEvent } from "../../platform/events/events.ts";
@@ -58,6 +58,15 @@ const DASH_ITEM = {
     area: { type: "string", enum: ["work", "personal"], description: "Which list it lands in. Default: work for Slack, Linear, GitHub and meeting sources, personal otherwise." },
   },
 };
+
+/** A capture of a link the board already holds answers with that source instead of making a second. */
+function alreadyOn(boardId: string, url: string): string | null {
+  const key = canonicalUrl(url);
+  const had = a.sourcesOf.all(boardId).find((r) => r.origin_url && canonicalUrl(r.origin_url) === key);
+  if (!had) return null;
+  logEvent(db, APP, "capture_same", { board: boardId, via: "agent" }, null);
+  return `Already on this board as ${idOf("source", had.id)} ("${had.filename ?? url}"), added ${new Date(had.created_at).toISOString().slice(0, 10)}; nothing new was captured.`;
+}
 
 export const TOOLS: Tool[] = [
   {
@@ -181,6 +190,8 @@ export const TOOLS: Tool[] = [
       const b = boardOf(x.board);
       const url = String(x.url ?? "").trim();
       if (!isHttpUrl(url)) fail("That doesn't look like a link.");
+      const had = alreadyOn(b.id, url);
+      if (had) return () => had;
       const video = isYouTube(url);
       if (video && !FIRECRAWL_KEY) fail("This room has no Firecrawl key, so it can't read YouTube transcripts. Add the video from the app, which takes captions downloaded on your machine.");
       if (!captureAvailable) fail("This room has no article fetcher configured, so links can't be captured. Download the page and use request_upload.");
@@ -189,6 +200,8 @@ export const TOOLS: Tool[] = [
         : `Couldn't fetch that ${video ? "video's transcript" : "page"}: ${e.message}`));
       prepared.input.study = x.study === true;
       return () => {
+        const raced = alreadyOn(b.id, url);   // another call for this link finished while this one fetched
+        if (raced) return raced;
         const rid = writeSource(b.id, prepared, null);
         pairForResource(b.id, filename, rid);
         logEvent(db, APP, "capture_done", { board: b.id, kind: video ? "youtube" : "article", via: "agent" }, null);

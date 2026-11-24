@@ -13,6 +13,21 @@ export function hostname(url: string): string {
 export function isYouTube(url: string): boolean {
   return /(?:youtube\.com\/(?:watch\?|shorts\/|live\/)|youtu\.be\/)/.test(url);
 }
+const TRACKING = /^(utm_\w+|fbclid|gclid|mc_[ce]id|si|feature|ref_src|igshid)$/i;
+/** One key per page, so the same link written two ways is one source: a YouTube video is its id; any other page drops
+ *  its scheme, www., fragment, trailing slash and tracking parameters. */
+export function canonicalUrl(url: string): string {
+  let u: URL;
+  try { u = new URL(url.trim()); } catch { return url.trim(); }
+  const host = u.hostname.toLowerCase().replace(/^(www\.|m\.)/, "");
+  const yt = host === "youtu.be" ? u.pathname.slice(1).split("/")[0]
+    : /(^|\.)youtube\.com$/.test(host) ? (u.searchParams.get("v") ?? /^\/(?:shorts|live|embed)\/([^/?#]+)/.exec(u.pathname)?.[1] ?? "") : "";
+  if (yt) return `youtube:${yt}`;
+  const kept = [...u.searchParams].filter(([k]) => !TRACKING.test(k)).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+  const query = kept.length ? `?${new URLSearchParams(kept)}` : "";
+  return `${host}${u.port ? `:${u.port}` : ""}${u.pathname.replace(/\/+$/, "")}${query}`;
+}
+
 export function isHttpUrl(url: string): boolean {
   try { const u = new URL(url); return u.protocol === "http:" || u.protocol === "https:"; } catch { return false; }
 }
