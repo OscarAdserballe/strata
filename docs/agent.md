@@ -95,7 +95,7 @@ instead. Decide and Implementing are reached only this way; Focus leaves Dispatc
 Two runs can wake at once, so a run claims what it works on (`dashboard_claims`). A run is one MCP session:
 `initialize` hands out an `Mcp-Session-Id` that the client sends back, never stored. `dashboard_open` on a
 thread in implementing claims it for 90 minutes; every write from that run renews the claim, posting the page
-drops it, and so does the next press. While another run holds a thread, `dashboard_open` and `dashboard_post`
+drops it, and so does the next press. Every agent call is logged (`agent_call` in `events`) with its run and, for a Dispatch tool, its thread. While another run holds a thread, `dashboard_open` and `dashboard_post`
 refuse it and `dashboard_board` marks it `claimed`, so the second run skips it. A client that sends no session
 is one run per token.
 Every thread is work or personal (`area`): the page shows one area at a time, and an item that names

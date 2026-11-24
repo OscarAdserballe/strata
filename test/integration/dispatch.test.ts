@@ -240,6 +240,12 @@ test("a run that opens a thread in implementing holds it: a second run is refuse
   assert.equal((await two("dashboard_open", { id })).isError, false, "a new press starts unclaimed: any run may take it");
   assert.equal((await one("dashboard_open", { id })).isError, true);
   assert.equal((await call("dashboard_open", { id })).isError, true, "a client that sends no session is a run of its own, so it is refused too");
+  const db = new DatabaseSync(server.db, { timeout: 5000 });
+  try {
+    const calls = (db.prepare("SELECT props FROM events WHERE event = 'agent_call' AND json_extract(props,'$.thread') = ? ORDER BY rowid").all(id) as { props: string }[]).map((r) => JSON.parse(r.props));
+    const opens = calls.filter((c) => c.tool === "dashboard_open").map((c) => [c.run.split(":").pop(), c.ok]);
+    assert.deepEqual(opens.slice(0, 2).sort(), [["run-one-0000", true], ["run-two-0000", false]], "each call is logged with its run, its thread and whether it went through");
+  } finally { db.close(); }
 });
 
 test("a claim lapses: a run that dies lets go of its thread", async () => {

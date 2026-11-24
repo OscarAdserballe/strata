@@ -75,6 +75,7 @@ async function callTool(ctx: Ctx, id: Id, caller: Caller, params: Record<string,
   const args = (params.arguments && typeof params.arguments === "object" ? params.arguments : {}) as Record<string, unknown>;
   const env: Env = { req, caller, run: runOf(req, caller) };
   const t0 = performance.now();
+  let failed = false;
   try {
     if ("read" in tool && !tool.claims) { answer(tool.read(args, env)); return; }
     if ("read" in tool) { ctx.commit(() => ({ status: 200, body: result(id, said(tool.read(args, env))) })); return; }
@@ -100,10 +101,13 @@ async function callTool(ctx: Ctx, id: Id, caller: Caller, params: Record<string,
       return { status: 200, body: result(id, said(text)) };
     });
   } catch (e) {
+    failed = true;
     if (!(e instanceof AgentError)) console.error(`[mcp ${name}]`, e);
     if (!res.headersSent) answer(e instanceof AgentError ? e.message : `Something went wrong in Strata: ${(e as Error).message}`, true);
   } finally {
-    logEvent(db, APP, "agent_call", { tool: name, ms: Math.round(performance.now() - t0), token: caller.id }, null);
+    // run and thread let a run's history be drawn after its claims are gone
+    const thread = name.startsWith("dashboard_") && typeof args.id === "string" ? { thread: args.id.slice(0, 60) } : {};
+    logEvent(db, APP, "agent_call", { tool: name, ms: Math.round(performance.now() - t0), token: caller.id, run: env.run, ok: !failed, ...thread }, null);
   }
 }
 
