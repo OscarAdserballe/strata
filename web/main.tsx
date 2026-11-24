@@ -44,6 +44,9 @@ import { outbox } from "./data/outbox.ts";
 import "./data/entities/marks.ts";
 import "./data/entities/keeps.ts";
 import "./data/entities/notes.ts";
+import "./data/entities/authored.ts";
+import "./capabilities/card/saveCard.ts";
+import { waitingLinks } from "./capabilities/sources/waiting-links.ts";
 
 stampSession();
 watchSnapshots();
@@ -51,6 +54,7 @@ sendSamplesWith(beacon);
 // writes taken offline in an earlier tab go out on this one's wire
 grades.restore();
 outbox.restore();
+void waitingLinks.drain();
 
 // Fire-and-forget: without a service worker the app simply stays online-only.
 if ("serviceWorker" in navigator) { void navigator.serviceWorker.register(StrataPath("/sw.js"), { scope: StrataPath("/"), updateViaCache: "none" }).catch(() => {}); }

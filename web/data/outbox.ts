@@ -32,6 +32,8 @@ export interface Kind<A> {
   clash?(e: SaveError, args: A): ClashDraft | null;
   /** Keep mine: what to send over the newer revision. */
   over?(clash: Clash): A;
+  /** The receipt it is sent under, when the act names its own (a second press of one draft is the same write); else minted. */
+  key?(args: A): string | undefined;
   /** Out of retries, its lanes are released (Mutator.release) rather than held. */
   release?: boolean;
 }
@@ -70,7 +72,7 @@ export class Outbox {
   /** Shelves the write under a fresh receipt and sends it; `op` is this tab's own, `args` what a reopen rebuilds it from. */
   send<Res>(kind: string, args: unknown, op?: Op<Res>): Promise<Res> {
     const spec = this.spec(kind);
-    const entry: Entry = { kind, key: mintKey(), at: this.now(), n: ++this.n, args, offline: this.m.offline() };
+    const entry: Entry = { kind, key: spec.key?.(args) ?? mintKey(), at: this.now(), n: ++this.n, args, offline: this.m.offline() };
     this.shelf.put(shelfId(entry), JSON.stringify(entry));
     return this.run(entry, (op ?? spec.build(args)) as Op<unknown>) as Promise<Res>;
   }

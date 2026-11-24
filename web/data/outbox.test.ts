@@ -7,7 +7,9 @@ import { markKind, type MarkAct } from "./entities/marks.ts";
 import { keepActOp, type KeepAct } from "./entities/keeps.ts";
 import { notesKind, notesSender, type NotesAct } from "./entities/notes.ts";
 import { marksKey, notesKey, type NotesEntity } from "./entities/boards.ts";
-import type { Mark } from "../../shared/types/index.ts";
+import type { Card, Mark } from "../../shared/types/index.ts";
+import { authoredKind, type AuthoredAct } from "./entities/authored.ts";
+import { cardEditKind, type CardEditAct } from "../capabilities/card/saveCard.ts";
 
 const tick = async () => { for (let i = 0; i < 4; i++) await new Promise((resolve) => setImmediate(resolve)); };
 function deferred<T>() {
@@ -32,6 +34,8 @@ function tab(shelf = mapShelf(), clashShelf = mapShelf(), down = true) {
   o.kind<MarkAct>("mark", markKind(store));
   o.kind<KeepAct>("keep", { build: keepActOp, release: true });
   o.kind<NotesAct>("notes", notesKind(store));
+  o.kind<AuthoredAct>("authored", authoredKind(store));
+  o.kind<CardEditAct>("card-edit", cardEditKind(store));
   const up = () => { wire.isDown = false; for (const fn of [...listeners]) fn(); };
   const reply = async (i: number, a: SendAnswer) => { sent[i].reply.resolve(a); await tick(); };
   return { o, m, store, sent, shelf, clashShelf, up, reply, wire };
@@ -220,4 +224,52 @@ test("an unguarded note (made online, or on a mark the server hasn't seen) is ne
   await t.reply(0, answer(409, { conflict: { rev: 2, value: { note: "y" } } }));
   await save;
   assert.equal(t.o.getSnapshot().clashes.length, 0);
+});
+
+const deckCard = { id: "econ/flashcard/ols", deck: "econ/0-flashcard", type: "flashcard", ord: 0, front: "What does OLS minimise?", back: "the squared residuals", rev: 7 } as Card;
+
+test("a card written on the plane is shelved under its draft's receipt and reaches the board on reconnect; a second press is the same write", async () => {
+  const t = tab();
+  const act: AuthoredAct = { do: "create", board: "b1", draft: { front: "Why is OLS unbiased?", variant: "bare", back: "E[u|X]=0", state: "closed" }, draftKey: "draft-0001-abcd" };
+  void t.o.send("authored", act).catch(() => {});
+  void t.o.send("authored", act).catch(() => {});
+  await tick();
+  assert.equal(t.sent.length, 0);
+  assert.equal(t.shelf.map.size, 1, "one draft, one receipt: the second press is the same entry");
+  const reopened = tab(t.shelf, t.clashShelf, false);
+  assert.equal(reopened.o.restore(), 1);
+  await tick();
+  assert.equal(reopened.sent[0].req.path, "/api/boards/b1/minted");
+  assert.match(reopened.sent[0].req.headers["Idempotency-Key"], /^draft-0001-abcd-[0-9a-f]{8}$/);
+  await reopened.reply(0, answer(201, { id: "m-9", state: {} }));
+  assert.equal(reopened.shelf.map.size, 0);
+});
+
+test("a deck card edited offline waits; meeting a newer card on reconnect it is a clash with both faces, and keep mine sends it over theirs", async () => {
+  const t = tab();
+  const edit = t.o.send("card-edit", { card: deckCard, patch: { back: "the sum of squared residuals" } } satisfies CardEditAct).catch((e: { clashed?: boolean }) => e);
+  await tick();
+  assert.equal(t.sent.length, 0);
+  t.up();
+  await tick();
+  assert.equal(t.sent[0].req.method, "PATCH");
+  assert.equal(t.sent[0].req.headers["If-Match"], '"7"');
+  await t.reply(0, answer(409, { error: "changed", conflict: { rev: 9, value: { ...deckCard, back: "squared errors, summed", rev: 9 } } }));
+  assert.equal(((await edit) as { clashed?: boolean }).clashed, true);
+  const [clash] = t.o.clashes();
+  assert.match(clash.mine, /the sum of squared residuals/);
+  assert.match(clash.theirs, /squared errors, summed/);
+  void t.o.resolve(clash.id, "mine");
+  await tick();
+  assert.equal(t.sent[1].req.headers["If-Match"], '"9"', "keep mine is sent over the revision it met");
+});
+
+test("an offline edit that meets its own landed text is no clash", async () => {
+  const t = tab();
+  const edit = t.o.send("card-edit", { card: deckCard, patch: { back: "mine" } } satisfies CardEditAct).catch((e) => e);
+  t.up();
+  await tick();
+  await t.reply(0, answer(409, { error: "changed", conflict: { rev: 8, value: { ...deckCard, back: "mine", rev: 8 } } }));
+  await edit;
+  assert.equal(t.o.clashes().length, 0);
 });

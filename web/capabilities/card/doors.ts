@@ -2,7 +2,7 @@ import { flushSync } from "react-dom";
 import { StrataAPI, StrataWhy } from "../../data/api.ts";
 import { authored } from "../../data/entities/authored.ts";
 import { reviewStrip } from "../../data/entities/review.ts";
-import { ATTEMPT_DEADLINE_MS, mintKey } from "../../data/mutate.ts";
+import { ATTEMPT_DEADLINE_MS, mintKey, mutator } from "../../data/mutate.ts";
 import { quoteAnchor } from "../../../shared/reading/anchors.ts";
 import { toast } from "../../shell/layers.ts";
 import type { ComposedCard } from "./Composer.tsx";
@@ -68,6 +68,7 @@ const tidier = createCardTidier((body) => StrataAPI.tidyCard(body));
 export async function formatFold(front: string, back: string): Promise<void> {
   const c = composerNow();
   if (!c?.fold || c.tidy?.phase === "formatting") return;
+  if (mutator.offline()) { setComposer({ ...c, tidy: { phase: "writing", front, back, error: "Format needs a connection. Keep saves your words as typed." } }); return; }
   setComposer({ ...c, tidy: { phase: "formatting", front, back, error: "" } });
   let next: NonNullable<ComposerDraft["tidy"]>;
   try {
@@ -93,6 +94,7 @@ export async function compose(card: Wire, front = "", answer = "", home: Wire = 
 export async function saveComposed(fields: ComposedCard): Promise<void> {
   const { front, back, source } = fields as { front: string; back?: string; source?: string };
   const c = composerNow(); const id = c && (c.boardId || room.activeId()); if (!c || !id) return;
+  if (mutator.offline()) return saveComposedOffline(c, id, fields);
   try {
     if (c.unfiled) {
       await authored.personal({ front, back: back as string, source: source || c.source, requestId: c.requestId as string });
@@ -117,7 +119,22 @@ export async function saveComposed(fields: ComposedCard): Promise<void> {
   } catch (e) { toastWhy(e, "couldn't save that card"); throw e; }
 }
 
+/** Offline the card waits on the device: the form closes at once, and the board takes the card when the wire is back. */
+function saveComposedOffline(c: ComposerDraft, id: string, fields: ComposedCard): void {
+  const { front, back, source } = fields as { front: string; back?: string; source?: string };
+  const sent: Promise<Wire> = c.unfiled
+    ? authored.personal({ front, back: back as string, source: source || c.source, requestId: c.requestId as string })
+    : c.mintId
+      ? authored.update(id, c.mintId, { front, back, source, state: "closed" })
+      : authored.create(id, { front, variant: "bare", pairId: c.pairId, source: source || c.source, meta: { answer: c.answer, hot: !!back, anchorExplicit: !!source }, state: back ? "closed" : "open", back: back || undefined }, { draftKey: c.requestId });
+  setComposer(null);
+  toast("Card saved on this device. It reaches your board when you're back online.");
+  sent.then((r) => { if (!c.unfiled && r?.state && id === room.activeId()) room.setBoard(r.state); },
+    (e) => { if (!e?.clashed) toastWhy(e, "a card saved offline didn't reach the server"); });
+}
+
 export function saveCardEdit(c: Wire, patch: Record<string, unknown>): Promise<Wire> {
+  if (mutator.offline()) return saveCardEditOffline(c, patch);
   const saved = c.mine && c.mintId
     ? saveAuthored(c.boardId || room.activeId(), c.mintId, patch)
       .then((r) => { if (r && r.state) room.setBoard(r.state); return { ...c, ...patch }; })
@@ -133,4 +150,14 @@ export function editCard(c: Wire, patch: Record<string, unknown>, drill: { setEd
     drill.setEditing(null);
     drill.logCard("card_edit", { ...(c.mine ? { mine: true } : {}), faces: Object.keys(patch).join(",") });
   });
+}
+
+/** Offline the edit shows at once and waits on the device; one that meets a newer card on reconnect goes to the clash list. */
+function saveCardEditOffline(c: Wire, patch: Record<string, unknown>): Promise<Wire> {
+  const merged = { ...c, ...patch };
+  const sent = c.mine && c.mintId
+    ? saveAuthored(c.boardId || room.activeId(), c.mintId, patch).then((r) => { if (r && r.state) room.setBoard(r.state); })
+    : (room.patchCard(deckOf(c), c.id, merged), saveCard(c, patch).then((saved) => room.patchCard(deckOf(c), c.id, saved)));
+  sent.catch((e) => { if (!e?.clashed) toastWhy(e, "an edit made offline didn't reach the server"); });
+  return Promise.resolve(merged);
 }

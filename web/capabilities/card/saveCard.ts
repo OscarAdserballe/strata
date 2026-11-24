@@ -1,5 +1,6 @@
 import type { Card, CardEditAnswer } from "../../../shared/types/index.ts";
 import { mutator as roomMutator, type Conflict, type Mutator, type Op, type SaveError } from "../../data/mutate.ts";
+import { outbox as roomOutbox, type Clash, type ClashDraft } from "../../data/outbox.ts";
 import { store as roomStore, sameData, type Store } from "../../data/store.ts";
 import { authored, rowOf } from "../../data/entities/authored.ts";
 
@@ -50,12 +51,39 @@ export function cardEditOp(card: Card, patch: Faces, s: Store = roomStore): Op<C
   };
 }
 
+/** An edit as shelved: offline it waits on the device, and meeting a newer card on reconnect it is a clash, not a write over it. */
+export interface CardEditAct { card: Card; patch: Faces }
+
+const faceText = (v: unknown): string => (Array.isArray(v) ? v.map((x, i) => `${i + 1}. ${String(x)}`).join("\n") : String(v ?? ""));
+export const facesText = (faces: Faces, keys: string[]): string => keys.map((k) => `${k}: ${faceText(faces[k])}`).join("\n\n");
+
+export function cardEditKind(s: Store) {
+  return {
+    build: (a: CardEditAct) => cardEditOp(a.card, a.patch, s),
+    release: true,
+    clash: (e: SaveError, a: CardEditAct): ClashDraft | null => {
+      const theirs = e.conflict?.value as Faces | null | undefined;
+      const keys = Object.keys(a.patch);
+      // a lost edit that landed comes back as theirs: nothing changed elsewhere
+      if (!theirs || keys.every((k) => same(theirs[k], a.patch[k]))) return null;
+      const board = typeof a.card.project === "string" ? a.card.project : "";
+      const title = typeof a.card.courseTitle === "string" ? a.card.courseTitle : deckOf(a.card);
+      return { where: { board, title, source: null, passage: String(a.card.front ?? "").slice(0, 200) || null },
+        mine: facesText(a.patch, keys), theirs: facesText(theirs, keys), rev: revOf(e.conflict?.rev) ?? 0, args: a };
+    },
+    over: (c: Clash): CardEditAct => { const a = c.args as CardEditAct; return { card: { ...a.card, rev: c.rev }, patch: a.patch }; },
+  };
+}
+roomOutbox.kind<CardEditAct>("card-edit", cardEditKind(roomStore));
+
 export async function saveCard(card: Card, patch: Faces, m: Mutator = roomMutator, s: Store = roomStore): Promise<Card> {
   if (!deckOf(card)) throw new Error("this card has no deck to write to");
   try {
-    const res = await m.mutate(cardEditOp(card, patch, s));
+    const op = cardEditOp(card, patch, s);
+    const res = m === roomMutator && s === roomStore ? await roomOutbox.send<CardEditAnswer>("card-edit", { card, patch } satisfies CardEditAct, op) : await m.mutate(op);
     return res.card;
   } catch (e) {
+    if ((e as { clashed?: boolean } | null)?.clashed) throw e;
     giveUp(e, card, m);
     const { conflict, epoch } = (e ?? {}) as SaveError;
     if (conflict) throw new CardConflict(conflict.value ? takeRefused(card, conflict, epoch ?? "", s) : null, patch);
@@ -104,6 +132,7 @@ export async function saveAuthored(board: string, mintId: string, patch: Faces, 
   try {
     return await authored.update(board, mintId, patch, m, s);
   } catch (e) {
+    if ((e as { clashed?: boolean } | null)?.clashed) throw e;
     const conflict = (e as { conflict?: Conflict } | null)?.conflict;
     if (!conflict) throw e;
     const row = (conflict.value && (rowOf(board, mintId, s) ?? conflict.value)) as { front?: unknown; back?: unknown } | null;
