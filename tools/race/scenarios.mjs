@@ -1904,12 +1904,10 @@ const dispatchPress = {
     const page = await t.open({ latency: true, lostAck: { match: presses, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     const pressOn = async (view, title, reopen) => {
       await page.goto(`${t.base}/dispatch?view=${view}`);
-      const card = page.locator(".ws-card", { hasText: title });
-      await card.first().waitFor();
-      if (!(await card.first().evaluate((el) => el.classList.contains("open")))) await card.first().click();
-      const open = page.locator(".ws-card.open", { hasText: title });
-      if (reopen) await open.getByRole("button", { name: "Reopen", exact: true }).click();
-      await open.getByRole("button", { name: "Send", exact: true }).click();
+      await page.locator(".ws-rail").getByTitle(title, { exact: true }).click();
+      const bar = page.locator(".ws-bar", { hasText: title });
+      if (reopen) await bar.getByRole("button", { name: "Reopen", exact: true }).click();
+      await bar.getByRole("button", { name: "Send", exact: true }).click();
       await page.evaluate(() => window.__strataSettled?.());
       return (await page.locator(".ws-list").textContent()) ?? "";
     };
