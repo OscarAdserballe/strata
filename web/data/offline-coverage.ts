@@ -86,6 +86,7 @@ export const WRITES: WriteRow[] = [
   { route: "PATCH /api/boards/:board/minted/:id", offline: "waits", what: "cards" },
   { route: "DELETE /api/boards/:board/minted/:id", offline: "live", what: "deleting a card" },
   { route: "POST /api/boards/:board/minted/file", offline: "live", what: "filing cards" },
+  { route: "POST /api/boards/:board/distil/*", offline: "live", what: "distilling marks into cards" },
   { route: "POST /api/library/cards", offline: "waits", what: "cards" },
   { route: "PATCH /api/decks/:deck/cards/:id", offline: "waits", what: "cards" },
   { route: "DELETE /api/decks/:deck/cards/:id", offline: "live", what: "deleting a card" },
