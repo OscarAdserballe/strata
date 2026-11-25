@@ -58,7 +58,8 @@ let shelfServed = startedDown;
 const wireListeners = new Set<() => void>();
 const wire = new Wire({
   down: startedDown,
-  probe: async () => (await probeHealth())?.ok ?? false,
+  // a probe the worker answers from its cache would call the wire up while the browser is offline
+  probe: async () => (typeof navigator === "undefined" || navigator.onLine) && ((await probeHealth())?.ok ?? false),
   changed: (down) => {
     if (!down) { needsReload ||= shelfServed; shelfServed = false; }
     for (const fn of [...wireListeners]) fn();
