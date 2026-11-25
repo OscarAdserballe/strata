@@ -65,13 +65,6 @@ export default function HomeTools({ onCardsChanged, composeRef }: { onCardsChang
     if (next === "card" && !card) { setCard(draft()); setPreview(null); }
   }
   const down = useWireDown();
-  // a save sent in the grace before the wire is called down keeps retrying under its key; the form shouldn't hang on it
-  useEffect(() => {
-    if (!down || !saving || tidying) return;
-    saveBusy.current = false; setSaving(false);
-    setCard(null); setPreview(null); setMode("cards");
-    setNotice("Saved on this device. It goes to Unfiled when you're back online.");
-  }, [down, saving, tidying]);
   const frontPics = useFaceImages(card?.front ?? "", (front) => setCard((c) => (c ? { ...c, front } : c)));
   const backPics = useFaceImages(card?.back ?? "", (back) => setCard((c) => (c ? { ...c, back } : c)));
   async function format() {
