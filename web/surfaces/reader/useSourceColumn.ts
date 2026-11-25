@@ -445,7 +445,9 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
     let last = 0, deepest = 0;
     const beat = () => {
       const h = sc.scrollHeight - sc.clientHeight;
-      const pct = h > 0 ? Math.min(100, Math.round((sc.scrollTop / h) * 100)) : 100;
+      // a scroll with nothing to scroll is the column collapsing (a fold, the tree flip), not reading to the end
+      if (h <= 0) return;
+      const pct = Math.min(100, Math.round((sc.scrollTop / h) * 100));
       deepest = Math.max(deepest, pct);
       const t = Date.now();
       if (last && t - last < 15000) return;
