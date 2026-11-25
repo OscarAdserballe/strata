@@ -2,7 +2,9 @@ import React, { useRef, useState, useSyncExternalStore } from "react";
 import { createPortal } from "react-dom";
 import { addImports } from "./imports.ts";
 import KindleHelp from "./KindleHelp.tsx";
-import { StrataAPI, StrataWhy } from "../../data/api.ts";
+import { StrataAPI, StrataWhy, StrataWireDown } from "../../data/api.ts";
+import { UNFILED_LINK, onWaitingLinks, shortLink, waitingLinks } from "./waiting-links.ts";
+import { untilWireDown } from "../offline/useWireDown.ts";
 import { store } from "../../data/store.ts";
 import { BOARDS, REGISTER, sources } from "../../data/entities/sources.ts";
 import type { BoardState } from "../../../shared/types/index.ts";
@@ -51,7 +53,7 @@ let captureChunk: CaptureChunk | null = null;
 let captureLoading: Promise<CaptureChunk> | null = null;
 export function loadCapture(): Promise<CaptureChunk> {
   captureLoading ??= import("./Capture.tsx").then((m) => {
-    m.bind({ React, createPortal, api: StrataAPI, resolve, set: setCapture, now: captureNow,
+    m.bind({ React, createPortal, api: StrataAPI, resolve, set: setCapture, now: captureNow, wait: waitLink,
       added: () => store.invalidate([REGISTER, BOARDS]), landed: (r, message) => hooks?.landed(r, message) });
     captureChunk = m;
     if (capture) setCapture((c) => ({ ...c }));           // a dialog asked for before it came: draw it
@@ -64,6 +66,24 @@ export function loadCapture(): Promise<CaptureChunk> {
   return captureLoading;
 }
 export const closeCapture = (): void => setCapture(null);
+
+async function wireDownWithin(ms: number): Promise<boolean> {
+  const wire = untilWireDown();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try { return await Promise.race([wire.down.then(() => true), new Promise<boolean>((r) => { timer = setTimeout(() => r(false), ms); })]); }
+  finally { wire.stop(); clearTimeout(timer); }
+}
+
+/** Offline the link waits on the device and is captured when the wire is back; online it is not taken. */
+function waitLink(board: string, url: string): boolean {
+  const link = waitingLinks.wait(board, url);
+  if (link) hooks?.toast(`Waiting for a connection · ${shortLink(url)} is captured when you're back online`);
+  return !!link;
+}
+onWaitingLinks({
+  landed: (l) => { store.invalidate([REGISTER, BOARDS]); hooks?.toast(`Captured ${shortLink(l.url)}`); },
+  refused: (l, e) => hooks?.toastWhy(e, `couldn't capture ${shortLink(l.url)}`),
+});
 
 async function resolve(board: Target): Promise<string | null> {
   if (board === UNFILED) return sources.unfiled();
@@ -81,7 +101,21 @@ export const addSource = {
       if (id) await addImports(chosen, id, study);
     } catch (e) { hooks?.toastWhy(e, "couldn't queue files"); }
   },
-  saveLink: async (board: Target, url: string): Promise<"added" | "captions"> => (await loadCapture()).saveLink(board, url.trim()),
+  saveLink: async (board: Target, url: string): Promise<"added" | "captions" | "waiting"> => {
+    const u = url.trim();
+    const waitOn = async () => {
+      // offline Unfiled can't be asked for its id: the link names it, and the id is asked for on reconnect
+      const id = board === UNFILED ? UNFILED_LINK : await resolve(board);
+      return !!id && waitLink(id, u);
+    };
+    if (StrataWireDown() && await waitOn()) return "waiting";
+    try { return await (await loadCapture()).saveLink(board, u); }
+    catch (e) {
+      // no answer at all, while the wire isn't called down yet (an online flag that lies): wait for the verdict
+      if ((e as { status?: number })?.status !== undefined || !await wireDownWithin(12_000) || !await waitOn()) throw e;
+      return "waiting";
+    }
+  },
 };
 
 export function AddSourceHost(props: Hooks) {

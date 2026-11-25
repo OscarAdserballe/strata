@@ -74,6 +74,7 @@ try {
   window.addEventListener("offline", () => wire.failed());
 } catch { /* not a browser */ }
 export const StrataWireDown = (): boolean => wire.down;
+export const StrataWireWatch = (fn: () => void): (() => void) => { wireListeners.add(fn); return () => { wireListeners.delete(fn); }; };
 function refuseWrite(): never {
   const err: ApiError = new Error("offline — this needs a connection");
   err.status = 0;

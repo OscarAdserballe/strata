@@ -13,6 +13,8 @@ export interface CaptureHost {
   React: typeof ReactNS; createPortal: typeof Portal;
   api: Pick<typeof StrataAPI, "capture" | "captureFinish" | "log">;
   resolve(board: Target): Promise<string | null>;
+  /** offline: the link waits on the device to be captured later, and true says it was taken */
+  wait?(board: string, url: string): boolean;
   set: SetCapture;
   now(): CaptureState | null;
   added(): void;
@@ -59,6 +61,7 @@ export async function submitUrl() {
     const id = await host.resolve(c.boardId);
     if (!id) throw new Error("there is no board to add it to");
     host.api.log("capture_submit", { board: id });
+    if (host.wait?.(id, url)) { if (up(d)) host.set(null); return; }
     const link = { url };
     const { r, key } = await press("capture", id, link, link, (k) => host.api.capture(id, url, k), gone);
     // a video whose transcript the room couldn't read is handed back to you, to fetch its captions yourself

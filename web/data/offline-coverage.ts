@@ -116,7 +116,8 @@ export const WRITES: WriteRow[] = [
   { route: "PATCH /api/boards/:board/pairs/:id", offline: "live", what: "pairing a deck" },
   { route: "DELETE /api/boards/:board/pairs/:id", offline: "live", what: "pairing a deck" },
   { route: "POST /api/boards/:board/pairs/:id/move", offline: "live", what: "moving a deck" },
-  { route: "POST /api/boards/:board/capture", offline: "live", what: "capturing a link" },
+  // a link pasted offline waits in strata.links. and is captured under its key on reconnect (waiting-links.ts)
+  { route: "POST /api/boards/:board/capture", offline: "waits", what: "links to capture" },
   { route: "POST /api/boards/:board/capture/finish", offline: "live", what: "capturing a link" },
   { route: "POST /api/boards/:board/plan/draft", offline: "live", what: "drafting a plan" },
   { route: "POST /api/cards/tidy", offline: "live", what: "tidying a card" },

@@ -1191,7 +1191,7 @@ const cardEditLost = {
     await editor.waitFor();
     const face = editor.locator("textarea").first();
     await face.fill(front);
-    await editor.getByRole("button", { name: "Format & Preview", exact: true }).click();
+    await editor.getByRole("button", { name: "Format", exact: true }).click();
     const confirm = editor.getByRole("button", { name: "Confirm save", exact: true });
     await confirm.waitFor();
     await t.net.idle(300);
@@ -1234,7 +1234,7 @@ const authoredTwice = {
     const front = `Race card of my own, seed ${t.seed}: is it saved once?`;
     await form.locator("textarea.front").fill(front);
     await form.locator("textarea.back").fill("Once: the draft's key makes the second save the first one again.");
-    await form.getByRole("button", { name: "Format & Preview", exact: true }).click();
+    await form.getByRole("button", { name: "Format", exact: true }).click();
     const confirm = form.getByRole("button", { name: "Confirm save", exact: true });
     await confirm.waitFor();
     await t.net.idle(300);
@@ -2237,7 +2237,7 @@ const offlineThenSync = {
     await t.net.idle(400);
 
     await wire.cut();
-    await page.locator(".connection-banner").getByText("Offline", { exact: true }).waitFor({ timeout: 30_000 });
+    await page.locator(".connection-mark.off").waitFor({ timeout: 30_000 });
     const graded = [];
     for (let i = 0; i < OFFLINE_GRADES; i++) {
       const was = await q.innerText();
@@ -2319,14 +2319,14 @@ const offlineCardEdit = {
     if (!card) throw new Error(`the drill shows a card its deck does not have: ${JSON.stringify(shown.slice(0, 60))}`);
 
     await wire.cut();
-    await page.locator(".connection-banner").getByText("Offline", { exact: true }).waitFor({ timeout: 30_000 });
+    await page.locator(".connection-mark.off").waitFor({ timeout: 30_000 });
     const front = `Rewritten on the plane, seed ${t.seed}: what lands once?`;
     await page.keyboard.press("e");
     const editor = page.locator(".ced");
     await editor.waitFor();
     await editor.locator("textarea").first().fill(front);
-    await editor.getByRole("button", { name: "Format & Preview", exact: true }).click();
-    const confirm = editor.getByRole("button", { name: "Confirm save", exact: true });
+    // offline Format is greyed out: Save keeps the words as typed
+    const confirm = editor.getByRole("button", { name: "Save", exact: true });
     await confirm.waitFor();
     const { presses, outcome } = await pressUntilGone(editor, confirm, editor.locator(".ced-err"));
     const onCard = await page.waitForFunction((want) => [...document.querySelectorAll(".q")].some((el) => el.innerText.replace(/\s+/g, " ").includes(want)),
@@ -2387,5 +2387,73 @@ const distilKeepLost = {
   },
 };
 
+const offlineCards = {
+  name: "offline-cards",
+  what: "offline, rewrite a deck card's back in the cram and write a new card from the library, both saved as typed; reconnect over a wire that drops and loses answers; each lands once, as written",
+  checks: {
+    edited: "the deck card holds the back written offline",
+    created: "the card written offline is in Unfiled exactly once",
+    drained: "nothing is left owed on the device once it has synced",
+  },
+  async run(t) {
+    const b = await board(t, "Race offline cards");
+    const unique = "A card written on the plane reaches its deck when the plane lands.";
+    const s = await prose(t, b.id, "race-offline-cards.md", essay("Cards offline", unique));
+    const slug = await deck(t, b.id, s.rid, ["Offline edit: what does the device keep?"]);
+    const [card] = (await t.api(`/api/decks/${slug}`)).cards;
+    const tag = `${t.seed}-${Date.now().toString(36)}`;
+    const mine = `Everything, until the server says it has it (${tag}).`;
+    const front = `Written offline ${tag}: why does a receipt make a replay safe?`;
+    const receipt = (e) => e.headers?.["idempotency-key"] ?? null;
+    const lossy = (e) => e.write && (e.path.startsWith("/api/decks/") || e.path === "/api/library/cards");
+    const page = await t.open({ latency: true, drop: { match: lossy, rate: 0.3, key: receipt }, lostAck: { match: lossy, rate: 0.4, key: receipt } });
+    const wire = await cuttable(page);
+    await page.goto(readerUrl(t, b.id, s));
+    await proseShown(page, unique);
+    await t.net.idle(400);
+
+    // the cram is open before the wire goes: this board was never downloaded
+    await page.keyboard.press("x");
+    await page.locator(".cramv").waitFor();
+    await page.getByRole("button", { name: "every card", exact: true }).click();
+    await page.keyboard.press("Enter");
+    await page.locator(".cramv .cram-card").waitFor();
+    await t.net.idle(400);
+    await wire.cut();
+    await page.locator(".connection-mark.off").waitFor({ timeout: 30_000 });
+    await page.keyboard.press(" ");
+    await page.keyboard.press("e");
+    const form = page.locator(".cramv .ced");
+    await form.locator("textarea").nth(1).fill(mine);
+    await form.getByRole("button", { name: "Save", exact: true }).click();
+    await form.waitFor({ state: "detached" });
+    await page.keyboard.press("Escape");
+    // a new page, still offline: the edit waits on the shelf, and this tab's boot puts it back on its lane
+    await page.goto(`${t.base}/`, { waitUntil: "domcontentloaded" });
+    await page.evaluate(() => window.dispatchEvent(new Event("offline")));
+    await page.locator(".connection-mark.off").waitFor({ timeout: 30_000 });
+    await page.getByRole("button", { name: "New card", exact: true }).click();
+    await page.getByLabel("Front", { exact: true }).fill(front);
+    await page.getByLabel("Back", { exact: true }).fill("The server answers a key it has seen with its first answer.");
+    await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
+    await page.getByText("Saved on this device", { exact: false }).waitFor();
+    const owed = () => page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("strata.outbox.")).length);
+    t.say(`${await owed()} writes kept on the device while offline`);
+
+    await wire.join();
+    const until = performance.now() + 60_000;
+    while (performance.now() < until && (await owed())) await sleep(250);
+    await page.evaluate(() => window.__strataSettled?.());
+    await t.net.idle(800);
+
+    const now = (await t.api(`/api/decks/${slug}`)).cards.find((c) => c.id === card.id);
+    t.check("edited", now?.back === mine, `the server holds ${JSON.stringify(now?.back)}`);
+    const made = (await t.api("/api/library")).cards.filter((c) => c.front === front);
+    t.check("created", made.length === 1, `${made.length} cards with that front`);
+    const left = await owed();
+    t.check("drained", left === 0, `${left} still on the device`);
+  },
+};
+
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, offlineThenSync, offlineCardEdit, distilKeepLost];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, offlineThenSync, offlineCardEdit, distilKeepLost, offlineCards];

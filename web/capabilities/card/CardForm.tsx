@@ -10,6 +10,7 @@ import type { FaceCard } from "./CardFace.tsx";
 import { StrataAPI } from "../../data/api.ts";
 import { useFaceImages } from "../attach/useFaceImages.ts";
 import { FaceStrip } from "../attach/Tray.tsx";
+import { useWireDown } from "../offline/useWireDown.ts";
 
 export function EditButton({ onClick, edited }: { onClick: (e: MouseEvent<HTMLButtonElement>) => void; edited: boolean }) {
   return <button type="button" className={"ced-b" + (edited ? " on" : "")}
@@ -122,6 +123,7 @@ function CardForm({ card, faces, onSave, onCancel, onDelete }: CardFormProps) {
   const [error, setError] = useState("");
   const [preview, setPreview] = useState<Draft | null>(null);
   const [theirs, setTheirs] = useState<Record<string, unknown> | null>(null);
+  const down = useWireDown();
   const tidier = useRef(createCardTidier(StrataAPI.tidyCard));
   const saving = useRef(false);
   const firstRef = useRef<HTMLTextAreaElement | null>(null);
@@ -142,7 +144,7 @@ function CardForm({ card, faces, onSave, onCancel, onDelete }: CardFormProps) {
   };
 
   function format() {
-    if (busy || saving.current) return;
+    if (busy || saving.current || down) return;
     if (!String(draft[fields[0].key] ?? "").trim()) { setError("a card needs its question"); return; }
     const id = card.id;
     saving.current = true; setBusy("tidying"); setError("");
@@ -157,9 +159,12 @@ function CardForm({ card, faces, onSave, onCancel, onDelete }: CardFormProps) {
     setDraft(preview!); setPreview(null); setError("");
   }
 
+  // your words as typed: formatting is a choice, and offline the model can't be reached
   function save() {
-    if (!preview || busy || saving.current) return;
-    const patch = changed(preview);
+    if (busy || saving.current) return;
+    const values = preview ?? draft;
+    if (!preview && !String(draft[fields[0].key] ?? "").trim()) { setError("a card needs its question"); return; }
+    const patch = changed(values);
     if (!Object.keys(patch).length) { onCancel(); return; }
     saving.current = true; setBusy("saving"); setError(""); setTheirs(null);
     Promise.resolve().then(() => onSave(patch))
@@ -183,7 +188,7 @@ function CardForm({ card, faces, onSave, onCancel, onDelete }: CardFormProps) {
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     e.stopPropagation();
     if (e.key === "Escape") { e.preventDefault(); if (busy === "saving") onCancel(); else if (!busy) { if (preview) backToEditing(); else onCancel(); } return; }
-    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); if (!preview && !e.repeat) format(); }
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); if (!e.repeat) save(); }
   };
 
   return (
@@ -198,13 +203,15 @@ function CardForm({ card, faces, onSave, onCancel, onDelete }: CardFormProps) {
           onChange={(v) => setDraft((d) => ({ ...d, [f.key]: v }))} />
       ))}
       <div className="ced-row">
-        {error ? <span className="ced-err" role="alert">{error}</span> : <span className="ced-hint">{preview ? "Review before saving" : "⌘↵ format & preview · esc leave"}</span>}
+        {error ? <span className="ced-err" role="alert">{error}</span> : <span className="ced-hint">{preview ? "Review before saving" : "⌘↵ save · esc leave"}</span>}
         <span className="grow" />
         {onDelete && !preview ? <button type="button" className="ced-x ced-delete" disabled={!!busy}
           title="remove this card from its deck and review" onClick={remove}>{busy === "deleting" ? "deleting…" : "delete card"}</button> : null}
         {preview ? <button type="button" className="ced-x" disabled={!!busy} onClick={backToEditing}>Back to editing</button> : null}
         <button type="button" className="ced-x" disabled={!!busy && busy !== "saving"} onClick={onCancel}>{theirs ? "use theirs" : "cancel"}</button>
-        <button type="button" className="ced-go" disabled={!!busy} onClick={preview ? save : format}>{busy === "tidying" ? "Formatting…" : busy === "saving" ? "Saving…" : theirs && preview ? "Keep mine" : preview ? "Confirm save" : "Format & Preview"}</button>
+        {preview ? null : <button type="button" className="ced-x ced-format" disabled={!!busy || down} title={down ? "formatting asks the model, which needs a connection" : "tidy the wording and preview it before saving"}
+          onClick={format}>{busy === "tidying" ? "Formatting…" : down ? "Format · needs a connection" : "Format"}</button>}
+        <button type="button" className="ced-go" disabled={!!busy} onClick={save}>{busy === "saving" ? "Saving…" : theirs ? "Keep mine" : preview ? "Confirm save" : "Save"}</button>
       </div>
     </div>
   );

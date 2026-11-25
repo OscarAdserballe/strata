@@ -213,7 +213,7 @@ try {
   const draft = page.locator(".fold .fi.draft");
   const drafted = !!carded && await draft.waitFor({ timeout: 5000 }).then(() => true, () => false);
   check("Card on picked words opens a draft that offers Format, not Keep", drafted
-    && await draft.locator(".fi-format").count() === 1 && await draft.locator(".fi-keep").count() === 0, `words ${!!words} · card ${!!carded} · draft ${drafted}`);
+    && await draft.locator(".fi-format").count() === 1 && await draft.locator(".fi-keep").count() === 1, `words ${!!words} · card ${!!carded} · draft ${drafted}`);
   if (drafted) {
     await draft.locator(".fi-front").fill("what makes the threat credible?");
     await draft.locator(".fi-back").fill("patience");

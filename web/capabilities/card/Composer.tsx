@@ -6,6 +6,7 @@ import { Preview } from "./CardForm.tsx";
 import { createCardTidier } from "./tidy.ts";
 import { useFaceImages } from "../attach/useFaceImages.ts";
 import { FaceStrip } from "../attach/Tray.tsx";
+import { useWireDown } from "../offline/useWireDown.ts";
 
 export type ComposedCard = { [face: string]: CardFaces[string] | undefined; source?: string };
 
@@ -32,8 +33,9 @@ export default function Composer({ front0, anchor, closing, review, onSave, onCa
   const previewRef = useRef<HTMLDivElement>(null);
   const saveBusy = useRef(false);
   const tidier = useRef(createCardTidier(StrataAPI.tidyCard));
+  const down = useWireDown();
   async function format() {
-    if (saveBusy.current) return;
+    if (saveBusy.current || down) return;
     saveBusy.current = true; setBusy("tidying"); setError("");
     try {
       const faces = await tidier.current("flashcard", { front: front.trim(), back: back.trim() });
@@ -46,11 +48,12 @@ export default function Composer({ front0, anchor, closing, review, onSave, onCa
     setFront(String(preview.front ?? "")); setBack(String(preview.back ?? "")); setSource(preview.source || "");
     setPreview(null); setError("");
   }
+  // your words as typed: formatting is a choice, and offline the model can't be reached
   async function save() {
-    if (!preview || saveBusy.current) return;
+    if (saveBusy.current || !front.trim() || !back.trim()) return;
     saveBusy.current = true; setBusy("saving"); setError("");
     try {
-      await onSave(preview);
+      await onSave(preview ?? { front: front.trim(), back: back.trim(), source: source.trim() || undefined });
     } catch (e) { setError(failed(e, "Couldn't save this card. Your draft is still here.")); }
     finally { saveBusy.current = false; setBusy(false); }
   }
@@ -59,7 +62,9 @@ export default function Composer({ front0, anchor, closing, review, onSave, onCa
   const backRef = useRef<HTMLTextAreaElement>(null);
   const frontRef = useRef<HTMLTextAreaElement>(null);
   useEffect(() => { (preview ? previewRef : front0 ? backRef : frontRef).current?.focus(); }, [preview]);
-  const esc = (e: KeyboardEvent) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); if (!saveBusy.current) { if (preview) backToEditing(); else onCancel(); } } };
+  const esc = (e: KeyboardEvent) => {
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) { e.preventDefault(); e.stopPropagation(); if (!e.repeat) void save(); return; }
+    if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); if (!saveBusy.current) { if (preview) backToEditing(); else onCancel(); } } };
   return (
     <div className="comp" onKeyDown={esc}>
       <div className="comp-head">{closing ? "close the card" : "new card"}
@@ -82,12 +87,15 @@ export default function Composer({ front0, anchor, closing, review, onSave, onCa
         placeholder='p. 12, #heading, @1:20, or "exact words from the source"' />
       <p className="comp-lbl">Pasted source text is matched automatically. Otherwise, the place you’re reading is kept.</p>
       </>}
-      <p className="comp-lbl">{preview ? "Review before saving." : "Format your card, then review it before saving."}</p>
+      <p className="comp-lbl">{preview ? "Review before saving." : "⌘↵ saves your words as typed. Format tidies them first."}</p>
       {error ? <p role="alert">{error}</p> : null}
       <div className="comp-row">
         {preview ? <button className="mint-ghost" disabled={!!busy} onClick={backToEditing}>Back to editing</button> : null}
         <button className="mint-go" disabled={!!busy || !front.trim() || !back.trim()}
-          onClick={preview ? save : format}>{busy === "tidying" ? "Formatting…" : busy ? "Saving…" : preview ? "Confirm save" : "Format & Preview"}</button>
+          onClick={save}>{busy === "saving" ? "Saving…" : preview ? "Confirm save" : "Save"}</button>
+        {preview ? null : <button className="mint-ghost comp-format" disabled={!!busy || down || !front.trim() || !back.trim()}
+          title={down ? "formatting asks the model, which needs a connection" : "tidy the wording and preview it before saving"}
+          onClick={format}>{busy === "tidying" ? "Formatting…" : down ? "Format · needs a connection" : "Format"}</button>}
         <button className="mint-ghost" disabled={!!busy} onClick={onCancel}>esc</button>
       </div>
     </div>
