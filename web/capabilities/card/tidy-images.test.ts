@@ -25,3 +25,10 @@ test("a card of pictures alone is not sent to be tidied", async () => {
   assert.equal(asked, 0);
   assert.equal(shieldImages(faces).empty, true);
 });
+
+test("offline the tidy is skipped: the preview shows the card in the reader's own words", async () => {
+  const tidier = createCardTidier(() => Promise.reject(Object.assign(new Error("offline — tidying a card needs a connection"), { status: 0 })));
+  assert.deepEqual(await tidier(undefined, { front: "what is 2SLS", back: "iv in two stages" }), { front: "what is 2SLS", back: "iv in two stages" });
+  const broken = createCardTidier(() => Promise.reject(Object.assign(new Error("the server said 500"), { status: 500 })));
+  await assert.rejects(broken(undefined, { front: "q", back: "a" }), /500/, "a server that answered with an error still says so");
+});

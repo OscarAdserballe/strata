@@ -44,6 +44,9 @@ import { outbox } from "./data/outbox.ts";
 import "./data/entities/marks.ts";
 import "./data/entities/keeps.ts";
 import "./data/entities/notes.ts";
+import "./data/entities/authored.ts";
+import "./data/entities/pagestate.ts";
+import "./capabilities/card/saveCard.ts";
 
 stampSession();
 watchSnapshots();

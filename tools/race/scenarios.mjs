@@ -2292,6 +2292,64 @@ const offlineThenSync = {
   },
 };
 
+const offlineCardEdit = {
+  name: "offline-card-edit",
+  what: "offline, rewrite a card's question in the drill's editor; the editor closes at once; reconnect over a lossy wire; the server applies the edit once and nothing is left owed",
+  checks: {
+    closed: "the editor closed offline without an error, showing the new question",
+    once: "the server applied the edit once and holds the new question",
+    drained: "nothing is left owed on the device once it has synced",
+  },
+  async run(t) {
+    const b = await board(t, "Race offline card");
+    const s = await prose(t, b.id, "race-offline-card.md", essay("Editing on the plane", "A card rewritten offline is rewritten once when the plane lands."));
+    const slug = await deck(t, b.id, s.rid, ["Plane edit 1: what waits?", "Plane edit 2: what lands?", "Plane edit 3: how often?"]);
+    const cards = (await t.api(`/api/decks/${slug}`)).cards;
+    const isEdit = (e) => e.method === "PATCH" && e.path.split("?")[0].startsWith(`/api/decks/${slug}/cards/`);
+    const receipt = (e) => e.headers?.["idempotency-key"] ?? null;
+    const page = await t.open({ latency: true, drop: { match: isEdit, rate: 0.3, key: receipt }, lostAck: { match: isEdit, rate: 0.3, key: receipt } });
+    const wire = await cuttable(page);
+    await page.goto(readerUrl(t, b.id, s));
+    await handUp(page);
+    const q = page.locator(".q").first();
+    await q.waitFor();
+    await t.net.idle(400);
+    const shown = squash(await q.innerText());
+    const card = cards.find((c) => shown.includes(squash(c.front)));
+    if (!card) throw new Error(`the drill shows a card its deck does not have: ${JSON.stringify(shown.slice(0, 60))}`);
+
+    await wire.cut();
+    await page.locator(".connection-banner").getByText("Offline", { exact: true }).waitFor({ timeout: 30_000 });
+    const front = `Rewritten on the plane, seed ${t.seed}: what lands once?`;
+    await page.keyboard.press("e");
+    const editor = page.locator(".ced");
+    await editor.waitFor();
+    await editor.locator("textarea").first().fill(front);
+    await editor.getByRole("button", { name: "Format & Preview", exact: true }).click();
+    const confirm = editor.getByRole("button", { name: "Confirm save", exact: true });
+    await confirm.waitFor();
+    const { presses, outcome } = await pressUntilGone(editor, confirm, editor.locator(".ced-err"));
+    const onCard = await page.waitForFunction((want) => [...document.querySelectorAll(".q")].some((el) => el.innerText.replace(/\s+/g, " ").includes(want)),
+      front.slice(0, 30), { timeout: 5000 }).then(() => true, () => false);
+    t.check("closed", outcome === "closed" && presses === 1 && onCard, `offline the editor ${outcome === "closed" ? "closed" : `is ${outcome}`} after ${presses} press(es); the card ${onCard ? "shows" : "does not show"} the new question`);
+    const owed = await page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("strata.outbox.")).length);
+
+    await wire.join();
+    const left = () => page.evaluate(() => Object.keys(localStorage).filter((k) => k.startsWith("strata.outbox.")).length);
+    const until = performance.now() + 60_000;
+    while (performance.now() < until && (await left())) await sleep(250);
+    await page.evaluate(() => window.__strataSettled?.());
+    await t.net.idle(800);
+    const sent = t.net.entries.filter(isEdit);
+    t.say(`${owed} write(s) owed offline; ${sent.length} PATCH(es) on reconnect: ${sent.map((e) => `${e.outcome} ${e.status}`).join(", ")}`);
+    const edits = Number(t.sql("SELECT COUNT(*) n FROM events WHERE event = 'card_edit' AND json_extract(props,'$.card') = ? AND json_type(props,'$.ignored') IS NOT NULL", card.id)[0]?.n ?? 0);
+    const held = (await t.api(`/api/decks/${slug}`)).cards.find((c) => c.id === card.id);
+    t.check("once", edits === 1 && squash(held?.front) === squash(front), `${edits} edit(s) applied; the server's question ${JSON.stringify(squash(held?.front).slice(0, 50))}`);
+    const still = await left();
+    t.check("drained", still === 0, `${still} of ${owed} still on the device`);
+  },
+};
+
 // distil: keeping an idea folds marks into one card; a lost answer resent under its key must not make two or retire twice
 const distilKeepLost = {
   name: "distil-keep-lost",
@@ -2330,4 +2388,4 @@ const distilKeepLost = {
 };
 
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, offlineThenSync, distilKeepLost];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, offlineThenSync, offlineCardEdit, distilKeepLost];

@@ -51,8 +51,13 @@ export function createCardTidier(tidy: Tidy, deadlineMs = 50_000) {
     const nextKey = JSON.stringify([type, faces]);
     if ((nextKey === key || nextKey === formattedKey) && result) return structuredClone(result);
     const shield = shieldImages(faces);
-    const checked = shield.empty ? faces : shield.restore(checkedTidy(shield.bare,
-      (await withDeadline(Promise.resolve().then(() => tidy({ type, faces: shield.bare })), deadlineMs, "Tidying")).faces));
+    let tidied: Record<string, unknown> | null = null;
+    if (!shield.empty) {
+      try { tidied = (await withDeadline(Promise.resolve().then(() => tidy({ type, faces: shield.bare })), deadlineMs, "Tidying")).faces; }
+      // offline the tidy needs the model, so the preview shows the card in the reader's own words
+      catch (e) { if ((e as { status?: number } | null)?.status === 0) return structuredClone(faces); throw e; }
+    }
+    const checked = tidied ? shield.restore(checkedTidy(shield.bare, tidied)) : faces;
     key = nextKey; formattedKey = JSON.stringify([type, checked]); result = checked;
     return structuredClone(checked);
   };
