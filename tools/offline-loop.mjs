@@ -57,6 +57,8 @@ try {
   }
   check("both boards download for the flight", true);
 
+  // a plane's captive wifi says online with nothing behind it, and some CI browsers keep saying online under setOffline
+  await context.addInitScript(() => Object.defineProperty(Navigator.prototype, "onLine", { get: () => true }));
   await context.setOffline(true);
   await page.reload({ waitUntil: "domcontentloaded" });
   await page.locator(".connection-mark.off").waitFor({ timeout: 30000 });

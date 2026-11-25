@@ -9,7 +9,7 @@ import { Preview } from "../../capabilities/card/CardForm.tsx";
 import { mdBlocks } from "../../engines/prose/blocks.tsx";
 import { MathText } from "../../engines/prose/math.tsx";
 import { useFaceImages } from "../../capabilities/attach/useFaceImages.ts";
-import { useWireDown } from "../../capabilities/offline/useWireDown.ts";
+import { untilWireDown, useWireDown } from "../../capabilities/offline/useWireDown.ts";
 import { FaceStrip } from "../../capabilities/attach/Tray.tsx";
 import ConnectAgent from "./ConnectAgent.tsx";
 import "./home-tools.css";
@@ -89,15 +89,15 @@ export default function HomeTools({ onCardsChanged, composeRef }: { onCardsChang
     if (!card || saveBusy.current || (preview && preview.requestId !== card.requestId)) return;
     const saved = preview ?? { ...card, front: card.front.trim(), back: card.back.trim() };
     if (!saved.front || !saved.back) return;
-    if (down) {
-      authored.personal(saved).then(() => onCardsChanged?.(), (e) => { if (live.current) setError(StrataWhy(e, "A card saved offline didn't reach the server")); });
-      setCard(null); setPreview(null); setMode("cards");
-      setNotice("Saved on this device. It goes to Unfiled when you're back online.");
-      return;
-    }
+    if (down) return shelve(saved);
     saveBusy.current = true; setSaving(true); setError("");
+    const wire = untilWireDown();
     try {
-      const result = await authored.personal(saved);
+      const sent = authored.personal(saved);
+      // the wire can be called down mid-save (an online flag that lies); the same requestId replays as one card
+      const answered = await Promise.race([sent.then((r) => ({ r })), wire.down.then(() => null)]);
+      if (!answered) { sent.catch(() => {}); if (live.current) shelve(saved); return; }
+      const result = answered.r;
       if (!live.current) return;
       setLibrary(was => ({ ...was, cards: [{ ...saved, id: result.id }, ...was.cards.filter(c => c.id !== result.id)] }));
       const sameDraft = cardRef.current?.requestId === saved.requestId;
@@ -107,7 +107,12 @@ export default function HomeTools({ onCardsChanged, composeRef }: { onCardsChang
       setNotice("Saved to Unfiled and kept for review.");
       onCardsChanged?.();
     } catch (e) { if (live.current) setError(StrataWhy(e, "Couldn't save this card")); }
-    finally { saveBusy.current = false; if (live.current) { setSaving(false); setTidying(false); } }
+    finally { wire.stop(); saveBusy.current = false; if (live.current) { setSaving(false); setTidying(false); } }
+  }
+  function shelve(saved: Draft) {
+    authored.personal(saved).then(() => onCardsChanged?.(), (e) => { if (live.current) setError(StrataWhy(e, "A card saved offline didn't reach the server")); });
+    setCard(null); setPreview(null); setMode("cards");
+    setNotice("Saved on this device. It goes to Unfiled when you're back online.");
   }
   return <div className="home-tools">
     <button className="home-primary" onClick={() => open("card")}>New card</button>

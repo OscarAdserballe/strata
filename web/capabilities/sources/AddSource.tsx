@@ -4,6 +4,7 @@ import { addImports } from "./imports.ts";
 import KindleHelp from "./KindleHelp.tsx";
 import { StrataAPI, StrataWhy, StrataWireDown } from "../../data/api.ts";
 import { UNFILED_LINK, onWaitingLinks, shortLink, waitingLinks } from "./waiting-links.ts";
+import { untilWireDown } from "../offline/useWireDown.ts";
 import { store } from "../../data/store.ts";
 import { BOARDS, REGISTER, sources } from "../../data/entities/sources.ts";
 import type { BoardState } from "../../../shared/types/index.ts";
@@ -66,6 +67,13 @@ export function loadCapture(): Promise<CaptureChunk> {
 }
 export const closeCapture = (): void => setCapture(null);
 
+async function wireDownWithin(ms: number): Promise<boolean> {
+  const wire = untilWireDown();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try { return await Promise.race([wire.down.then(() => true), new Promise<boolean>((r) => { timer = setTimeout(() => r(false), ms); })]); }
+  finally { wire.stop(); clearTimeout(timer); }
+}
+
 /** Offline the link waits on the device and is captured when the wire is back; online it is not taken. */
 function waitLink(board: string, url: string): boolean {
   const link = waitingLinks.wait(board, url);
@@ -94,10 +102,19 @@ export const addSource = {
     } catch (e) { hooks?.toastWhy(e, "couldn't queue files"); }
   },
   saveLink: async (board: Target, url: string): Promise<"added" | "captions" | "waiting"> => {
-    // offline Unfiled can't be asked for its id: the link names it, and the id is asked for on reconnect
-    const id = board === UNFILED && StrataWireDown() ? UNFILED_LINK : await resolve(board);
-    if (id && waitLink(id, url.trim())) return "waiting";
-    return (await loadCapture()).saveLink(board, url.trim());
+    const u = url.trim();
+    const waitOn = async () => {
+      // offline Unfiled can't be asked for its id: the link names it, and the id is asked for on reconnect
+      const id = board === UNFILED ? UNFILED_LINK : await resolve(board);
+      return !!id && waitLink(id, u);
+    };
+    if (StrataWireDown() && await waitOn()) return "waiting";
+    try { return await (await loadCapture()).saveLink(board, u); }
+    catch (e) {
+      // no answer at all, while the wire isn't called down yet (an online flag that lies): wait for the verdict
+      if ((e as { status?: number })?.status !== undefined || !await wireDownWithin(12_000) || !await waitOn()) throw e;
+      return "waiting";
+    }
   },
 };
 
