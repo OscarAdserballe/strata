@@ -4,7 +4,7 @@ import { call, mutator, type SendAnswer, type SendRequest } from "./mutate.ts";
 import type { Fetched } from "./store.ts";
 
 import type {
-  BoardState, Message, DeckSummary, Touched, CardsSeen, Here,
+  BoardState, Message, DeckSummary, Touched, CardsSeen, Here, DistilMap,
   CaptureResponse, CaptureFinishResponse, TreeResponse, ReviewState, CardHistory, SessionMapResponse, ReviewTreeResponse, DeckKeepsResponse,
   BoardCollectionResponse, MintedEverywhere, LibraryCollectionResponse, BoardStatus,
   ThreadPage, DeckRead, DeckIgnored,
@@ -438,6 +438,8 @@ export const StrataAPI = {
   /** Claude's first draft of a project's units; it writes nothing. */
   planDraft: (board: string) =>
     call<{ units: { name: string; items: string[] }[]; loose: string[]; drafted?: boolean }>("POST", `/api/boards/${board}/plan/draft`, {}),
+  /** Claude's grouping of a board's marks into ideas to distil; it writes nothing. */
+  distilMap: (board: string, decks: string[] | null) => call<DistilMap>("POST", `/api/boards/${board}/distil/map`, { decks }),
   deckKeeps: (slug: string) => api<DeckKeepsResponse>(`/api/decks/${slug}/keeps`),
   boardCollection: (id: string) => api<BoardCollectionResponse>(`/api/boards/${id}/collection`),
   libraryCollection: () => api<LibraryCollectionResponse>("/api/collection"),

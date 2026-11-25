@@ -26,6 +26,10 @@ import type { cardThreadKey as CardThreadKey } from "../../capabilities/ask/thre
 import type { useProvideHere as UseProvideHere } from "../../shell/here.ts";
 import type { default as ComposerT, ComposerProps } from "../../capabilities/card/Composer.tsx";
 import type { ComposerDraft } from "../../capabilities/card/composing.ts";
+import type { Minted } from "../../../shared/types/index.ts";
+import type { distil as DistilOps } from "../../data/entities/distil.ts";
+import type { StrataWhy as Why } from "../../data/api.ts";
+import Distil, { bindDistil } from "./Distil.tsx";
 
 // lazy chunk: import only types, or esbuild hoists shared code into the boot bundle; deps come via bind()
 export interface CramHost {
@@ -36,6 +40,7 @@ export interface CramHost {
   CardControls: typeof CardControlsT; gradeActions: typeof GradeActions; CardFace: typeof CardFaceT;
   Ask: typeof AskT; closeAsk: typeof CloseAsk; openAsk: typeof OpenAsk; cardThreadKey: typeof CardThreadKey;
   useProvideHere: typeof UseProvideHere; Composer: typeof ComposerT;
+  distil: typeof DistilOps; StrataWhy: typeof Why;
 }
 let React: typeof ReactNS, TOUCH = false, PHONE = false;
 let useState: typeof ReactNS.useState, useEffect: typeof ReactNS.useEffect, useMemo: typeof ReactNS.useMemo, useRef: typeof ReactNS.useRef;
@@ -50,15 +55,16 @@ export function bind(host: CramHost) {
     CardControls, gradeActions, CardFace, Ask, closeAsk, openAsk, cardThreadKey, useProvideHere, Composer } = host);
   // the host's React, so hooks share one instance
   ({ useState, useEffect, useMemo, useRef } = React);
+  bindDistil({ React, StrataAPI, distil: host.distil, begin, arrived, why: host.StrataWhy });
 }
 
 export type CramCard = FaceCard & { id: string; deck?: string | null; course?: string };
 interface Loaded { slug: string; cards: CramCard[]; kept: Set<string> | null }
-type Phase = "choose" | "round" | "end";
+type Phase = "choose" | "round" | "end" | "distil";
 interface Live {
   phase: Phase; card: CramCard | null; answered: boolean; picked: number | null; editing: boolean; round: number;
   missed: number; pile: CramCard[] | null; start: () => Promise<void>; again: (onlyMissed: boolean) => void;
-  close: () => void; composing: boolean;
+  close: () => void; composing: boolean; distilMode: boolean;
 }
 
 export interface CramProps {
@@ -70,6 +76,8 @@ export interface CramProps {
   decks: DeckSummary[] | null | undefined;
   plan: BoardPlan | null | undefined;
   mine: CramCard[] | null | undefined;
+  /** the board's own cards as stored, for distil's tally */
+  minted: Minted[] | null | undefined;
   deckCards: (slug: string) => Promise<CramCard[] | null | undefined>;
   onEditSave: (card: CramCard, patch: CardFaces) => Promise<CramCard>;
   onDeleteCard?: ((card: CramCard) => unknown) | null;
@@ -81,7 +89,7 @@ export interface CramProps {
   onComposerCancel: () => void;
 }
 
-function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, mine, deckCards, onEditSave, onDeleteCard, onJump, onClose,
+function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, mine, minted, deckCards, onEditSave, onDeleteCard, onJump, onClose,
   composer, onNewCard, onComposerSave, onComposerCancel }: CramProps) {
   const sources = useMemo(() => cramSources(pairs || [], resources || [], sections || [], decks || [], plan),
     [pairs, resources, sections, decks, plan]);
@@ -131,6 +139,7 @@ function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, 
   const [picked, setPicked] = useState<number | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [starting, setStarting] = useState(false);
+  const [distilMode, setDistilMode] = useState(false);
   const card = phase === "round" && queue.length ? queue[0] : null;
   const answered = revealed || picked !== null;
   const course = card ? String(card.course || String(card.deck || "").split("/")[0]) : "";
@@ -152,6 +161,7 @@ function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, 
   }
   async function start() {
     if (starting) return;
+    if (distilMode) { if (ticked.size) setPhase("distil"); return; }
     begin("cram.start");
     setStarting(true);
     try {
@@ -222,7 +232,7 @@ function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, 
   // capture phase, so the room behind never hears these keys
   const ref = useRef({} as Live);
   ref.current = { phase, card, answered, picked, editing: !!(card && editing === card.id), round, missed: missed.size, pile, start, again, close: onClose,
-    composing: !!composer };
+    composing: !!composer, distilMode };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey) return;
@@ -233,6 +243,7 @@ function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, 
       const k = (e.key || "").toLowerCase();
       const s = ref.current;
       if (s.composing) { if (k === "escape") { e.preventDefault(); onComposerCancel(); } return; }
+      if (s.phase === "distil") { if (k === "escape") { e.preventDefault(); setPhase("choose"); } return; }
       if (k === "/" && !s.editing) { e.preventDefault(); openAsk(); return; }
       if (k === "escape" && s.editing) { e.preventDefault(); setEditing(null); return; }
       if (s.editing) return;
@@ -285,8 +296,10 @@ function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, 
   const chooser = (
     <div className="cram-choose">
       <div className="cram-modes" role="group" aria-label="Which cards">
-        <button className={prefs.kept ? "on" : ""} onClick={() => setPrefs((p) => ({ ...p, kept: true }))}>★ kept</button>
-        <button className={!prefs.kept ? "on" : ""} onClick={() => setPrefs((p) => ({ ...p, kept: false }))}>every card</button>
+        <button className={prefs.kept && !distilMode ? "on" : ""} onClick={() => { setDistilMode(false); setPrefs((p) => ({ ...p, kept: true })); }}>★ kept</button>
+        <button className={!prefs.kept && !distilMode ? "on" : ""} onClick={() => { setDistilMode(false); setPrefs((p) => ({ ...p, kept: false })); }}>every card</button>
+        <button className={distilMode ? "on" : ""} title="fold your kept cards, notes and asks into fewer cards"
+          onClick={() => setDistilMode(true)}>distil</button>
         <span className="grow" />
         <button className="cram-all" onClick={() => setPrefs((p) => ({ ...p, decks: null, mine: true }))}>all</button>
         <button className="cram-all" onClick={() => setPrefs((p) => ({ ...p, decks: [], mine: false }))}>none</button>
@@ -321,7 +334,7 @@ function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, 
           </div>
         );
       })}
-      <div className="cram-group">
+      {distilMode ? null : <div className="cram-group">
         <div className="cram-row">
           <label className="cram-tick">
             <input type="checkbox" checked={prefs.mine} onChange={(e) => setPrefs((p) => ({ ...p, mine: e.target.checked }))} />
@@ -329,19 +342,21 @@ function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, 
           </label>
           <span className="cram-n">{yours.length}</span>
         </div>
-      </div>
+      </div>}
       {!sources.length && !yours.length ? <p className="cram-quiet">This board has no cards yet.</p> : null}
       <div className="cram-foot">
         <span className="cram-total">
+          {distilMode ? `${ticked.size} source${ticked.size === 1 ? "" : "s"} ticked` : <>
           {pile ? pile.length : listed} card{(pile ? pile.length : listed) === 1 ? "" : "s"}
           {prefs.dropped.length ? <> · {prefs.dropped.length} dropped <button className="cram-link"
-            onClick={() => setPrefs((p) => ({ ...p, dropped: [] }))}>bring back</button></> : null}
+            onClick={() => setPrefs((p) => ({ ...p, dropped: [] }))}>bring back</button></> : null}</>}
         </span>
         <span className="grow" />
-        <button className="lask-go" disabled={starting || (pile ? !pile.length : !listed)} onClick={start}>
-          {starting ? "loading…" : "Start"}{!TOUCH ? <kbd>↵</kbd> : null}</button>
+        <button className="lask-go" disabled={starting || (distilMode ? !ticked.size : pile ? !pile.length : !listed)} onClick={start}>
+          {starting ? "loading…" : distilMode ? "Map the marks" : "Start"}{!TOUCH ? <kbd>↵</kbd> : null}</button>
       </div>
-      <p className="cram-quiet">Off the review schedule: nothing here moves a card’s next review or counts as seen.</p>
+      <p className="cram-quiet">{distilMode ? "Claude groups the kept cards, notes and open questions of the ticked sources into ideas; you fold each into a card."
+        : "Off the review schedule: nothing here moves a card’s next review or counts as seen."}</p>
     </div>
   );
 
@@ -352,7 +367,7 @@ function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, 
       <div className="rwrap">
         <div className="rhead">
           <span className="ltitle">Cram</span>
-          <span className="lsub">{title || "this board"}{phase !== "choose" ? ` · round ${round}` : ""}</span>
+          <span className="lsub">{title || "this board"}{phase === "distil" ? " · distil" : phase !== "choose" ? ` · round ${round}` : ""}</span>
           <span className="grow" />
           {phase !== "choose" ? <button className="seg" onClick={() => setPhase("choose")} title="choose again (esc)">choose</button> : null}
           <button className="seg" onClick={onClose} title="back to the board">✕</button>
@@ -363,6 +378,7 @@ function CramSurface({ boardId, title, pairs, resources, sections, decks, plan, 
               closing={!!composer.mintId} review onSave={onComposerSave} onCancel={onComposerCancel} />
           </div>
         ) : phase === "choose" ? chooser
+        : phase === "distil" ? <Distil boardId={boardId} decks={Array.from(ticked)} minted={minted || []} onBack={() => setPhase("choose")} />
         : phase === "end" ? (
           <div className="rdone">
             <div className="rdone-mark">✓</div>
