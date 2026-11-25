@@ -96,7 +96,11 @@ try {
   await page.getByLabel("Front", { exact: true }).fill(front);
   await page.getByLabel("Back", { exact: true }).fill(back);
   await page.getByRole("dialog").getByRole("button", { name: "Save", exact: true }).click();
-  await page.getByText("Saved on this device. It goes to Unfiled when you're back online.").waitFor();
+  await page.getByText("Saved on this device. It goes to Unfiled when you're back online.").waitFor().catch(async (e) => {
+    const seen = await page.evaluate(() => ({ online: navigator.onLine, mark: !!document.querySelector(".connection-mark.off"),
+      dialog: document.querySelector("dialog[open]")?.textContent?.slice(0, 400) ?? null }));
+    throw new Error(`the new card's offline notice never showed: ${JSON.stringify(seen)}`, { cause: e });
+  });
   check("a new card saves offline, as typed", true);
   await page.keyboard.press("Escape");
 

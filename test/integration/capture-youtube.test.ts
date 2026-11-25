@@ -125,7 +125,10 @@ test("the agent's capture of a link the board already holds answers with that so
   assert.equal([a, b].filter((r) => /^Captured /.test(r.text)).length, 1, `${a.text} | ${b.text}`);
   assert.match([a, b].find((r) => !/^Captured /.test(r.text))!.text, /^Already on this board as src_\S+ \("Me at the zoo/);
   assert.equal(rows("SELECT id FROM resources WHERE board_id = ?", board).length, 1);
+  // The pair may fetch once or twice depending on which lands first; only the third is a link already held.
+  const pair = asked.length - scrapes;
+  assert.ok(pair === 1 || pair === 2, `the pair fetched ${pair} times`);
   const third = await call("https://m.youtube.com/watch?v=jNQXAC9IVRw");
   assert.match(third.text, /^Already on this board as src_/);
-  assert.equal(asked.length - scrapes, 2, "a link already on the board isn't fetched again");
+  assert.equal(asked.length - scrapes, pair, "a link already on the board isn't fetched again");
 });
