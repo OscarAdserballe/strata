@@ -33,15 +33,17 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   const pinned = here.some((x) => x.id === sel?.thread);
   useEffect(() => { if (!pinned && t) setSel({ thread: t.id, n: null }); }, [pinned, t?.id]);
   const [drawer, setDrawer] = useState(false);
+  const [kept, setKept] = useState(readKept);
+  const keep = (on: boolean) => { setKept(on); setDrawer(false); try { localStorage.setItem(KEPT, on ? "1" : "0"); } catch {} };
   const pick = (x: DispatchThread, n: number | null = null) => { setSel({ thread: x.id, n }); setDrawer(false); };
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
       if (e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
-      if (e.key === "[") { e.preventDefault(); setDrawer((o) => !o); } else if (e.key === "Escape") setDrawer(false);
+      if (e.key === "[") { e.preventDefault(); keep(!kept); } else if (e.key === "Escape") setDrawer(false);
     };
     addEventListener("keydown", key);
     return () => removeEventListener("keydown", key);
-  }, []);
+  }, [kept]);
 
   function press(th: DispatchThread, kind: "send" | "drop" | "archive" | "todo" | "thinking"): void {
     const rest = here.filter((x) => x.id !== th.id);
@@ -82,12 +84,15 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
       </>;
 
   return (
-    <div className="ws dispatch railed" data-drawer={drawer ? "open" : undefined}>
-      <nav className="ws-rail" aria-label="Threads" onMouseEnter={() => setDrawer(true)}>
+    <div className="ws dispatch railed" data-drawer={drawer ? "open" : undefined} data-kept={kept ? "" : undefined}>
+      <div className="ws-side">
+      <nav className="ws-rail" aria-label="Threads" onMouseEnter={() => setDrawer(true)} onClick={(e) => { if (e.target === e.currentTarget) keep(true); }}>
+        <button className="ws-pip keep" title="Keep the list open ([)" onClick={() => keep(true)}>»</button>
         {here.map((x) => <button key={x.id} className="ws-pip" aria-current={x.id === t?.id ? "true" : undefined} title={x.title} onClick={() => pick(x)}>{initial(x.title)}</button>)}
         <button className="ws-pip add" title="New thread (N)" onClick={() => setDrawer(true)}>+</button>
       </nav>
       <aside className="ws-list" aria-label="Thread list" onMouseLeave={() => setDrawer(false)}>
+        <button className="ws-keep" aria-pressed={kept} title={kept ? "Fold the list to a rail ([)" : "Keep the list open ([)"} onClick={() => keep(!kept)}>{kept ? "« Fold" : "Keep open »"}</button>
         {stage === "implementing" ? <Implementing threads={here} on={t?.id ?? null} onPick={(x) => pick(x)} />
           : here.map((x) => x.id === t?.id
             ? <section key={x.id} className="ws-card open" aria-label={x.title}>
@@ -106,6 +111,7 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
         {pane && !here.length ? <p className="ws-none">{blank}</p> : null}
         <NewThread />
       </aside>
+      </div>
       <div className="ws-room">
         {t ? <Bar t={t} v={v} acts={acts} /> : null}
         <div className="ws-sheet">
@@ -117,6 +123,8 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   );
 }
 
+const KEPT = "strata.dispatchList";
+const readKept = (): boolean => { try { return localStorage.getItem(KEPT) === "1"; } catch { return false; } };
 const initial = (title: string): string => (title.match(/[A-Za-z0-9]/)?.[0] ?? "·").toUpperCase();
 const typing = (el: EventTarget | null) => !!(el as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])");
 // versions already read in this tab; a version not yet read opens with its ask unfolded, so a misreading shows first
