@@ -54,6 +54,8 @@ export const HUMAN_ONLY: Record<string, string> = {
   "POST /api/decks/:id/keeps": "keeping a card is the reader's choice of what to hold onto",
   "POST /api/decks/:id/keeps/minted": "keeping a card is the reader's choice of what to hold onto",
   "POST /api/library/cards": "a library card is one the reader writes and keeps",
+  "POST /api/boards/:id/distil/keep": "distilling keeps the new cards and lets the old ones go, the reader's choice of what to hold onto",
+  "POST /api/boards/:id/distil/:id/undo": "undoing a distil puts back the reader's own keeps",
   "POST /api/decks/:id/cards/:id/restore": "the reader's undo of setting a card aside",
   "POST /api/decks/:id/restore": "the reader's undo of setting a deck aside",
   "POST /api/review/grade": "a grade is the reader recalling",
