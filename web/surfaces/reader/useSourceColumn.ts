@@ -7,7 +7,6 @@ import { marksOn, useMarks } from "../../capabilities/annotate/useMarks.ts";
 import { PdfEngine } from "../../engines/pdf/PdfEngine.ts";
 import type { HtmlEngine } from "../../engines/html/HtmlEngine.ts";
 import { liveEngine, liveUrlOf, noteFolds, paintLiveMarks, type LiveAt } from "../../capabilities/live/live.ts";
-import { drawnAs } from "../../engines/html/drawn.ts";
 import { mdRender } from "../../engines/prose/render.ts";
 import { drawDiagrams } from "../../engines/prose/diagrams.ts";
 import { paintProseMarks, reconcileProseMarks } from "../../engines/prose/paint.ts";
@@ -170,13 +169,13 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
   const { openMark, paintPdfMarks } = marks;
   // where a kind opens its layers in folds, notes no longer hang in the margin
   const foldHost = {
-    adapter: () => { const s = room.live().src; return s ? adapterOf(drawnAs(s.kind)) : null; },
+    adapter: () => { const s = room.live().src; return s ? adapterOf(s.kind) : null; },
     ...noteFolds(liveAt, () => marks),
     // the deck, card by card: each sheet is turned and graded on its own; the card in hand is also the keys'
     cards: () => {
       const v = room.live(), s = v.src;
       if (!s || v.solo) return [];
-      const kind = drawnAs(s.kind), face = kind !== "html", deck = v.pair.deck;
+      const kind = s.kind, face = kind !== "html", deck = v.pair.deck;
       return (v.cards || []).map((c) => {
         const hand = !!v.card && c.id === v.card.id, at = quoteOfAnchor(c.source), got = answered.of(deck, c.id);
         const up = (hand && v.done) || turned.has(deck, c.id);
@@ -215,7 +214,7 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
       const key = sourceThread(bid, s.id);
       const msgs = roomStore.get<ThreadEntity>(storeKeyOf(key))?.messages ?? [];
       const turn = turnOf(key), maps = docRef.current.maps;
-      const prose = drawnAs(s.kind) !== "pdf" && drawnAs(s.kind) !== "html";
+      const prose = s.kind !== "pdf" && s.kind !== "html";
       // the block holding an offset, by the blocks' source ranges
       const blockAt = (n: number) => { if (!prose) return null; const b = maps.findIndex((m) => m.length > 0 && m[0] <= n && n < m[m.length - 1]); return b < 0 ? null : b; };
       const held: Ask[] = (roomStore.get<Ask[]>(asksKey(bid)) ?? []).filter((a) => a.resourceId === s.id);
@@ -227,7 +226,7 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
         const mine = turn.ask === a.id;
         return { id: a.id, quote: a.quote, start: a.start, end: a.end, page: a.page, rects: a.rects, box: a.box ?? null, block: a.block,
           turns, writing: mine && turn.sending ? turn.reply : null, error: mine ? turn.error : "", again: mine && !turn.sending && turn.error ? turn.text : "",
-          rich: drawnAs(s.kind) !== "html" };
+          rich: s.kind !== "html" };
       }).filter((a) => a.turns.length || a.writing !== null || a.error || (fresh && a.id === fresh.id));
     },
     ask: (id: string, text: string) => {
@@ -288,12 +287,12 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
   useEffect(() => {
     // the sheets lie on a plane that outlives the source: the one left takes its sheets with it
     if (shownKind.current) adapterOf(shownKind.current).forgetLayers();
-    shownKind.current = src && !onHome ? drawnAs(src.kind) : null;
-    if (src) adapterOf(drawnAs(src.kind)).forgetLayers();
+    shownKind.current = src && !onHome ? src.kind : null;
+    if (src) adapterOf(src.kind).forgetLayers();
     if (onHome || !src || !activeId) { engine().forget(); docRef.current = EMPTY_DOC(); setDocHtml(""); return; }
     if (src.kind === "pdf") { docRef.current = EMPTY_DOC(); setDocHtml(""); renderPdf(); return; }
     engine().forget();
-    if (drawnAs(src.kind) === "html") { docRef.current = EMPTY_DOC(); setDocHtml(""); return; }
+    if (src.kind === "html") { docRef.current = EMPTY_DOC(); setDocHtml(""); return; }
     let dead = false;
     journey("prose.open");
     StrataSourceText(activeId, src.id, src.generation).then((t: string) => {
@@ -333,7 +332,7 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
       last = now;
       const s = room.live().src, om = marks.openMarkRef.current;
       if (!s) return;
-      if (drawnAs(s.kind) === "html") { paintLive(); paintLayer(); return; }
+      if (s.kind === "html") { paintLive(); paintLayer(); return; }
       if (s.kind === "pdf") { paintPdfMarks(); paintLayer(); return; }
       const col = proseRef.current;
       if (!col || !docRef.current.html) return;
@@ -584,7 +583,7 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
     // the reader has to be back on screen before we can measure anything in it
     requestAnimationFrame(async () => {
       if (!pageRef.current) return;
-      if (!(await adapterOf(drawnAs(s.kind)).reveal(anchorOf({ source: anchor })))) room.toast("that part of the source isn't marked up");
+      if (!(await adapterOf(s.kind).reveal(anchorOf({ source: anchor })))) room.toast("that part of the source isn't marked up");
     });
   }
 
@@ -600,7 +599,7 @@ export function useSourceColumn(room: SourceRoom, v: SourceColumnView, { pageRef
     const at = quoteOfAnchor(c.source); if (!pageRef.current) return;
     if (!at) { room.toast("this card has no place in the source"); return; }
     if (room.live().treeOpen) { readerTop.current = 0; setTreeOpen(false); }
-    const a = adapterOf(drawnAs(s.kind));
+    const a = adapterOf(s.kind);
     if (await a.reveal(anchorOf({ source: c.source }))) { a.openLayers?.([c.id]); return; }
     room.toast("that part isn't in this source");
   }

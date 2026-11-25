@@ -421,3 +421,22 @@ export interface ProjectEntry {
 }
 /** Flat triples, since there can be thousands: hours since the last one (the first since the epoch), minutes read, cards graded. */
 export type ActivityHours = number[];
+
+// ---------- distil: a project's marks folded into fewer cards ----------
+
+/** k: a kept card, n: a highlight's note, q: an open question. */
+export type DistilMarkKind = "kept" | "note" | "ask";
+export interface DistilMark { ref: string; kind: DistilMarkKind; text: string; said: string; from: string; deck: string | null }
+export interface DistilFace { front: string; back: string }
+export type DistilSuggestionKind = "merge" | "tighten" | "answer" | "conflict" | "split";
+export interface DistilSuggestion {
+  id: string; kind: DistilSuggestionKind; text: string;
+  /** tighten / answer: the draft it proposes; split: the cards it proposes */
+  draft?: DistilFace; cards?: DistilFace[];
+  /** merge: the other idea's id */
+  with?: string;
+}
+export interface DistilIdea { id: string; title: string; why: string; marks: string[]; deck: string; draft: DistilFace; suggestions: DistilSuggestion[] }
+export interface DistilMap { ideas: DistilIdea[]; loose: string[]; marks: DistilMark[]; drafted: boolean }
+/** what a distilled card's minted row carries in meta.distil */
+export interface DistilMeta { idea: string; title: string; from: string[]; retired: { id: string; course: string; deck: string }[]; drafted: "agent" | "edited" | "you" }

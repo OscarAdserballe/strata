@@ -3,7 +3,8 @@ import { registerKeys } from "../../capabilities/keys/registry.ts";
 import { cardPrompt } from "../../capabilities/card/drill-order.ts";
 import { facesOf } from "../../../shared/cards/faces.ts";
 import { TOUCH, PHONE } from "../../platform/device.js";
-import { StrataAPI } from "../../data/api.ts";
+import { StrataAPI, StrataWhy } from "../../data/api.ts";
+import { distil } from "../../data/entities/distil.ts";
 import { begin, end as arrived } from "../../platform/rum.ts";
 import CardForm from "../../capabilities/card/CardForm.tsx";
 import CardMeta from "../../capabilities/card/CardMeta.tsx";
@@ -29,7 +30,7 @@ export function loadCram(): Promise<CramChunk> {
   loading ??= import("./CramSurface.tsx").then(
     (m) => {
       m.bind({ React, TOUCH, PHONE, registerKeys, cardPrompt, facesOf, StrataAPI, begin, arrived, CardForm, CardMeta, CardHistory, deckOf,
-        CardControls, gradeActions, CardFace, Ask, closeAsk, openAsk, cardThreadKey, useProvideHere, Composer });
+        CardControls, gradeActions, CardFace, Ask, closeAsk, openAsk, cardThreadKey, useProvideHere, Composer, distil, StrataWhy });
       loaded = m;
       return m;
     },

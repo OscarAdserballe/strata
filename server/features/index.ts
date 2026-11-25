@@ -25,10 +25,12 @@ import { draftRoutes } from "./plan/draft.ts";
 import { imageRoutes } from "./images/routes.ts";
 import { dashboardRoutes } from "./dashboard/routes.ts";
 import { primerRoutes } from "./primers/routes.ts";
+import { consolidateRoutes } from "./consolidate/routes.ts";
 
 export const publicRoutes: Route[] = [...systemPublicRoutes, ...agentPublicRoutes];
 
 export const apiRoutes: Route[] = [
+  ...consolidateRoutes,
   ...boardRoutes,
   ...progressRoutes,
   ...importRoutes,
