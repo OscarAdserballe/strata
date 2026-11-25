@@ -117,7 +117,7 @@ for (const [title, body, h, lede, a, b, links] of [
   ["Drop per-step configurable timers", "Most recipes need one timer per step at most.", "Per-step timer settings", "Fold them into one setting per recipe.", "One setting.", "Keep both.", [{ kind: "linear", ref: "RCP-066" }]],
 ]) {
   const id = await thread(title, body, links);
-  await send(id); await post(id, { page: shortDecide(h, lede, a, b) });
+  await send(id); await post(id, { page: shortDecide(h, lede, a, b), ask: body, heard: `${lede} Two ways to do it.` });
   if (title.startsWith("Recipe overview")) await note(id, 1, "A summary row", "Show a sketch of the row first.");
 }
 const d1 = await thread("Some recipe steps lack photos", "Steps the assistant adds have no photo. Find why and fix it so every step shows one. Synthetic recipes only.", [{ kind: "linear", ref: "RCP-128" }]);
@@ -125,7 +125,8 @@ await send(d1);
 await post(d1, { page: decideV1 });
 await note(d1, 1, "Copy the previous photo", "Two steps rarely look the same. Ask instead.");
 await press(d1, "back");
-await post(d1, { page: decideV2 });
+await post(d1, { page: decideV2, ask: "Every step the assistant adds should show a photo; ask me which one rather than copying the previous step's.",
+  heard: "Make the assistant name a photo for each step it saves, and refuse an edit that leaves one out, instead of guessing." });
 const n1 = await note(d1, 2, "E_STEP_PHOTO_MISSING", "What does the assistant see when this fires?");
 await note(d1, 2, "The photo lives in the recipe page, not in the saved steps.", "Good, keep the saved steps small.");
 await post(d1, { replies: { [`hl_${n1}`]: "The edit comes back refused with \"choose the photo that shows step_2\". It fixes it in the same turn." } });

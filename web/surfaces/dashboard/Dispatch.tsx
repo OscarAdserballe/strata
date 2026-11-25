@@ -1,6 +1,6 @@
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useEffect, useState, useSyncExternalStore, type ReactNode } from "react";
 import { StrataWhy } from "../../data/api.ts";
-import { dash, useArchive, useDispatch, type DispatchThread, type DispatchVersion } from "../../data/entities/dashboard.ts";
+import { dash, useDispatch, type DispatchThread, type DispatchVersion } from "../../data/entities/dashboard.ts";
 import { toast } from "../../shell/layers.ts";
 import LivePage from "../../capabilities/live/LivePage.tsx";
 import { switches } from "../../capabilities/fold/switches.ts";
@@ -19,8 +19,8 @@ export function caption(t: DispatchThread, v: DispatchVersion): string {
   return `Claude's page · ${label(v)} · ${hm(v.at)}${why}${latest(t)?.n !== v.n ? " · an older version" : ""}`;
 }
 
-/** Dispatch: threads Claude answers with a page, read on the sheet with Strata's notes; Send, Later, To thinking and Drop on the card, Archive in Finish. */
-export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thinking" | "review"> }) {
+/** Dispatch: threads Claude answers with a page, read on a sheet that takes the room; the threads are a rail that opens into a drawer, and Send and the rest sit on one line above the page. */
+export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thinking" | "review" | "archive"> }) {
   const pane = useDispatch();
   const stage = view === "built" ? "review" : view;
   const here = (pane?.threads ?? []).filter((t) => t.stage === stage).sort((a, b) => b.updatedAt - a.updatedAt);
@@ -32,14 +32,24 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   // a thread arriving later sorts above the one on the sheet, so pin what is shown
   const pinned = here.some((x) => x.id === sel?.thread);
   useEffect(() => { if (!pinned && t) setSel({ thread: t.id, n: null }); }, [pinned, t?.id]);
-  // the sheet fits a short page; a long one fills the room and scrolls in its frame
-  const [tall, setTall] = useState<{ rid: string; h: number } | null>(null);
-  const fit = v && tall?.rid === v.resourceId ? Math.max(tall.h, 240) : null;
+  const [drawer, setDrawer] = useState(false);
+  const [kept, setKept] = useState(readKept);
+  const keep = (on: boolean) => { setKept(on); setDrawer(false); try { localStorage.setItem(KEPT, on ? "1" : "0"); } catch {} };
+  const pick = (x: DispatchThread, n: number | null = null) => { setSel({ thread: x.id, n }); setDrawer(false); };
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+      if (e.key === "[") { e.preventDefault(); keep(!kept); } else if (e.key === "Escape") setDrawer(false);
+    };
+    addEventListener("keydown", key);
+    return () => removeEventListener("keydown", key);
+  }, [kept]);
 
   function press(th: DispatchThread, kind: "send" | "drop" | "archive" | "todo" | "thinking"): void {
     const rest = here.filter((x) => x.id !== th.id);
     setSel(rest[0] ? { thread: rest[0].id, n: null } : null);
     setReopening(null);
+    setDrawer(false);
     if (kind === "drop") { toast("Dropped"); dash.end(th.id).catch((e) => toast(StrataWhy(e, "not dropped"), 4200)); return; }
     if (kind === "todo" || kind === "thinking") {
       toast(kind === "todo" ? "In to-do. Send it again when it matters." : "In Thinking. Send to Dispatch picks up from this page.");
@@ -56,52 +66,89 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
     : !v ? "Claude is preparing the first page. It shows up in Decide when it is ready."
     : null;
 
+  const acts = !t ? null : stage === "implementing" ? (t.press?.sessionUrl ? <a className="session" href={t.press.sessionUrl} target="_blank" rel="noopener">Open the session ↗</a> : null)
+    : stage !== "finish" ? <>
+        <button className="btn dark" onClick={() => press(t, "send")}>Send</button>
+        <button className="btn quiet" title="Back to to-do, pages kept" onClick={() => press(t, "todo")}>Later</button>
+        <button className="btn quiet" title="Write more in Thinking, pages kept" onClick={() => press(t, "thinking")}>To thinking</button>
+        <button className="btn quiet danger" onClick={() => press(t, "drop")}>Drop</button>
+      </>
+    : reopening === t.id ? <>
+        <span className="hint">Write what's wrong as a note on the page, then Send.</span>
+        <button className="btn dark" onClick={() => press(t, "send")}>Send</button>
+        <button className="btn quiet" onClick={() => setReopening(null)}>Cancel</button>
+      </>
+    : <>
+        <button className="btn dark" onClick={() => press(t, "archive")}>Archive</button>
+        <button className="btn quiet" onClick={() => setReopening(t.id)}>Reopen</button>
+      </>;
+
   return (
-    <div className="ws dispatch">
-      <aside className="ws-list" aria-label="Threads">
-        {stage === "implementing" ? <Implementing threads={here} on={t?.id ?? null} onPick={(x) => setSel({ thread: x.id, n: null })} />
+    <div className="ws dispatch railed" data-drawer={drawer ? "open" : undefined} data-kept={kept ? "" : undefined}>
+      <div className="ws-side">
+      <nav className="ws-rail" aria-label="Threads" onMouseEnter={() => setDrawer(true)} onClick={(e) => { if (e.target === e.currentTarget) keep(true); }}>
+        <button className="ws-pip keep" title="Keep the list open ([)" onClick={() => keep(true)}>»</button>
+        {here.map((x) => <button key={x.id} className="ws-pip" aria-current={x.id === t?.id ? "true" : undefined} title={x.title} onClick={() => pick(x)}>{initial(x.title)}</button>)}
+        <button className="ws-pip add" title="New thread (N)" onClick={() => setDrawer(true)}>+</button>
+      </nav>
+      <aside className="ws-list" aria-label="Thread list" onMouseLeave={() => setDrawer(false)}>
+        <button className="ws-keep" aria-pressed={kept} title={kept ? "Fold the list to a rail ([)" : "Keep the list open ([)"} onClick={() => keep(!kept)}>{kept ? "« Fold" : "Keep open »"}</button>
+        {stage === "implementing" ? <Implementing threads={here} on={t?.id ?? null} onPick={(x) => pick(x)} />
           : here.map((x) => x.id === t?.id
             ? <section key={x.id} className="ws-card open" aria-label={x.title}>
                 <span className="t">{x.title}</span>
                 {x.links.length ? <span className="m">{x.links.map((l) => l.ref).join(" · ")}</span> : null}
                 <ol className="vers" reversed>
                   {[...x.versions].reverse().map((ver) => <li key={ver.n}>
-                    <button aria-current={v?.n === ver.n ? "true" : undefined} onClick={() => setSel({ thread: x.id, n: ver.n })}><b>{label(ver)}</b><span>{notes(ver.notes)}</span></button>
+                    <button aria-current={v?.n === ver.n ? "true" : undefined} onClick={() => pick(x, ver.n)}><b>{label(ver)}</b><span>{notes(ver.notes)}</span></button>
                   </li>)}
                 </ol>
-                {stage !== "finish" ? <div className="acts">
-                  <button className="btn dark" onClick={() => press(x, "send")}>Send</button>
-                  <button className="btn quiet" title="Back to to-do, pages kept" onClick={() => press(x, "todo")}>Later</button>
-                  <button className="btn quiet" title="Write more in Thinking, pages kept" onClick={() => press(x, "thinking")}>To thinking</button>
-                  <button className="btn quiet danger" onClick={() => press(x, "drop")}>Drop</button>
-                </div> : reopening === x.id ? <div className="acts reopen">
-                  <p>Write what's wrong as a note on the page, then Send.</p>
-                  <button className="btn dark" onClick={() => press(x, "send")}>Send</button>
-                  <button className="btn quiet" onClick={() => setReopening(null)}>Cancel</button>
-                </div> : <div className="acts">
-                  <button className="btn dark" onClick={() => press(x, "archive")}>Archive</button>
-                  <button className="faint" onClick={() => setReopening(x.id)}>Reopen</button>
-                </div>}
               </section>
-            : <button key={x.id} className="ws-card" onClick={() => setSel({ thread: x.id, n: null })}>
+            : <button key={x.id} className="ws-card" onClick={() => pick(x)}>
                 <span className="t">{x.title}</span>
                 <span className="m">{[latest(x) ? label(latest(x)!) : null, latest(x) ? notes(latest(x)!.notes) : null, latest(x) ? age(latest(x)!.at) : null].filter(Boolean).join(" · ")}</span>
               </button>)}
         {pane && !here.length ? <p className="ws-none">{blank}</p> : null}
-        {stage === "finish" ? <Archived /> : null}
         <NewThread />
       </aside>
+      </div>
       <div className="ws-room">
-        <div className="ws-caption"><span>{t && v ? caption(t, v) : ""}</span>{t && v ? <NotesSwitch /> : null}</div>
-        {v?.ask && v.heard ? <Asked v={v} /> : null}
-        <div className="ws-sheet" style={fit ? { flex: `0 1 ${fit}px` } : undefined}>
-          {t && v && pane?.board ? <LivePage key={v.resourceId} board={pane.board} resource={v.resourceId}
-            onHeight={(h) => setTall((was) => (was?.rid === v.resourceId && was.h === h ? was : { rid: v.resourceId, h }))} /> : null}
+        {t ? <Bar t={t} v={v} acts={acts} /> : null}
+        <div className="ws-sheet">
+          {t && v && pane?.board ? <LivePage key={v.resourceId} board={pane.board} resource={v.resourceId} /> : null}
           {blank ? <div className="ws-blank"><p>{blank}</p></div> : null}
         </div>
       </div>
     </div>
   );
+}
+
+const KEPT = "strata.dispatchList";
+const readKept = (): boolean => { try { return localStorage.getItem(KEPT) === "1"; } catch { return false; } };
+const initial = (title: string): string => (title.match(/[A-Za-z0-9]/)?.[0] ?? "·").toUpperCase();
+const typing = (el: EventTarget | null) => !!(el as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])");
+// versions already read in this tab; a version not yet read opens with its ask unfolded, so a misreading shows first
+const seen = new Set<string>();
+
+// One line over the page: which version, the ask and how Claude read it (click to unfold), the notes switch and the buttons.
+function Bar({ t, v, acts }: { t: DispatchThread; v: DispatchVersion | null; acts: ReactNode }) {
+  const [fold, setFold] = useState<{ rid: string; open: boolean } | null>(null);
+  const rid = v?.resourceId ?? "";
+  const open = !!v?.ask && !!v.heard && (fold?.rid === rid ? fold.open : !seen.has(rid));
+  useEffect(() => { if (rid) return () => { seen.add(rid); }; }, [rid]);
+  return <>
+    <div className="ws-bar">
+      <span className="ver" title={v ? caption(t, v) : t.title}>{v ? `${label(v)} · ${hm(v.at)}` : "No page yet"}</span>
+      {v?.ask && v.heard
+        ? <button className="ask" aria-expanded={open} title={open ? "Fold the ask" : "Unfold the ask"} onClick={() => setFold({ rid, open: !open })}>
+            <span><i>Your ask</i>{v.ask}</span><span className="heard"><i>Heard</i>{v.heard}</span>
+          </button>
+        : <span className="ask plain">{t.title}</span>}
+      {v ? <NotesSwitch /> : null}
+      <span className="acts">{acts}</span>
+    </div>
+    {open && v ? <Asked v={v} /> : null}
+  </>;
 }
 
 // The ask this version answers and how Claude read it, the same size side by side, so a misreading shows.
@@ -129,15 +176,4 @@ function Implementing({ threads, on, onPick }: { threads: DispatchThread[]; on: 
       {t.press?.sessionUrl ? <a className="session" href={t.press.sessionUrl} target="_blank" rel="noopener">Open the session ↗</a> : null}
     </div>
   ))}</>;
-}
-
-// Finish's fold: Dispatch threads archived or dropped, loaded only when opened.
-function Archived() {
-  const [open, setOpen] = useState(false);
-  const list = (useArchive(open) ?? []).filter((t) => t.dispatched).slice(0, 40);
-  return <>
-    <button className="ws-fold" aria-expanded={open} onClick={() => setOpen(!open)}>{open ? "Hide archived" : "Archived"}</button>
-    {open ? list.map((x) => <div key={x.id} className="ws-done"><span>{x.title}</span><i>{x.stage === "dropped" ? "dropped" : "archived"}</i></div>) : null}
-    {open && !list.length ? <p className="ws-none">Nothing archived yet.</p> : null}
-  </>;
 }

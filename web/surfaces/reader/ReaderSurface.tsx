@@ -23,7 +23,6 @@ import { useSourceColumn } from "./useSourceColumn.ts";
 import type { HeldPlace, SourceRoom } from "./useSourceColumn.ts";
 import { useReaderHere } from "./here.ts";
 import HtmlSource from "../../capabilities/live/HtmlSource.tsx";
-import { drawnAs } from "../../engines/html/drawn.ts";
 import { ROOM } from "../../engines/zoom/zoom.ts";
 import { switches } from "../../capabilities/fold/switches.ts";
 import { handSlot } from "../../capabilities/fold/hand.ts";
@@ -193,7 +192,7 @@ export default function ReaderSurface(props: ReaderSurfaceProps) {
                 onClose={() => column.flipTree(false)} />
             : null}
           {/* written by useSourceColumn, not React: painted marks split text nodes React would rejoin */}
-          {!onHome && !showTree && src && src.kind !== "pdf" && drawnAs(src.kind) !== "html"
+          {!onHome && !showTree && src && src.kind !== "pdf" && src.kind !== "html"
             ? <div className="page-col prose marked" ref={proseRef} />
             : null}
           {!onHome && !showTree && src && column.live.url

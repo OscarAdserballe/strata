@@ -11,7 +11,6 @@ import { zoomOf } from "../../engines/zoom/zoom.ts";
 import { NUDGE_PX } from "../../engines/pdf/window.ts";
 import { TOUCH } from "../../platform/device.js";
 import { begin as journey, end as arrived } from "../../platform/rum.ts";
-import { drawnAs } from "../../engines/html/drawn.ts";
 import { typing } from "../keys/registry.ts";
 import { chipKey, isMarkKey, type ChipAct, type ChipOffer } from "./chips.ts";
 import { asking, newAskId } from "../fold/asking.ts";
@@ -175,7 +174,7 @@ export function useMarks(reader: MarksReader, { pairIdx, loading, notesOnly = fa
   }
   // a mark made earlier, as the same place: its block is where its words are painted
   function markPlace(m: Mark): Place | null {
-    const kind = drawnAs(reader.live().src?.kind || ""), prose = kind !== "pdf" && kind !== "html";
+    const kind = reader.live().src?.kind || "", prose = kind !== "pdf" && kind !== "html";
     return placeOf(m, prose, prose ? blockOf(proseRef.current?.querySelector(`[data-mark="${CSS.escape(m.id)}"]`) ?? null) : null);
   }
   function blockOf(at: Node | null): number | null {
@@ -200,7 +199,7 @@ export function useMarks(reader: MarksReader, { pairIdx, loading, notesOnly = fa
   function cardAt(at: Place, own: string | null) {
     const st = reader.live();
     if (!st.activeId || !st.src || st.onHome || st.treeOpen) return;
-    const kind = drawnAs(st.src.kind);
+    const kind = st.src.kind;
     // a card sits on its words: too few, or words that occur elsewhere too, grow until they are its alone
     const text = kind === "pdf" ? (at.page ? reader.pageIndex(at.page)?.text ?? null : null) : kind !== "html" ? docRef.current.text : null;
     const quote = text ? widenQuote(text, at.start, at.end)?.quote ?? null : kind === "html" && !at.box ? own : at.quote;
@@ -210,7 +209,7 @@ export function useMarks(reader: MarksReader, { pairIdx, loading, notesOnly = fa
 
   // a live page's own words for a card are known only while picked, so a mark made there earlier offers no card
   const offerOf = (c: Chips): ChipOffer => {
-    const live = drawnAs(reader.live().src?.kind || "") === "html";
+    const live = reader.live().src?.kind === "html";
     return { note: true, ask: !notesOnly, card: !notesOnly && (!live || c.fresh || !!markNow(c.id)?.box), remove: !c.fresh };
   };
   function chipAct(act: ChipAct, prefill = "") {

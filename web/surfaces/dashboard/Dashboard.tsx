@@ -9,6 +9,7 @@ import Triage from "./Triage.tsx";
 import Thinking from "./Thinking.tsx";
 import FocusReview from "./FocusReview.tsx";
 import Dispatch from "./Dispatch.tsx";
+import Archive from "./Archive.tsx";
 import { hm } from "./parts.tsx";
 import { loadWriter } from "../../capabilities/write/Writer.tsx";
 import Pad from "../../capabilities/pad/Pad.tsx";
@@ -18,7 +19,7 @@ import Pad from "../../capabilities/pad/Pad.tsx";
 const WAITS: View[] = ["review", "decide", "built", "finish"];
 const RAIL: Record<Mode, [View, string][]> = {
   focus: [["thinking", "Thinking"], ["review", "Review"]],
-  dispatch: [["decide", "Decide"], ["implementing", "With Claude"], ["built", "Review"], ["finish", "Finish"]],
+  dispatch: [["decide", "Decide"], ["implementing", "With Claude"], ["built", "Review"], ["finish", "Finish"], ["archive", "Archive"]],
 };
 
 export default function Dashboard() {
@@ -36,6 +37,7 @@ export default function Dashboard() {
         {nav.view === "triage" ? <Triage mode={nav.mode} sub={nav.sub} />
           : nav.view === "thinking" ? <Thinking />
           : nav.view === "review" ? <FocusReview />
+          : nav.view === "archive" ? <Archive />
           : <Dispatch view={nav.view} />}
       </main>
     </div>
