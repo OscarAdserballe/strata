@@ -1904,12 +1904,10 @@ const dispatchPress = {
     const page = await t.open({ latency: true, lostAck: { match: presses, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     const pressOn = async (view, title, reopen) => {
       await page.goto(`${t.base}/dispatch?view=${view}`);
-      const card = page.locator(".ws-card", { hasText: title });
-      await card.first().waitFor();
-      if (!(await card.first().evaluate((el) => el.classList.contains("open")))) await card.first().click();
-      const open = page.locator(".ws-card.open", { hasText: title });
-      if (reopen) await open.getByRole("button", { name: "Reopen", exact: true }).click();
-      await open.getByRole("button", { name: "Send", exact: true }).click();
+      await page.locator(".ws-rail").getByTitle(title, { exact: true }).click();
+      const bar = page.locator(".ws-bar", { hasText: title });
+      if (reopen) await bar.getByRole("button", { name: "Reopen", exact: true }).click();
+      await bar.getByRole("button", { name: "Send", exact: true }).click();
       await page.evaluate(() => window.__strataSettled?.());
       return (await page.locator(".ws-list").textContent()) ?? "";
     };
@@ -1948,9 +1946,11 @@ const dispatchNewThread = {
     const creates = (e) => e.write && e.method === "POST" && e.path === "/api/dashboard/tasks";
     const page = await t.open({ latency: true, lostAck: { match: creates, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dispatch?view=decide`);
-    await page.locator(".ws-new-row").waitFor();
+    await page.locator(".ws-rail .ws-pip.add").waitFor();
     for (const [i, title] of titles.entries()) {
-      if (i === 0) await page.keyboard.press("n"); else await page.locator(".ws-new-row").click();
+      // New thread sits in the drawer the rail's + opens
+      if (i === 0) await page.keyboard.press("n");
+      else { await page.locator(".ws-rail .ws-pip.add").click(); await page.locator(".ws-new-row").click(); }
       const form = page.locator(".ws-new-form");
       await form.getByLabel("Title").fill(title);
       await form.getByLabel("Context").fill(`Context ${i} under loss.`);
@@ -2350,5 +2350,42 @@ const offlineCardEdit = {
   },
 };
 
+// distil: keeping an idea folds marks into one card; a lost answer resent under its key must not make two or retire twice
+const distilKeepLost = {
+  name: "distil-keep-lost",
+  what: "keep a distilled idea in cram while the answer to the keep is lost; the server holds one distilled card, its kept cards left review, and the tally says one",
+  checks: {
+    one: "the server holds exactly one distilled card for the idea",
+    retired: "the kept cards the idea folds in are no longer kept",
+    shown: "the done tally shows one card",
+  },
+  async run(t) {
+    const b = await board(t, "Race distil");
+    const s = await prose(t, b.id, "race-distil.md", essay("Folding marks", "Three marks on one claim are one card."));
+    const slug = await deck(t, b.id, s.rid, ["Race distil 1: what folds?", "Race distil 2: what stays?", "Race distil 3: what retires?"]);
+    const ids = (await t.api(`/api/decks/${slug}`)).cards.slice(0, 2).map((c) => c.id);
+    await t.api(`/api/decks/${slug}/keeps`, "POST", { add: ids });
+    await t.api(`/api/boards/${b.id}/minted`, "POST", { front: "Why do these fold into one?", variant: "bare", state: "open", pairId: s.pair, meta: {} });
+    const isKeep = (e) => e.method === "POST" && e.path === `/api/boards/${b.id}/distil/keep`;
+    const page = await t.open({ latency: true, lostAck: { match: isKeep, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
+    await page.goto(`${t.base}/?board=${b.id}&view=cram`);
+    await page.locator(".cram-modes").getByRole("button", { name: "distil", exact: true }).click({ timeout: 30_000 });
+    await page.getByRole("button", { name: "Map the marks" }).click();
+    await page.locator(".dst-open").first().click({ timeout: 30_000 });
+    await page.getByRole("button", { name: "keep card", exact: true }).click();
+    await page.evaluate(() => window.__strataSettled?.());
+    await t.net.idle(800);
+    const sent = t.net.entries.filter(isKeep);
+    if (!sent.some((e) => e.outcome === "lost-ack")) throw new Error("no keep answer was lost: the race this scenario is about did not happen");
+    t.say(`${sent.length} request(s): ${sent.map((e) => e.outcome).join(", ")}`);
+    const rows = t.sql("SELECT id FROM minted WHERE board_id = ? AND json_extract(meta, '$.distil.idea') IS NOT NULL", b.id);
+    t.check("one", rows.length === 1, `${rows.length} distilled card(s) after ${sent.length} request(s)`);
+    const still = t.sql(`SELECT id FROM card_keeps WHERE id IN (${ids.map(() => "?").join(",")})`, ...ids);
+    t.check("retired", still.length === 0, `${still.length} of ${ids.length} folded card(s) still kept`);
+    const tally = await page.locator(".dst-head").getByRole("button", { name: /done · / }).textContent({ timeout: 10_000 }).catch(() => "");
+    t.check("shown", /done · 1$/.test(squash(tally)), `the head says ${JSON.stringify(squash(tally))}`);
+  },
+};
+
 export const scenarios = [highlightDuringRefresh, planDoubleMove, drillGrades, reviewGrades, pageDeleteSource, pageDeleteLastSource, sourceDeleteUndo, chatSwitch, sourceRename503, keepsToggle,
-  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, offlineThenSync, offlineCardEdit];
+  planThreeMoves, unitDateTwice, markNoteDelete, captureLostAnswer, captureCancelAgain, captureCancelLost, captureCancelLanded, captureTitleDrift, chatStreamCut, cardEditLost, authoredTwice, planPurposeLate409, imageUploadLate, agentResend, agentRevise, pageStateSaves, liveNotes, liveNoteRemove, noteReplies, selectionCard, resplitRaces, dashboardTriage, dashboardWrites, dashboardAdd, dashboardTyping, dispatchPress, dispatchNewThread, padTwoTabs, offlineThenSync, offlineCardEdit, distilKeepLost];

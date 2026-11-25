@@ -258,3 +258,21 @@ test("a run claims the thread it opens: another run is refused until the first p
     assert.deepEqual(evs.map((e) => `${e.event}${e.took ? `:${e.took}` : ""}`), ["dispatch_claim:took", "dispatch_claim:renewed", "dispatch_release", "dispatch_claim:took"], "claims and releases are logged per run");
   } finally { db.close(); }
 });
+
+test("runs: presses that shared a session form one run, each with how long it waited for its page", async () => {
+  const before = Date.now() - 1000;
+  const a = await newThread("Runs: a thread that gets its page");
+  const b = await newThread("Runs: a thread still with Claude");
+  const sa = await send(`/api/dashboard/tasks/${a}/send`, "POST", {});
+  await send(`/api/dashboard/tasks/${b}/send`, "POST", {});
+  assert.equal((await post(a, { page: page("Runs", "A page for the runs view.") })).isError, false);
+  const r = await server.api(`/api/dashboard/runs?since=${before}`);
+  assert.equal(r.status, 200, JSON.stringify(r.body));
+  const lane = r.body.runs.find((x: any) => x.blocks.some((bl: any) => bl.task === a));
+  assert.equal(lane.session, sa.body.press.session_url);
+  const got = lane.blocks.find((bl: any) => bl.task === a), held = lane.blocks.find((bl: any) => bl.task === b);
+  assert.deepEqual([got.press, got.posted, got.landed, got.to >= got.from], ["Send", 1, "decide", true]);
+  assert.deepEqual([held.posted, held.to], [null, null], "a press with no page yet is still open");
+  assert.ok(r.body.stats.open >= 1 && r.body.stats.posted >= 1 && r.body.stats.medianMs !== null);
+  assert.equal((await server.api("/api/dashboard/runs?since=nope")).status, 400);
+});

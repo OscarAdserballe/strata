@@ -19,7 +19,7 @@ export default function CramScreen() {
   const title = (board.board && board.board.title) || "Strata";
   return createPortal(
     <CramSurface boardId={id} title={title} pairs={board.pairs} resources={board.resources}
-      sections={board.sections} decks={decks} plan={store.get(planKey(id)) ?? board.plan} mine={mintedToCards(board.minted || [], id)}
+      sections={board.sections} decks={decks} plan={store.get(planKey(id)) ?? board.plan} mine={mintedToCards(board.minted || [], id)} minted={board.minted}
       deckCards={room.deckCards} onEditSave={saveCardEdit} onDeleteCard={room.deleteCard}
       composer={composer} onComposerSave={saveComposed} onComposerCancel={() => setComposer(null)}
       onNewCard={(c: CramCard, q: string, a: string) => compose(c, q, a, { board: id, pair: c.mine ? c.pairId : null, label: title, asked: "asked during a cram" })}

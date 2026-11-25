@@ -3,11 +3,11 @@ import { StrataPath } from "../../data/api.ts";
 
 // Where you are on the dashboard: the mode is the path (/dashboard or /dispatch), the view and tab are the query.
 export type Mode = "focus" | "dispatch";
-export type View = "triage" | "thinking" | "review" | "decide" | "implementing" | "built" | "finish";
+export type View = "triage" | "thinking" | "review" | "decide" | "implementing" | "built" | "finish" | "archive";
 export type Sub = "inbox" | "todo";
 export interface Nav { mode: Mode; view: View; sub: Sub }
 
-const VIEWS: Record<Mode, View[]> = { focus: ["triage", "thinking", "review"], dispatch: ["triage", "decide", "implementing", "built", "finish"] };
+const VIEWS: Record<Mode, View[]> = { focus: ["triage", "thinking", "review"], dispatch: ["triage", "decide", "implementing", "built", "finish", "archive"] };
 const SUBS: Sub[] = ["inbox", "todo"];
 // Focus opens where the hour puts you, as it always has; Dispatch opens on what waits for you
 const byHour = (): View => { const h = new Date().getHours(); return h < 11 ? "thinking" : h >= 13 && h < 16 ? "review" : "triage"; };
