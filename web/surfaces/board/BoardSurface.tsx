@@ -153,7 +153,7 @@ export default function BoardSurface(p: BoardSurfaceProps) {
   ) : null;
 
   function planWrite(w: Parameters<Parameters<typeof planCalls>[0]>[0]) {
-    if (StrataWireDown()) { toast("offline — the plan needs the wire"); return Promise.resolve(null); }
+    if (StrataWireDown()) { toast("offline — the plan needs a connection"); return Promise.resolve(null); }
     const bid = activeId;
     return planOps.write(bid, w).catch((e: { retryable?: boolean } | undefined) => {
       toast(StrataWhy(e, "couldn't save that"));

@@ -91,7 +91,7 @@ export async function loadEarlier(key: ThreadKey): Promise<void> {
 }
 
 const INTERRUPTED = "The reply was interrupted. Your question is back in the line to try again.";
-const OFFLINE = "Offline — the model needs the wire. Your question is still in the line.";
+const OFFLINE = "Offline — asking needs a connection. Your question is still in the line.";
 
 export async function sendTurn(key: ThreadKey, text: string, h: Here, askAt: AskWire | null = null): Promise<void> {
   const p = parseThread(key);

@@ -172,18 +172,22 @@ test("explicit download stamps the saved copy and surfaces quota failures", asyn
   assert.equal(await saved.text(), "download");
   assert.ok(Number(saved.headers.get("X-Strata-Saved-At")) > 0);
   globalThis.caches = { open: async () => ({ put: async () => { throw new Error("QuotaExceededError"); } }) };
-  await assert.rejects(saveOfflineUrl("/api/boards/b"), /QuotaExceededError/);
+  await assert.rejects(saveOfflineUrl("/api/boards/b"), /no room left on this device/);
 });
 
-test("download rejects expired authentication and stale fallback responses", async (t) => {
-  const oldLocation = globalThis.location;
-  t.after(() => { globalThis.location = oldLocation; });
+test("download rejects expired authentication and stale fallback responses, and keeps the server's 404s", async (t) => {
+  const oldLocation = globalThis.location, oldCaches = globalThis.caches;
+  t.after(() => { globalThis.location = oldLocation; globalThis.caches = oldCaches; });
   globalThis.location = new URL(origin);
+  const kept = [];
+  globalThis.caches = { open: async () => ({ put: async (url, r) => { kept.push([url.pathname, r.status]); } }) };
   t.mock.method(globalThis, "fetch", async () => new Response("login", { status: 401 }));
-  await assert.rejects(saveOfflineUrl("/api/boards/b"), /live connection/);
+  await assert.rejects(saveOfflineUrl("/api/boards/b"), /the server said 401/);
   t.mock.method(globalThis, "fetch", async () => new Response("missing", { status: 404 }));
-  await assert.rejects(saveOfflineUrl("/dist/main.js"), /live connection/);
+  await assert.rejects(saveOfflineUrl("/dist/main.js"), /the server said 404/);
+  // offline, "no tree yet" must read as it does online, not as a board that wasn't downloaded
   await saveOfflineUrl("/api/boards/b/resources/r/tree");
+  assert.deepEqual(kept, [["/api/boards/b/resources/r/tree", 404]]);
   t.mock.method(globalThis, "fetch", async () => new Response("old", { headers: { "X-Strata-Shelf": "1" } }));
   await assert.rejects(saveOfflineUrl("/api/boards/b"), /live connection/);
 });
@@ -294,4 +298,45 @@ test("a missing image is not kept", async () => {
   assert.equal((await w.request(path)).status, 404);
   await w.settled();
   assert.equal(await w.cache(images).match(path), undefined);
+});
+
+const down = async () => { throw new TypeError("Failed to fetch"); };
+
+test("offline, a source asked for under a newer generation opens from the copy saved without one", async () => {
+  const w = worker(), raw = `${base}api/boards/b/resources/r/raw`;
+  await w.cache(api).put(raw, new Response("# saved notes"));
+  w.network(down);
+  const r = await w.request(`${raw}?v=3`);
+  assert.equal(await r.text(), "# saved notes");
+  assert.equal(r.headers.get("X-Strata-Shelf"), "1", "the room is told it is a copy");
+});
+
+test("offline, the session map of another day answers from the one a download saved", async () => {
+  const w = worker(), map = `${base}api/review/session`;
+  await w.cache(api).put(`${map}?since=100`, new Response(JSON.stringify({ due: 4 })));
+  w.network(down);
+  const r = await w.request(`${map}?since=200`);
+  assert.deepEqual(await r.json(), { due: 4 });
+  // a read whose query names the thing, not the moment, never takes another one's copy
+  await w.cache(api).put(`${base}api/review/tree?course=a`, new Response("{}"));
+  assert.equal((await w.request(`${base}api/review/tree?course=b`)).status, 503);
+});
+
+test("offline, a snapshot read with no snapshot answers from the download's copy", async () => {
+  const w = worker(), review = `${base}api/review`;
+  await w.cache(api).put(review, new Response(JSON.stringify({ due: 42 })));
+  w.network(down);
+  const r = await w.request(review, { headers: { "X-Strata-Snapshot": "ok" } });
+  assert.deepEqual(await r.json(), { due: 42 });
+});
+
+test("offline, the dashboard and an unsaved page answer in Strata's words, not the browser's or raw JSON", async () => {
+  const w = worker();
+  w.network(down);
+  const dash = await w.request(`${base}dashboard`, {}, true);
+  assert.equal(dash.status, 503);
+  assert.match(await dash.text(), /The dashboard needs a connection/);
+  const page = await w.request(`${base}api/boards/b/resources/r/live?v=2`);
+  assert.match(page.headers.get("Content-Type"), /text\/html/);
+  assert.match(await page.text(), /isn't saved on this device/);
 });

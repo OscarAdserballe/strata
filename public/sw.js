@@ -91,11 +91,15 @@ function markedFromShelf(hit) {
 const SHELL_PATIENCE_MS = 1500;
 const API_PATIENCE_MS = 8000;
 
+// Reads whose query names the moment, not the thing: offline, another moment's copy beats none.
+const anyQuery = (u) => isApi(u) && u.pathname.endsWith("/api/review/session");
+
 async function networkFirst(event, req, cacheName, offline) {
   const cache = await caches.open(cacheName).catch(() => null);
+  const url = new URL(req.url);
   const hit = await cache?.match(req, { ignoreVary: true }).catch(() => null)
     || (req.mode === "navigate" ? await cache?.match(BASE, { ignoreVary: true }).catch(() => null) : null);
-  const url = new URL(req.url);
+  const near = hit || !anyQuery(url) ? null : await cache?.match(req, { ignoreVary: true, ignoreSearch: true }).catch(() => null);
   if (hit && cacheName === SHELL && isImmutableAsset(url)) return hit;
   const network = (async () => { try {
     const r = await fetch(new Request(req, { cache: "no-cache" }));
@@ -111,7 +115,7 @@ async function networkFirst(event, req, cacheName, offline) {
     }
     return r;
   } catch (err) {
-    if (hit) return markedFromShelf(hit);
+    if (hit || near) return markedFromShelf(hit || near);
     return offline();
   } })();
   // a saved room stays usable on a hanging connection; the refresh finishes in the worker
@@ -191,7 +195,12 @@ async function snapshotFirst(event, req) {
   };
   if (!hit) {
     try { return await refresh(); }
-    catch { return new Response(JSON.stringify({ error: "offline — this board hasn't been downloaded" }), { status: 503, headers: { "Content-Type": "application/json", "X-Strata-Shelf": "1" } }); }
+    catch {
+      // a Download saves the same read without the snapshot header
+      const saved = await (await caches.open(API).catch(() => null))?.match(req.url, { ignoreVary: true }).catch(() => null);
+      if (saved) return markedFromShelf(saved);
+      return new Response(JSON.stringify({ error: "offline — this board hasn't been downloaded" }), { status: 503, headers: { "Content-Type": "application/json", "X-Strata-Shelf": "1" } });
+    }
   }
   event.waitUntil(refresh().catch(() => {}));
   const headers = new Headers(hit.headers);
@@ -221,6 +230,10 @@ async function bytesFromShelf(event, req) {
     try {
       fetched = await fetch(key);                       // deliberately WITHOUT the Range header
     } catch (err) {
+      // the saved copy of another generation (?v=) beats a blank column; it is marked, so the room knows it's a copy
+      const near = await cache?.match(key, { ignoreVary: true, ignoreSearch: true }).catch(() => null)
+        || await reader?.match(key, { ignoreVary: true, ignoreSearch: true }).catch(() => null);
+      if (near) return markedFromShelf(near);
       return new Response(JSON.stringify({ error: "offline — this source hasn't been downloaded" }),
         { status: 503, headers: { "Content-Type": "application/json", "X-Strata-Shelf": "1" } });
     }
@@ -257,17 +270,34 @@ async function bytesFromShelf(event, req) {
   return new Response(body.slice(start, end + 1), { status: 206, statusText: "Partial Content", headers });
 }
 
+// Said in Strata's own words, where the browser would show its offline page or a page would show raw JSON.
+function offlinePage(title, line, home) {
+  const esc = (t) => t.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+  const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title>`
+    + `<body style="margin:0;font:15px/1.5 -apple-system,system-ui,sans-serif;color:#1a1a1a;background:#fbfaf7;display:grid;place-items:center;min-height:100vh">`
+    + `<main style="max-width:420px;padding:24px"><h1 style="font-size:18px;margin:0 0 8px">${esc(title)}</h1><p style="margin:0 0 14px;color:#444">${esc(line)}</p>`
+    + (home ? `<a href="${BASE}" style="color:#0f766e">Open your boards</a>` : "") + `</main></body>`;
+  return new Response(html, { status: 503, headers: { "Content-Type": "text/html; charset=utf-8", "X-Strata-Shelf": "1" } });
+}
+
 self.addEventListener("fetch", (e) => {
   const req = e.request;
   if (req.method !== "GET") return;                       // writes go to the wire or fail there
   if (req.cache === "no-store") return;                   // connectivity checks must reach the server
   const u = new URL(req.url);
   // The dashboard (Focus and Dispatch) is its own page: answered with the room's shell, it opened as Strata until the second visit.
-  if (req.mode === "navigate" && (u.pathname === `${BASE}dashboard` || u.pathname === `${BASE}dispatch`)) return;
+  if (req.mode === "navigate" && (u.pathname === `${BASE}dashboard` || u.pathname === `${BASE}dispatch`)) {
+    e.respondWith(fetch(req).catch(() => offlinePage("The dashboard needs a connection", "Focus and Dispatch live on the server, so they open once you're back online. Your boards still open offline.", true)));
+    return;
+  }
   if (req.mode === "navigate") { e.respondWith(shellNavigation(e, req)); return; }
   if (isRaw(u)) { e.respondWith(bytesFromShelf(e, req)); return; }
   if (isImage(u)) { e.respondWith(imageFromShelf(e, req)); return; }
   if (isSnapshotRead(req, u)) { e.respondWith(snapshotFirst(e, req)); return; }
+  if (isApi(u) && u.pathname.endsWith("/live")) {
+    e.respondWith(networkFirst(e, req, API, () => offlinePage("This page isn't saved on this device", "Download the board while you're online, and its pages open here offline.", false)));
+    return;
+  }
   if (isApi(u)) {
     e.respondWith(networkFirst(e, req, API, () =>
       new Response(JSON.stringify({ error: "offline — this board hasn't been downloaded" }),

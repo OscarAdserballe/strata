@@ -19,7 +19,7 @@ import { BoardPickerHost, addSourceFrom, pickerNow, setPicker } from "../capabil
 import Ask from "../capabilities/ask/Ask.tsx";
 import { askIsOpen, closeAsk, openAsk } from "../capabilities/ask/control.ts";
 import { threadFor } from "../capabilities/ask/useThread.ts";
-import { DownloadButton, downloadBoard } from "../capabilities/offline/DownloadBoard.tsx";
+import { DownloadButton, downloadBoard, resumeDownload } from "../capabilities/offline/DownloadBoard.tsx";
 import BoardSurface from "../surfaces/board/BoardSurface.tsx";
 import { boardNotes, installNotesLeave } from "../surfaces/board/boardNotes.ts";
 import { boardPage as sheets } from "../surfaces/board/summon.ts";
@@ -52,6 +52,7 @@ import { warmCram } from "../surfaces/cram/cram-load.ts";
 
 // Warm the keeps and cram chunks only once the wire is quiet, so they don't compete with a board's own reads.
 const warmKeyed = (): void => { warmKeeps(); warmCram(); };
+const NO_SOURCES: { id: string }[] = [];
 /** Falls back to running at once where requestIdleCallback is missing (Safari). */
 function warmWhenQuiet(): () => void {
   let stop = (): void => {};
@@ -160,6 +161,9 @@ export default function BoardRoute() {
 
   const signOut = () => leaveRoom((e) => toastWhy(e, "couldn't sign out"));
   const keepBoardOffline = () => downloadBoard(current(), stateRef.current.board, { toast, toastWhy });
+  // a Download that had to reload first carries on once the board is back
+  const boardHere = !!board;
+  useEffect(() => { if (boardHere) resumeDownload(current(), stateRef.current.board, { toast, toastWhy }); }, [activeId, boardHere]);
   const benchRestoreCard = (c: Wire) => drill.undeleteCard(c, null);
   const deskHome = (emptyColumn: boolean) => onHome && emptyColumn && !composer;
 
@@ -218,7 +222,7 @@ export default function BoardRoute() {
   const boardTitle = (board && board.board && board.board.title) || "Strata";
   // a source open with no screen over it gets the reader's bar; everything else keeps the room's
   const reading = !onHome && !solo && !launcher && !reviewing && !cramming && !keepsUp;
-  const deskTools = <DownloadButton boardId={activeId} onDownload={keepBoardOffline} />;
+  const deskTools = <DownloadButton boardId={activeId} resources={board?.resources ?? NO_SOURCES} onDownload={keepBoardOffline} />;
   const cardWork = src && distilWork.busy.find((w) => w.r.id === src.id);
   // read when the reader arms its delete, not on every render of the room
   const askDelete = (rid: string) => () => deleteAsk({

@@ -66,6 +66,12 @@ Run `--quick` after each step and the whole thing before a PR. Each stage serves
     write route says in `server/features/agent/coverage.ts` how an agent does the same, or why it
     can't. See [docs/agent.md](docs/agent.md).
 
+14. **Offline is declared, not discovered.** Every route says in `web/data/offline-coverage.ts`
+    what it does with no wire: a read a Download saves or one that needs a connection, a write
+    that waits on the device (an outbox kind in `web/data/outbox.ts`) or one that needs a
+    connection (`test/offline-coverage.test.ts`). Download builds its list from that table, and a
+    refused write says what its row says.
+
 ## Branches
 
 Open as many branches as the work needs: one branch and PR per separate piece of work. The branch a

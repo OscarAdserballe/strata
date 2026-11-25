@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { StrataAPI, StrataWhy } from "../../data/api.ts";
+import { StrataAPI, StrataWhy, StrataWireDown } from "../../data/api.ts";
 import type { CardHistory as History } from "../../../shared/types/index.ts";
 import "./card-history.css";
 
@@ -15,7 +15,7 @@ export default function CardHistory({ card }: { card: { id: string; course: stri
     let live = true;
     setHistory(null); setError(""); setOpen(false);
     StrataAPI.cardHistory(card.course, card.id).then(h => { if (live) setHistory(h); })
-      .catch(e => { if (live) setError(StrataWhy(e, "Couldn't load card history")); });
+      .catch(e => { if (live) setError(StrataWireDown() ? "Card history needs a connection." : StrataWhy(e, "Couldn't load card history")); });
     return () => { live = false; };
   }, [card.course, card.id, retry]);
   if (error) return <section className="card-history" aria-label="Card history">

@@ -22,8 +22,11 @@ export function StrataReason(e: unknown): string {
   const err = (e ?? {}) as ApiError;
   const msg = String(err.message ?? "").trim();
   const vague = !msg || /^HTTP \d+$/.test(msg);
-  // refuseWrite's own error: status 0, thrown before fetch was called
-  if (err.status === 0 || /^offline/i.test(msg)) return "you're offline, and offline is read-only";
+  // the save path's refusal names what needs the wire (offline-coverage.ts): "renaming needs a connection"
+  if (err.status === 0 || /^offline/i.test(msg)) {
+    const what = /needs a connection$/.test(msg) ? msg.replace(/^offline\s*—\s*/i, "") : "this needs a connection";
+    return `you're offline, and ${what}`;
+  }
   // fetch itself failed: no status, and a message that differs per browser
   if (err.status === undefined) {
     if (!msg) return "no reason given";
@@ -39,7 +42,7 @@ export const StrataWhy = (e: unknown, said: string): string => `${said} — ${St
 export const StrataMB = (n: number): string =>
   n >= 1024 * 1024 ? `${(n / (1024 * 1024)).toFixed(n < 10 * 1024 * 1024 ? 1 : 0)} MB` : `${Math.max(1, Math.round(n / 1024))} kB`;
 
-// Offline is read-only: while the wire is known down, every mutating call is refused here, before fetch.
+// While the wire is known down, a call that is not on the save path is refused here, before fetch.
 let savedAt: number | null = null;
 let unknownSavedAt = false;
 let serverBuild: string | null = null;
@@ -72,7 +75,7 @@ try {
 } catch { /* not a browser */ }
 export const StrataWireDown = (): boolean => wire.down;
 function refuseWrite(): never {
-  const err: ApiError = new Error("offline — read only");
+  const err: ApiError = new Error("offline — this needs a connection");
   err.status = 0;
   throw err;
 }
@@ -271,7 +274,7 @@ mutator.subscribePending(() => {
 });
 
 function logEvent(event: string, props?: Record<string, unknown>): void {
-  if (wire.down) return;   // offline is read-only: no queue, no console noise
+  if (wire.down) return;   // a log line is not worth keeping on the device
   try { fetch(StrataPath("/api/log"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ event, props: props || {} }) }).catch(() => {}); } catch { /* ignore */ }
 }
 
@@ -358,7 +361,7 @@ const cardChatStream = (body: CardTurnBody, cb: ChatStreamCallbacks = {}, signal
   streamTurn("/api/review/chat", body, cb, signal, key);
 
 async function streamTurn(path: string, body: unknown, cb: ChatStreamCallbacks, signal?: AbortSignal, key?: string): Promise<void> {
-  if (wire.down) throw new Error("offline — the model needs the wire");
+  if (wire.down) throw new Error("offline — asking needs a connection");
   const headers: Record<string, string> = { "Content-Type": "application/json", Accept: "text/event-stream" };
   if (key) headers["Idempotency-Key"] = key;
   const r = await fetch(StrataPath(path), { method: "POST", signal, headers, body: JSON.stringify(body) });

@@ -207,7 +207,7 @@ test("offline refuses a new write at once, painting nothing", async () => {
   store.apply("notes:b", 1, { text: "server" }, "wire");
   wire.set(true);
   const e = await failure(m.mutate(op(["notes:b"], { optimistic: [{ key: "notes:b", apply: () => ({ text: "mine" }) }] })));
-  assert.equal(e.status, 0, "refuseWrite's status: StrataReason says offline is read-only");
+  assert.equal(e.status, 0, "refuseWrite's status: StrataReason says what needs a connection");
   assert.deepEqual(store.get("notes:b"), { text: "server" });
   assert.equal(sent.length, 0);
   assert.deepEqual(m.pending(), []);
