@@ -29,7 +29,7 @@ export default function FocusReview() {
   const ended = [...(board?.tasks ?? []).filter((x) => x.stage === "done" || x.stage === "dropped"), ...(archive ?? [])]
     .sort((a, b) => b.updatedAt - a.updatedAt).slice(0, 40);
   return (
-    <div className="ws">
+    <div className="ws railed narrow">
       <aside className="ws-list" aria-label="Ready for you">
         {list.map((x) => <button key={x.id} className={"ws-card" + (t?.id === x.id ? " on" : "")} onClick={() => setSel(x.id)}>
           <span className="t">{x.title}</span><span className="m">since {hm(x.updatedAt)}{x.links.length ? ` · ${x.links.length} link${x.links.length > 1 ? "s" : ""}` : ""}</span></button>)}
@@ -39,7 +39,6 @@ export default function FocusReview() {
           <button className="btn quiet small" onClick={() => dash.patch(x.id, { cleared: false, stage: "todo" }, (y) => ({ ...y, stage: "todo", clearedAt: null })).then(() => toast("Back in to-do"), (e) => toast(StrataWhy(e, "not restored"), 4200))}>Back</button></div>) : null}
       </aside>
       <div className="ws-room">
-        <div className="ws-caption">{t ? <span>Ready for you · since {hm(t.updatedAt)}</span> : <span />}</div>
         <div className={"ws-sheet" + (t ? " fit" : "")}>{t ? <Panel key={t.id} t={t} /> : <div className="ws-blank"><p>Nothing to review.</p></div>}</div>
       </div>
     </div>

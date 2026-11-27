@@ -19,7 +19,7 @@ export function caption(t: DispatchThread, v: DispatchVersion): string {
   return `Claude's page · ${label(v)} · ${hm(v.at)}${why}${latest(t)?.n !== v.n ? " · an older version" : ""}`;
 }
 
-/** Dispatch: threads Claude answers with a page, read on a sheet that takes the room; the threads are a list beside it, and Send and the rest sit on one line above the page. */
+/** Dispatch: threads Claude answers with a page, read on a sheet that takes the room; the threads are a list beside it, and the open thread's card holds its ask, notes switch and buttons. */
 export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thinking" | "review" | "archive"> }) {
   const pane = useDispatch();
   const stage = view === "built" ? "review" : view;
@@ -54,15 +54,14 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
     : !v ? "Claude is preparing the first page. It shows up in Decide when it is ready."
     : null;
 
-  const acts = !t ? null : stage === "implementing" ? (t.press?.sessionUrl ? <a className="session" href={t.press.sessionUrl} target="_blank" rel="noopener">Open the session ↗</a> : null)
-    : stage !== "finish" ? <>
+  const acts = !t ? null : stage !== "finish" ? <>
         <button className="btn dark" onClick={() => press(t, "send")}>Send</button>
         <button className="btn quiet" title="Back to to-do, pages kept" onClick={() => press(t, "todo")}>Later</button>
         <button className="btn quiet" title="Write more in Thinking, pages kept" onClick={() => press(t, "thinking")}>To thinking</button>
         <button className="btn quiet danger" onClick={() => press(t, "drop")}>Drop</button>
       </>
     : reopening === t.id ? <>
-        <span className="hint">Write what's wrong as a note on the page, then Send.</span>
+        <p>Write what's wrong as a note on the page, then Send.</p>
         <button className="btn dark" onClick={() => press(t, "send")}>Send</button>
         <button className="btn quiet" onClick={() => setReopening(null)}>Cancel</button>
       </>
@@ -74,16 +73,18 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   return (
     <div className="ws dispatch railed">
       <aside className="ws-list" aria-label="Threads">
-        {stage === "implementing" ? <Implementing threads={here} on={t?.id ?? null} onPick={(x) => pick(x)} />
+        {stage === "implementing" ? <Implementing threads={here} on={t?.id ?? null} onPick={(x) => pick(x)} detail={v ? <Detail v={v} /> : null} />
           : here.map((x) => x.id === t?.id
             ? <section key={x.id} className="ws-card open" aria-label={x.title}>
                 <span className="t">{x.title}</span>
                 {x.links.length ? <span className="m">{x.links.map((l) => l.ref).join(" · ")}</span> : null}
                 <ol className="vers" reversed>
                   {[...x.versions].reverse().map((ver) => <li key={ver.n}>
-                    <button aria-current={v?.n === ver.n ? "true" : undefined} onClick={() => pick(x, ver.n)}><b>{label(ver)}</b><span>{notes(ver.notes)}</span></button>
+                    <button aria-current={v?.n === ver.n ? "true" : undefined} title={caption(x, ver)} onClick={() => pick(x, ver.n)}><b>{label(ver)}</b><span>{notes(ver.notes)}</span></button>
                   </li>)}
                 </ol>
+                {v ? <Detail v={v} /> : <span className="m">No page yet</span>}
+                <div className="acts">{acts}</div>
               </section>
             : <button key={x.id} className="ws-card" onClick={() => pick(x)}>
                 <span className="t">{x.title}</span>
@@ -93,7 +94,6 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
         <NewThread />
       </aside>
       <div className="ws-room">
-        {t ? <Bar t={t} v={v} acts={acts} /> : null}
         <div className="ws-sheet">
           {t && v && pane?.board ? <LivePage key={v.resourceId} board={pane.board} resource={v.resourceId} /> : null}
           {blank ? <div className="ws-blank"><p>{blank}</p></div> : null}
@@ -103,39 +103,18 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   );
 }
 
-// versions already read in this tab; a version not yet read opens with its ask unfolded, so a misreading shows first
-const seen = new Set<string>();
-
-// One line over the page: which version, the ask and how Claude read it (click to unfold), the notes switch and the buttons.
-function Bar({ t, v, acts }: { t: DispatchThread; v: DispatchVersion | null; acts: ReactNode }) {
-  const [fold, setFold] = useState<{ rid: string; open: boolean } | null>(null);
-  const rid = v?.resourceId ?? "";
-  const open = !!v?.ask && !!v.heard && (fold?.rid === rid ? fold.open : !seen.has(rid));
-  useEffect(() => { if (rid) return () => { seen.add(rid); }; }, [rid]);
+// What the open thread's card says about the version on the sheet: the ask, how Claude read it, and the notes switch.
+function Detail({ v }: { v: DispatchVersion }) {
   return <>
-    <div className="ws-bar">
-      <span className="ver" title={v ? caption(t, v) : t.title}>{v ? `${label(v)} · ${hm(v.at)}` : "No page yet"}</span>
-      {v?.ask && v.heard
-        ? <button className="ask" aria-expanded={open} title={open ? "Fold the ask" : "Unfold the ask"} onClick={() => setFold({ rid, open: !open })}>
-            <span><i>Your ask</i>{v.ask}</span><span className="heard"><i>Heard</i>{v.heard}</span>
-          </button>
-        : <span className="ask plain">{t.title}</span>}
-      {v ? <NotesSwitch /> : null}
-      <span className="acts">{acts}</span>
-    </div>
-    {open && v ? <Asked v={v} /> : null}
+    {v.ask && v.heard ? <div className="ws-ask" aria-label="The ask">
+      <div><span className="lab">Your ask</span><p>{v.ask}</p></div>
+      <div className="heard"><span className="lab">Claude heard · v{v.n}</span><p>{v.heard}</p></div>
+    </div> : null}
+    <NotesSwitch />
   </>;
 }
 
-// The ask this version answers and how Claude read it, the same size side by side, so a misreading shows.
-function Asked({ v }: { v: DispatchVersion }) {
-  return <div className="ws-asked" aria-label="The ask">
-    <div><span className="lab">Your ask</span><p>{v.ask}</p></div>
-    <div className="heard"><span className="lab">Claude heard · v{v.n}</span><p>{v.heard}</p></div>
-  </div>;
-}
-
-// Strata's own notes layer: its count and its switch, set above the sheet.
+// Strata's own notes layer: its count and its switch.
 function NotesSwitch() {
   const sw = useSyncExternalStore(switches.subscribe, switches.getSnapshot);
   return <button className={"notes-switch" + (sw.on.notes ? "" : " off")} aria-pressed={sw.on.notes} title={`${sw.on.notes ? "hide" : "show"} notes`}
@@ -143,13 +122,14 @@ function NotesSwitch() {
 }
 
 // Where the page lands is Claude's call, so the card says only what was pressed and when.
-function Implementing({ threads, on, onPick }: { threads: DispatchThread[]; on: string | null; onPick(t: DispatchThread): void }) {
+function Implementing({ threads, on, onPick, detail }: { threads: DispatchThread[]; on: string | null; onPick(t: DispatchThread): void; detail: ReactNode }) {
   const pressed = (t: DispatchThread): string => !t.press ? "" : !t.press.version ? "Sent" : t.press.stage === "finish" ? "Reopened" : `Sent v${t.press.version}`;
   return <>{threads.map((t) => (
     <div key={t.id} className={"ws-card impl" + (t.id === on ? " on" : "")}>
       <button className="t" onClick={() => onPick(t)}>{t.title}</button>
       <span className="m">{t.press ? `${pressed(t)} · ${age(t.press.at)}` : ""}{t.versions.length ? "" : " · first page coming"}</span>
       {t.press?.sessionUrl ? <a className="session" href={t.press.sessionUrl} target="_blank" rel="noopener">Open the session ↗</a> : null}
+      {t.id === on ? detail : null}
     </div>
   ))}</>;
 }
