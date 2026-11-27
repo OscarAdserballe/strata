@@ -1904,7 +1904,7 @@ const dispatchPress = {
     const page = await t.open({ latency: true, lostAck: { match: presses, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     const pressOn = async (view, title, reopen) => {
       await page.goto(`${t.base}/dispatch?view=${view}`);
-      await page.locator(".ws-rail").getByTitle(title, { exact: true }).click();
+      await page.locator(".ws-list").getByText(title, { exact: true }).click();
       const bar = page.locator(".ws-bar", { hasText: title });
       if (reopen) await bar.getByRole("button", { name: "Reopen", exact: true }).click();
       await bar.getByRole("button", { name: "Send", exact: true }).click();
@@ -1946,11 +1946,10 @@ const dispatchNewThread = {
     const creates = (e) => e.write && e.method === "POST" && e.path === "/api/dashboard/tasks";
     const page = await t.open({ latency: true, lostAck: { match: creates, pick: new Set([1]), key: (e) => e.headers["idempotency-key"] ?? null } });
     await page.goto(`${t.base}/dispatch?view=decide`);
-    await page.locator(".ws-rail .ws-pip.add").waitFor();
+    await page.locator(".ws-new-row").waitFor();
     for (const [i, title] of titles.entries()) {
-      // New thread sits in the drawer the rail's + opens
       if (i === 0) await page.keyboard.press("n");
-      else { await page.locator(".ws-rail .ws-pip.add").click(); await page.locator(".ws-new-row").click(); }
+      else await page.locator(".ws-new-row").click();
       const form = page.locator(".ws-new-form");
       await form.getByLabel("Title").fill(title);
       await form.getByLabel("Context").fill(`Context ${i} under loss.`);

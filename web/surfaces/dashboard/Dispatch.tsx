@@ -19,7 +19,7 @@ export function caption(t: DispatchThread, v: DispatchVersion): string {
   return `Claude's page · ${label(v)} · ${hm(v.at)}${why}${latest(t)?.n !== v.n ? " · an older version" : ""}`;
 }
 
-/** Dispatch: threads Claude answers with a page, read on a sheet that takes the room; the threads are a rail that opens into a drawer, and Send and the rest sit on one line above the page. */
+/** Dispatch: threads Claude answers with a page, read on a sheet that takes the room; the threads are a list beside it, and Send and the rest sit on one line above the page. */
 export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thinking" | "review" | "archive"> }) {
   const pane = useDispatch();
   const stage = view === "built" ? "review" : view;
@@ -32,24 +32,12 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   // a thread arriving later sorts above the one on the sheet, so pin what is shown
   const pinned = here.some((x) => x.id === sel?.thread);
   useEffect(() => { if (!pinned && t) setSel({ thread: t.id, n: null }); }, [pinned, t?.id]);
-  const [drawer, setDrawer] = useState(false);
-  const [kept, setKept] = useState(readKept);
-  const keep = (on: boolean) => { setKept(on); setDrawer(false); try { localStorage.setItem(KEPT, on ? "1" : "0"); } catch {} };
-  const pick = (x: DispatchThread, n: number | null = null) => { setSel({ thread: x.id, n }); setDrawer(false); };
-  useEffect(() => {
-    const key = (e: KeyboardEvent) => {
-      if (e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
-      if (e.key === "[") { e.preventDefault(); keep(!kept); } else if (e.key === "Escape") setDrawer(false);
-    };
-    addEventListener("keydown", key);
-    return () => removeEventListener("keydown", key);
-  }, [kept]);
+  const pick = (x: DispatchThread, n: number | null = null) => setSel({ thread: x.id, n });
 
   function press(th: DispatchThread, kind: "send" | "drop" | "archive" | "todo" | "thinking"): void {
     const rest = here.filter((x) => x.id !== th.id);
     setSel(rest[0] ? { thread: rest[0].id, n: null } : null);
     setReopening(null);
-    setDrawer(false);
     if (kind === "drop") { toast("Dropped"); dash.end(th.id).catch((e) => toast(StrataWhy(e, "not dropped"), 4200)); return; }
     if (kind === "todo" || kind === "thinking") {
       toast(kind === "todo" ? "In to-do. Send it again when it matters." : "In Thinking. Send to Dispatch picks up from this page.");
@@ -84,15 +72,8 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
       </>;
 
   return (
-    <div className="ws dispatch railed" data-drawer={drawer ? "open" : undefined} data-kept={kept ? "" : undefined}>
-      <div className="ws-side">
-      <nav className="ws-rail" aria-label="Threads" onMouseEnter={() => setDrawer(true)} onClick={(e) => { if (e.target === e.currentTarget) keep(true); }}>
-        <button className="ws-pip keep" title="Keep the list open ([)" onClick={() => keep(true)}>»</button>
-        {here.map((x) => <button key={x.id} className="ws-pip" aria-current={x.id === t?.id ? "true" : undefined} title={x.title} onClick={() => pick(x)}>{initial(x.title)}</button>)}
-        <button className="ws-pip add" title="New thread (N)" onClick={() => setDrawer(true)}>+</button>
-      </nav>
-      <aside className="ws-list" aria-label="Thread list" onMouseLeave={() => setDrawer(false)}>
-        <button className="ws-keep" aria-pressed={kept} title={kept ? "Fold the list to a rail ([)" : "Keep the list open ([)"} onClick={() => keep(!kept)}>{kept ? "« Fold" : "Keep open »"}</button>
+    <div className="ws dispatch railed">
+      <aside className="ws-list" aria-label="Threads">
         {stage === "implementing" ? <Implementing threads={here} on={t?.id ?? null} onPick={(x) => pick(x)} />
           : here.map((x) => x.id === t?.id
             ? <section key={x.id} className="ws-card open" aria-label={x.title}>
@@ -111,7 +92,6 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
         {pane && !here.length ? <p className="ws-none">{blank}</p> : null}
         <NewThread />
       </aside>
-      </div>
       <div className="ws-room">
         {t ? <Bar t={t} v={v} acts={acts} /> : null}
         <div className="ws-sheet">
@@ -123,10 +103,6 @@ export default function Dispatch({ view }: { view: Exclude<View, "triage" | "thi
   );
 }
 
-const KEPT = "strata.dispatchList";
-const readKept = (): boolean => { try { return localStorage.getItem(KEPT) === "1"; } catch { return false; } };
-const initial = (title: string): string => (title.match(/[A-Za-z0-9]/)?.[0] ?? "·").toUpperCase();
-const typing = (el: EventTarget | null) => !!(el as HTMLElement | null)?.closest?.("input, textarea, select, [contenteditable]:not([contenteditable=false])");
 // versions already read in this tab; a version not yet read opens with its ask unfolded, so a misreading shows first
 const seen = new Set<string>();
 
