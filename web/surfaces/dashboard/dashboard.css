@@ -213,25 +213,10 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
 .ws-blank{position:absolute;inset:0;display:grid;place-items:center;background:#fff;border-radius:inherit}
 .ws-blank p{max-width:30em;text-align:center;font-size:14px;color:var(--d-quiet)}
 
-/* ===== Dispatch: threads as a rail that opens into a drawer, one line over the page, and the page takes the rest ===== */
+/* ===== Dispatch: the thread list, one line over the page, and the page up to 1440 px ===== */
 .ws.railed{justify-content:center;gap:12px;padding:12px 20px 0 14px}
-.ws-rail{flex:0 0 40px;min-height:0;display:flex;flex-direction:column;gap:6px;padding:2px 2px 12px;overflow-y:auto}
-.ws-pip{flex:none;width:36px;height:36px;border-radius:9px;display:grid;place-items:center;text-align:center;font-size:13px;font-weight:600;color:var(--d-ink-3);background:rgba(40,30,60,.05);transition:background .15s}
-.ws-pip:hover{background:#fff}
-.ws-pip[aria-current]{background:#fff;color:var(--d-ink);box-shadow:0 0 0 1.5px var(--d-ink)}
-.ws-pip.add{margin-top:auto;background:none;border:1px dashed var(--d-line-2);color:var(--d-mute);font-weight:500}
-/* beside the rail, never over it, so a letter stays clickable while the drawer is open; :focus-within keeps it open while you write */
-.ws-side{position:relative;flex:none;display:flex;gap:12px;min-height:0}
-.ws.railed .ws-list{position:absolute;z-index:20;left:46px;top:-6px;bottom:6px;width:300px;padding:10px;border-radius:12px;background:#faf8f4;box-shadow:var(--d-sheet);
-  opacity:0;transform:translateX(-12px);pointer-events:none;transition:opacity .14s,transform .14s}
-.ws.railed[data-drawer] .ws-list,.ws.railed .ws-list:focus-within{opacity:1;transform:none;pointer-events:auto}
-.ws.railed .ws-new{background:linear-gradient(rgba(250,248,244,0),#faf8f4 12px)}
+.ws.railed .ws-list{flex:0 0 264px;padding:2px 0 12px}
 .ws.railed .ws-room{flex:0 1 1440px}
-.ws-pip.keep{background:none;color:var(--d-mute);font-weight:500}
-.ws-keep{flex:none;align-self:flex-end;padding:2px 8px;border-radius:7px;font-size:12px;color:var(--d-mute)}
-.ws-keep:hover{background:rgba(40,30,60,.06);color:var(--d-ink)}
-.ws.railed[data-kept] .ws-rail{display:none}
-.ws.railed[data-kept] .ws-list{position:static;flex:0 0 264px;width:auto;padding:2px 0 12px;border-radius:0;background:none;box-shadow:none;opacity:1;transform:none;pointer-events:auto;transition:none}
 .ws.railed .ws-asked{margin:0 0 8px}
 .ws.railed .ws-sheet{margin-bottom:12px}
 .ws-bar{flex-shrink:0;display:flex;align-items:center;gap:10px;min-height:44px;margin-bottom:8px;padding:4px 6px 4px 14px;background:#fff;border-radius:10px;box-shadow:var(--d-lift),0 0 0 1px var(--d-line)}
@@ -345,12 +330,9 @@ a.src:hover{color:var(--d-ink);text-decoration:none}
   .ws-list{flex:none;overflow:visible}
   .ws-new{position:static;margin:6px 0 0;padding:0;background:none}
   .ws-room{flex:none;min-height:70vh}
-  .ws-rail{display:none}
   .ws.railed{padding:20px 16px 0}
-  .ws.railed .ws-list{position:static;width:auto;padding:0;background:none;box-shadow:none;opacity:1;transform:none;pointer-events:auto}
+  .ws.railed .ws-list{flex:none;padding:0}
   .ws.railed .ws-room{flex:none}
-  .ws-side{display:block}
-  .ws-keep{display:none}
   .dispatch .ws-sheet{flex:none;height:85vh;height:85svh}
   .ws-bar{flex-wrap:wrap;padding:6px 8px 6px 12px}
   .ws-bar .ask{order:3;flex:1 0 100%;border-left:0;border-top:1px solid var(--d-line);padding:8px 0 4px;flex-direction:column;gap:4px}
