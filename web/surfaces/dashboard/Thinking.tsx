@@ -18,16 +18,16 @@ export default function Thinking() {
   useEffect(() => { if (t && sel !== t.id) setSel(t.id); }, [t?.id]);
   const take = (x: DashTask) => { setSel(x.id); move(x, "thinking"); };
   return (
-    <div className="ws">
+    <div className="ws railed narrow">
       <aside className="ws-list" aria-label="Threads">
         {open.map((x) => <button key={x.id} className={"ws-card" + (t?.id === x.id ? " on" : "")} onClick={() => setSel(x.id)}>
-          <span className="t">{x.title}</span><span className="m">{x.links[0]?.ref ?? x.createdFrom?.source ?? ""}<ByClaude t={x} /></span></button>)}
+          <span className="t">{x.title}</span><span className="m">{x.links[0]?.ref ?? x.createdFrom?.source ?? ""}<ByClaude t={x} /></span>
+          {t?.id === x.id ? <span className="m">Your notes · {x.area} · since {new Date(x.updatedAt).toLocaleDateString([], { day: "numeric", month: "short" })}</span> : null}</button>)}
         {rest.length ? <h3 className="ws-group">To-do</h3> : null}
         {rest.map((x) => <button key={x.id} className="ws-card wait dim" onClick={() => take(x)} title="Open in Thinking"><span className="t">{x.title}</span></button>)}
         {!open.length && !rest.length ? <p className="ws-none">Nothing to think about yet. Keep threads from the inbox in to-do.</p> : null}
       </aside>
       <div className="ws-room">
-        <div className="ws-caption">{t ? <span>Your notes · {t.area} · since {new Date(t.updatedAt).toLocaleDateString([], { day: "numeric", month: "short" })}</span> : <span />}</div>
         <div className={"ws-sheet" + (t ? " fit" : "")}>
           {t ? <Doc key={t.id} t={t} /> : <div className="ws-blank"><p>{open.length ? "Pick a thread on the left." : "Nothing in Thinking yet. Open one from the left, or from Triage."}</p></div>}
         </div>

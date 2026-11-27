@@ -35,8 +35,8 @@ try {
   const frame = await (await page.waitForSelector(".ws-sheet iframe.html-frame", { timeout: 15000 })).contentFrame();
   await frame.waitForSelector("text=Posted while you looked", { timeout: 15000 });
   console.log("✓ a page posted while Decide is open draws without a reload");
-  assert.equal(await page.locator(".ws-asked p").first().textContent(), "See what I sent once a thread is in Dispatch.");
-  assert.equal(await page.locator(".ws-asked .heard p").textContent(), "Two fields above every page: the ask, and how Claude read it.");
+  assert.equal(await page.locator(".ws-ask p").first().textContent(), "See what I sent once a thread is in Dispatch.");
+  assert.equal(await page.locator(".ws-ask .heard p").textContent(), "Two fields above every page: the ask, and how Claude read it.");
   if (process.env.DISPATCH_SHOT) await page.screenshot({ path: process.env.DISPATCH_SHOT });
   console.log("✓ the ask and how Claude read it sit above the page");
 
@@ -67,8 +67,8 @@ try {
   console.log("✓ a new thread doesn't replace the page being read");
   await api(`/api/dashboard/tasks/${later}`, "PATCH", { stage: "dropped", cleared: true });
 
-  // Drop on the line over the page takes the thread off the board
-  await page.locator(".ws-bar").getByRole("button", { name: "Drop" }).click();
+  // Drop on the open thread's card takes the thread off the board
+  await page.locator(".ws-card.open").getByRole("button", { name: "Drop" }).click();
   await page.waitForSelector(`text=Smoke ${run}: a page posted while Decide is open`, { state: "detached", timeout: 5000 });
   for (let i = 0; i < 20 && (await stageOf(fresh)) !== null; i++) await page.waitForTimeout(250);
   assert.equal(await stageOf(fresh), null, "a dropped Decide thread leaves the board");

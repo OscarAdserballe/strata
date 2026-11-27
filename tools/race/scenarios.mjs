@@ -1905,7 +1905,7 @@ const dispatchPress = {
     const pressOn = async (view, title, reopen) => {
       await page.goto(`${t.base}/dispatch?view=${view}`);
       await page.locator(".ws-list").getByText(title, { exact: true }).click();
-      const bar = page.locator(".ws-bar", { hasText: title });
+      const bar = page.locator(".ws-card.open", { hasText: title });
       if (reopen) await bar.getByRole("button", { name: "Reopen", exact: true }).click();
       await bar.getByRole("button", { name: "Send", exact: true }).click();
       await page.evaluate(() => window.__strataSettled?.());
